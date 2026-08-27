@@ -10,6 +10,10 @@ pub fn ms(m: i64) -> i64 {
     m * 705_600
 }
 pub fn frames(n: i64, fps: i64) -> i64 {
+    assert!(
+        TIMEBASE % fps == 0,
+        "unsupported fps {fps}: must divide {TIMEBASE}"
+    );
     n * (TIMEBASE / fps)
 }
 
@@ -60,7 +64,11 @@ pub enum Transition {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Element {
     Image {
         asset: String,

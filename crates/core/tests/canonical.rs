@@ -72,3 +72,63 @@ fn time_sugar_is_exact() {
     assert_eq!(ms(150), 105_840_000);
     assert_eq!(frames(27, 30), 27 * 23_520_000);
 }
+
+#[test]
+#[should_panic(expected = "unsupported fps")]
+fn frames_panics_on_non_divisor_fps() {
+    frames(1, 11);
+}
+
+/// Exercises drift-prone serialization surfaces not touched by
+/// `example_doc()`: a `group` element, all four `Common` transform fields,
+/// a `Vec2`-keyed translate track, non-default `Align` variants, and
+/// fractional `Scalar` values (the `serialize_f64` branch).
+fn example_full_doc() -> Document {
+    let mut d = Document::new(640, 360);
+    d.add_asset("f01", Asset::image("frame.png"));
+    let group = Element::group(
+        [10.0, 20.0],
+        vec![
+            Element::rect([0.0, 0.0, 100.0, 100.0], "#FFFFFF").with_opacity(0.1),
+            Element::text("Centered", "mono", 16.0, "#FFFFFF", [0.0, 0.0])
+                .with_align(Align::Center),
+            Element::text("Right", "mono", 16.0, "#FFFFFF", [0.0, 0.0]).with_align(Align::Right),
+        ],
+    )
+    .with_translate([10.0, 20.0])
+    .with_scale(0.5)
+    .with_rotation(12.5)
+    .with_opacity(0.5)
+    .with_animation(Track::new(
+        Prop::Translate,
+        vec![
+            Key::vec2(0, [0.0, 0.0]),
+            Key::vec2(ms(500), [100.0, 50.0]).with_ease(Ease::InOutCubic),
+        ],
+    ));
+
+    d.push_scene(Scene::new("scene-1", seconds(1.0)).with_element(group));
+    d
+}
+
+#[test]
+fn canonical_bytes_match_golden_full() {
+    common::assert_golden(
+        "testdata/canonical/example-full.json",
+        example_full_doc().canonical_json().as_bytes(),
+    );
+}
+
+#[test]
+fn canonical_full_covers_drift_prone_surfaces() {
+    let j = example_full_doc().canonical_json();
+    assert!(j.contains("\"scale\":0.5"));
+    assert!(j.contains("\"rotation\":12.5"));
+    assert!(j.contains("\"opacity\":0.5"));
+    assert!(j.contains("\"opacity\":0.1"));
+    assert!(j.contains("\"translate\":[10,20]"));
+    assert!(j.contains("\"type\":\"group\""));
+    assert!(j.contains("\"prop\":\"translate\""));
+    assert!(j.contains("\"align\":\"center\""));
+    assert!(j.contains("\"align\":\"right\""));
+}
