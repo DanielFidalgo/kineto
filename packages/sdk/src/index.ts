@@ -20,3 +20,5 @@ export {
 export { build, validateIds } from "./canonical";
 export { render } from "./render";
 export type { RenderOptions } from "./render";
+export { mount } from "./mount";
+export type { MountOptions, Player } from "./mount";
