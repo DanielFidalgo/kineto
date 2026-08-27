@@ -1,0 +1,57 @@
+# WebAssembly SIMD for the wasm target only (Task 28).
+#
+# WHY
+# `tiny-skia` carries hand-written SIMD pipelines behind
+# `cfg(all(feature = "simd", target_feature = "simd128"))` (see its
+# `src/wide/*_t.rs`). Without this flag rustc compiles for the bare wasm MVP
+# feature set, every one of those pipelines falls back to scalar, and the
+# browser renders ~4x slower than it needs to. Measured on the tape demo:
+# 63.2 -> 16.5 ms/frame render-only (0.53x -> 2.02x realtime), full
+# in-browser MP4 export 0.57x -> 2.16x realtime. That is spec §10 success
+# criterion 1 going from missed to met, from one build flag — the render
+# code is byte-for-byte the same code.
+#
+# DETERMINISM (spec §5, the law)
+# Enabling SIMD changes which instructions execute, and byte-identical
+# output across native and wasm is not something to assume when that
+# changes. It is not assumed here. The CI byte-parity gate
+# (`tests/parity/run.mjs`: native vs wasm, 18 corpus renders, SHA-256 per
+# frame) is the instrument that adjudicates it, and this flag was kept only
+# because that gate printed `parity: 18/18 identical` with it on. This works
+# because the WebAssembly `simd128` proposal is fully specified IEEE-754
+# with no fast-math, no approximate reciprocals, and no
+# implementation-defined lane behaviour — the same reason native NEON/SSE2
+# pipelines already agree with each other. `-ffast-math`-style flags stay
+# forbidden regardless.
+#
+# BROWSER SUPPORT
+# `simd128` shipped in Chrome 91, Firefox 89, Safari 16.4. WebCodecs, which
+# the browser export path already hard-requires (spec §4), shipped in
+# Chrome 94 and Safari 16.4 and is still absent from Firefox. Every browser
+# that can run a zoetrope export at all already has SIMD, so this does not
+# narrow the supported set by a single version.
+#
+# WHY THIS FILE IS AT THE WORKSPACE ROOT AND NOT IN `crates/wasm/`
+# Both locations were built and measured. Cargo discovers `.cargo/config.toml`
+# by walking up from the *current working directory*, not from the package
+# being built:
+#   - `crates/wasm/.cargo/config.toml` DOES work for `wasm-pack build
+#     crates/wasm` from anywhere, because wasm-pack runs cargo with its cwd
+#     set to the crate directory (verified: the built binary contained
+#     13,795 v128 instructions).
+#   - ...but it is silently skipped by `cargo build -p zoetrope-wasm
+#     --target wasm32-unknown-unknown` run from the repo root (verified with
+#     `-v`: no `target-feature=+simd128` in the rustc invocation), which
+#     also covers the CI wasm32 clippy step. That produces a working but
+#     4x-slower binary with no warning anywhere.
+# At the root it applies to every invocation from every directory. It stays
+# out of native builds because it is keyed on the wasm target, not `[build]`
+# — `cargo test --workspace` and native clippy are untouched (`[build]
+# rustflags` would NOT be safe here; it applies to all targets).
+#
+# CAVEAT: a `RUSTFLAGS` environment variable, if set, *overrides* this table
+# wholesale rather than appending to it, so a build with `RUSTFLAGS` set
+# silently loses SIMD. The parity gate would not catch that (output would
+# still be identical, just slow) — the bench is the instrument that would.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
