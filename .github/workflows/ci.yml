@@ -57,3 +57,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm -w @zoetrope/sdk run test:browser
       - run: npm -w @zoetrope/demo-tape run test:browser
+      # Perf diagnostic (spec §6, Task 26): render-only ms/frame and
+      # realtime ratio for the fixture tape, logged for regression
+      # visibility. Measured, not asserted — never fails the job on a
+      # threshold (see bench/render-bench.test.ts).
+      - run: npm -w @zoetrope/demo-tape run bench

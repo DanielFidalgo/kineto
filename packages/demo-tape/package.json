@@ -12,6 +12,7 @@
     "dev": "vite",
     "test": "vitest run",
     "test:browser": "playwright test",
+    "bench": "vitest run --config vitest.bench.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
