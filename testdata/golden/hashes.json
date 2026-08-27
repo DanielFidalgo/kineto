@@ -2,5 +2,7 @@
   "raster-image-rot": "6dfcce5b3a481a5505762646e99b1b13e41744b80b58b4dbf61fdb716dee7365",
   "raster-image-stretch": "22d8e6c73763c6017ad65578dfec5b55fbcce056a711630db4db70506d5c76b6",
   "raster-rect-opacity": "9e82b8c4523f081c1046617e15ccd103a1d2792014e302154435ccd465ae4e24",
-  "raster-rect-rotation-45": "e12051faaac1f57bd26e24b95fd33046e723306ba52289d263f14be77ce15fa7"
+  "raster-rect-rotation-45": "e12051faaac1f57bd26e24b95fd33046e723306ba52289d263f14be77ce15fa7",
+  "raster-text": "16de8902b732350798c34df9f55eae3efd588ae60e86a4c81c1a3f5cb34a5335",
+  "raster-text-wrapped-rot": "04b958eea5c6f005621ae68dabaebbf190296ecfe334d62f17ebbffdfb3e0024"
 }

@@ -1,8 +1,22 @@
 mod common;
 
-use zoetrope_core::doc::{Common, Element};
+use zoetrope_core::doc::{Align, Asset, Common, Element};
 use zoetrope_core::raster::{element_matrix, BBox, Renderer};
-use zoetrope_core::{anim::Resolved, AssetStore};
+use zoetrope_core::{anim::Resolved, resolve_reserved_src, AssetStore, Document};
+
+/// Build an `AssetStore` with Inter loaded under asset id `"body"`, prepared
+/// against a `w x h` document (mirrors `tests/text.rs`'s `inter_store`).
+fn inter_store(w: u32, h: u32) -> AssetStore {
+    let mut doc = Document::new(w, h);
+    doc.add_asset("body", Asset::font("zoetrope:inter"));
+    let mut assets = AssetStore::new();
+    assets.add_bytes(
+        "body",
+        resolve_reserved_src("zoetrope:inter").unwrap().to_vec(),
+    );
+    assets.prepare(&doc).unwrap();
+    assets
+}
 
 fn blank_pixmap(w: u32, h: u32, bg: (u8, u8, u8, u8)) -> tiny_skia::Pixmap {
     let mut pm = tiny_skia::Pixmap::new(w, h).unwrap();
@@ -165,4 +179,59 @@ fn image_rotation_opacity() {
     renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
 
     common::assert_golden_hash("raster-image-rot", pm.width(), pm.height(), pm.data());
+}
+
+/// "Zoetrope" in Inter 24px white at [8,8] on a 256x64 opaque-black canvas.
+/// No pixel-exact hand math here (glyph coverage is font-dependent) — pin
+/// exact output via the golden hash, and sanity-check via a coarse probe
+/// that a plausible amount of the canvas actually got painted white-ish.
+#[test]
+fn text_render() {
+    let mut pm = blank_pixmap(256, 64, (0, 0, 0, 255));
+    let el = Element::text("Zoetrope", "body", 24.0, "#FFFFFF", [8.0, 8.0]);
+    let mut renderer = Renderer::new();
+    let mut assets = inter_store(256, 64);
+
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let non_bg = pm
+        .data()
+        .chunks_exact(4)
+        .filter(|px| px != &[0u8, 0, 0, 255])
+        .count();
+    assert!(
+        non_bg >= 200,
+        "expected at least 200 non-background pixels, got {non_bg}"
+    );
+
+    common::assert_golden_hash("raster-text", pm.width(), pm.height(), pm.data());
+}
+
+/// Wrapped (`max_w`), center-aligned, 10deg-rotated text on a 256x128
+/// opaque-black canvas — exercises the wrap/align path through `layout_text`
+/// plus `element_matrix` rotation about the (wrapped) text box's own center.
+#[test]
+fn text_wrapped_rotated() {
+    let mut pm = blank_pixmap(256, 128, (0, 0, 0, 255));
+    let el = Element::text(
+        "Deterministic video, twice.",
+        "body",
+        24.0,
+        "#FFFFFF",
+        [8.0, 8.0],
+    )
+    .with_max_w(120.0)
+    .with_align(Align::Center)
+    .with_rotation(10.0);
+    let mut renderer = Renderer::new();
+    let mut assets = inter_store(256, 128);
+
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    common::assert_golden_hash(
+        "raster-text-wrapped-rot",
+        pm.width(),
+        pm.height(),
+        pm.data(),
+    );
 }

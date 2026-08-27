@@ -12,9 +12,11 @@
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
 use crate::doc::Element;
+use crate::text::layout_text;
+use cosmic_text::SwashContent;
 use tiny_skia::{
-    BlendMode, FillRule, FilterQuality, Paint, PathBuilder, PixmapMut, PixmapPaint, Rect as SkRect,
-    Shader, Transform,
+    BlendMode, FillRule, FilterQuality, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint,
+    Rect as SkRect, Shader, Transform,
 };
 
 /// Axis-aligned base bounding box, in the element's parent-local coordinate
@@ -53,9 +55,14 @@ pub fn element_matrix(b: &BBox, r: &Resolved) -> Transform {
 /// of their children's base boxes, shifted by the group's static `origin`
 /// (recursing through nested groups' origins the same way).
 ///
-/// Text's box is a placeholder — `pos` with zero size — until Task 10 wires
-/// in the real `layout_text` box (glyph extents depend on the font, which
-/// this function doesn't have access to).
+/// Text's box is a placeholder — `pos` with zero size. Task 10 wires the
+/// real `layout_text` box into `Renderer::draw_elements`'s `Text` arm
+/// directly (it has `FontSystem` access there), but deliberately leaves
+/// *this* placeholder as-is: `base_bbox` is a free function with no
+/// `FontSystem`, so giving it a real text box would mean threading font
+/// access through every `base_bbox` caller (currently only group-union
+/// math) for a case — text nested in a `Group` — that doesn't exist yet.
+/// Revisit when a text-in-group case needs an accurate group union box.
 pub fn base_bbox(el: &Element) -> BBox {
     match el {
         Element::Image { rect, .. } | Element::Rect { rect, .. } => BBox {
@@ -134,10 +141,6 @@ impl Renderer {
     /// Draw `elements` (already in document/paint order, spec §3.3) onto
     /// `canvas` at time `t`, with `offset` the accumulated parent-group
     /// origin (scene root passes `(0.0, 0.0)`).
-    // `assets` is unused until the Image (Task 9) and Text (Task 10) arms
-    // below are implemented; kept named (not `_assets`) since it's part of
-    // this fn's load-bearing public signature, not a truly dead param.
-    #[allow(unused_variables)]
     pub fn draw_elements(
         &mut self,
         canvas: &mut PixmapMut,
@@ -201,13 +204,221 @@ impl Renderer {
 
                     canvas.draw_pixmap(0, 0, src.as_ref(), &paint, matrix, None);
                 }
-                Element::Text { .. } => {
-                    // implemented in Task 10
+                Element::Text {
+                    text,
+                    font,
+                    size_px,
+                    color,
+                    pos,
+                    max_w,
+                    align,
+                    common,
+                } => {
+                    let resolved = resolve_common(common, t);
+
+                    // `assets.family(font)` borrows `assets` immutably; copy
+                    // it to an owned `String` before `assets.font_system()`
+                    // needs `assets` mutably for `layout_text` below (the
+                    // two borrows can't overlap otherwise).
+                    let family = assets.family(font).to_string();
+                    let layout = layout_text(
+                        assets.font_system(),
+                        &family,
+                        text,
+                        size_px.0 as f32,
+                        max_w.as_ref().map(|w| w.0 as f32),
+                        *align,
+                    );
+
+                    let pos_x = pos[0].0 as f32 + offset.0;
+                    let pos_y = pos[1].0 as f32 + offset.1;
+
+                    // Isolated full-canvas transparent layer: uniform with
+                    // how groups will composite (Task 11), and it makes the
+                    // element's `translate/scale/rotation` transform (below)
+                    // trivial to apply as a single `draw_pixmap` call instead
+                    // of transforming every glyph individually.
+                    let mut layer = Pixmap::new(canvas.width(), canvas.height())
+                        .expect("canvas dimensions are always non-zero");
+                    let (cr, cg, cb, ca) = color.rgba8();
+
+                    // `self.swash` (rasterizes) and `assets.font_system()`
+                    // (glyph source) are different objects, so this mutable
+                    // borrow of `assets` doesn't conflict with anything
+                    // `layer`/`self.swash` hold.
+                    let fs = assets.font_system();
+                    for g in &layout.glyphs {
+                        let Some(img) = self.swash.get_image_uncached(fs, g.cache_key) else {
+                            continue; // no bitmap for this glyph (e.g. whitespace)
+                        };
+                        if img.placement.width == 0 || img.placement.height == 0 {
+                            continue;
+                        }
+                        // placement.top is SUBTRACTED: swash's placement
+                        // origin is the glyph's top-left in a y-up-from-
+                        // baseline space, so flipping to our y-down pixel
+                        // space negates the vertical offset.
+                        let x0 = pos_x.round() as i32 + g.x + img.placement.left;
+                        let y0 = pos_y.round() as i32 + g.y - img.placement.top;
+                        match img.content {
+                            SwashContent::Mask | SwashContent::SubpixelMask => blit_mask(
+                                &mut layer,
+                                x0,
+                                y0,
+                                img.placement.width,
+                                img.placement.height,
+                                &img.data,
+                                (cr, cg, cb, ca),
+                            ),
+                            SwashContent::Color => blit_color_premul(
+                                &mut layer,
+                                x0,
+                                y0,
+                                img.placement.width,
+                                img.placement.height,
+                                &img.data,
+                            ),
+                        }
+                    }
+
+                    let text_bbox = BBox {
+                        x: pos_x,
+                        y: pos_y,
+                        w: layout.width,
+                        h: layout.height,
+                    };
+                    let matrix = element_matrix(&text_bbox, &resolved);
+                    let paint = PixmapPaint {
+                        opacity: resolved.opacity as f32,
+                        blend_mode: BlendMode::SourceOver,
+                        quality: FilterQuality::Bilinear,
+                    };
+                    canvas.draw_pixmap(0, 0, layer.as_ref(), &paint, matrix, None);
                 }
                 Element::Group { .. } => {
                     // implemented in Task 11
                 }
             }
+        }
+    }
+}
+
+/// Rounding "divide by 255", the same formula as `assets.rs`'s
+/// `premultiply_rgba` (tiny-skia's own rounding-division approximation:
+/// `((x + 128) + ((x + 128) >> 8)) >> 8`). Used here for both the alpha-mask
+/// tint/premultiply step and the per-pixel source-over compose, so glyph
+/// blitting is pure integer math — no floats, bit-identical on native and
+/// wasm (determinism is law, spec §5).
+#[inline]
+fn div255(x: u32) -> u32 {
+    let x = x + 128;
+    (x + (x >> 8)) >> 8
+}
+
+/// Source-over composite one premultiplied `src` pixel onto `dst` (also
+/// premultiplied), returning the premultiplied result. Shared by both blit
+/// paths below; each channel of the output is `<= out_a` by construction
+/// (see `div255`'s monotonicity), but components are still clamped to the
+/// resulting alpha as a defensive belt-and-braces check before handing the
+/// bytes to `tiny_skia::PremultipliedColorU8::from_rgba`, which rejects
+/// (returns `None`) anything that violates that invariant.
+#[inline]
+fn over_premul(dst: (u8, u8, u8, u8), src: (u8, u8, u8, u8)) -> tiny_skia::PremultipliedColorU8 {
+    let inv = 255 - src.3 as u32;
+    let out_a = src.3 as u32 + div255(dst.3 as u32 * inv);
+    let out_r = (src.0 as u32 + div255(dst.0 as u32 * inv)).min(out_a);
+    let out_g = (src.1 as u32 + div255(dst.1 as u32 * inv)).min(out_a);
+    let out_b = (src.2 as u32 + div255(dst.2 as u32 * inv)).min(out_a);
+    tiny_skia::PremultipliedColorU8::from_rgba(out_r as u8, out_g as u8, out_b as u8, out_a as u8)
+        .expect("channels clamped to <= alpha above")
+}
+
+/// Blit an 8-bit alpha mask glyph bitmap (`SwashContent::Mask` /
+/// `SubpixelMask`, treated identically per the task brief) into `layer` at
+/// `(x0, y0)`, tinted by the element's straight-alpha text `color` and
+/// source-over composited (glyphs can have overlapping antialiased edges,
+/// so this is a real compose, not an overwrite).
+#[allow(clippy::too_many_arguments)]
+fn blit_mask(
+    layer: &mut Pixmap,
+    x0: i32,
+    y0: i32,
+    w: u32,
+    h: u32,
+    mask: &[u8],
+    color: (u8, u8, u8, u8),
+) {
+    let (cw, ch) = (layer.width() as i32, layer.height() as i32);
+    let (cr, cg, cb, ca) = color;
+    let pixels = layer.pixels_mut();
+    for row in 0..h as i32 {
+        let py = y0 + row;
+        if py < 0 || py >= ch {
+            continue;
+        }
+        for col in 0..w as i32 {
+            let px = x0 + col;
+            if px < 0 || px >= cw {
+                continue;
+            }
+            let m = mask[(row as usize) * (w as usize) + col as usize] as u32;
+            let src_a = div255(m * ca as u32);
+            if src_a == 0 {
+                continue;
+            }
+            let src_r = div255(cr as u32 * src_a) as u8;
+            let src_g = div255(cg as u32 * src_a) as u8;
+            let src_b = div255(cb as u32 * src_a) as u8;
+            let idx = (py as usize) * (cw as usize) + px as usize;
+            pixels[idx] = over_premul(
+                (
+                    pixels[idx].red(),
+                    pixels[idx].green(),
+                    pixels[idx].blue(),
+                    pixels[idx].alpha(),
+                ),
+                (src_r, src_g, src_b, src_a as u8),
+            );
+        }
+    }
+}
+
+/// Blit a premultiplied-RGBA color glyph bitmap (`SwashContent::Color` —
+/// emoji-style fonts, spec §8) into `layer` at `(x0, y0)`, source-over
+/// composited (no color tint: the bitmap's own colors are used as-is).
+fn blit_color_premul(layer: &mut Pixmap, x0: i32, y0: i32, w: u32, h: u32, rgba: &[u8]) {
+    let (cw, ch) = (layer.width() as i32, layer.height() as i32);
+    let pixels = layer.pixels_mut();
+    for row in 0..h as i32 {
+        let py = y0 + row;
+        if py < 0 || py >= ch {
+            continue;
+        }
+        for col in 0..w as i32 {
+            let px = x0 + col;
+            if px < 0 || px >= cw {
+                continue;
+            }
+            let src_idx = ((row as usize) * (w as usize) + col as usize) * 4;
+            let src = (
+                rgba[src_idx],
+                rgba[src_idx + 1],
+                rgba[src_idx + 2],
+                rgba[src_idx + 3],
+            );
+            if src.3 == 0 {
+                continue;
+            }
+            let idx = (py as usize) * (cw as usize) + px as usize;
+            pixels[idx] = over_premul(
+                (
+                    pixels[idx].red(),
+                    pixels[idx].green(),
+                    pixels[idx].blue(),
+                    pixels[idx].alpha(),
+                ),
+                src,
+            );
         }
     }
 }
