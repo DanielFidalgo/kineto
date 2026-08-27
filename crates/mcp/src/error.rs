@@ -6,8 +6,8 @@
 //! — an `Err(ErrorData)` is rendered opaquely by MCP clients and the message
 //! never reaches the model.
 
+use kineto_core::DocError;
 use rmcp::model::{CallToolResult, ContentBlock};
-use zoetrope_core::DocError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -38,7 +38,7 @@ pub enum ToolError {
     Fps(i64),
 
     #[error(
-        "ffmpeg was not found on PATH. zoetrope renders frames itself but \
+        "ffmpeg was not found on PATH. kineto renders frames itself but \
          relies on ffmpeg to encode and mux MP4. Install it (macOS: \
          `brew install ffmpeg`; Debian/Ubuntu: `apt install ffmpeg`) and retry."
     )]

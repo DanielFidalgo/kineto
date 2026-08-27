@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
-use zoetrope_core::doc::TIMEBASE;
-use zoetrope_core::{Asset, Document, Element, Scene};
+use kineto_core::doc::TIMEBASE;
+use kineto_core::{Asset, Document, Element, Scene};
 
 use crate::error::ToolError;
 
@@ -28,7 +28,7 @@ pub const MAX_FRAME_DURATION_MS: i64 = 86_400_000;
 pub const MAX_FRAMES: usize = 10_000;
 
 pub const CAPTION_FONT_ID: &str = "caption-font";
-pub const CAPTION_FONT_SRC: &str = "zoetrope:jetbrains-mono";
+pub const CAPTION_FONT_SRC: &str = "kineto:jetbrains-mono";
 
 const CAPTION_BAND_H: f64 = 56.0;
 const CAPTION_SIZE_PX: f64 = 22.0;
@@ -221,17 +221,17 @@ mod tests {
         let elements = &doc.scenes[0].elements;
         assert_eq!(elements.len(), 3, "image + caption band + text");
         assert!(
-            matches!(elements[0], zoetrope_core::Element::Image { .. }),
+            matches!(elements[0], kineto_core::Element::Image { .. }),
             "element 0 should be the image, got {:?}",
             elements[0]
         );
         assert!(
-            matches!(elements[1], zoetrope_core::Element::Rect { .. }),
+            matches!(elements[1], kineto_core::Element::Rect { .. }),
             "element 1 should be the caption band, got {:?}",
             elements[1]
         );
         match &elements[2] {
-            zoetrope_core::Element::Text { text, font, .. } => {
+            kineto_core::Element::Text { text, font, .. } => {
                 assert_eq!(text, "clicked Checkout");
                 assert_eq!(font, CAPTION_FONT_ID);
             }
@@ -351,6 +351,6 @@ mod tests {
         let doc = build(&frames, None).unwrap();
         let base = std::env::current_dir().unwrap();
         let store = crate::source::resolve_assets(&doc, &base).unwrap();
-        zoetrope_core::Engine::new(doc, store).expect("engine accepts the built document");
+        kineto_core::Engine::new(doc, store).expect("engine accepts the built document");
     }
 }

@@ -1,17 +1,17 @@
 mod common;
 
-use zoetrope_core::doc::{Align, Asset};
-use zoetrope_core::{layout_text, resolve_reserved_src, AssetStore, Document};
+use kineto_core::doc::{Align, Asset};
+use kineto_core::{layout_text, resolve_reserved_src, AssetStore, Document};
 
 /// Build an `AssetStore` with Inter loaded under asset id `"body"`, and
 /// return the store alongside the resolved family name for that asset.
 fn inter_store() -> (AssetStore, String) {
     let mut d = Document::new(64, 64);
-    d.add_asset("body", Asset::font("zoetrope:inter"));
+    d.add_asset("body", Asset::font("kineto:inter"));
     let mut store = AssetStore::new();
     store.add_bytes(
         "body",
-        resolve_reserved_src("zoetrope:inter").unwrap().to_vec(),
+        resolve_reserved_src("kineto:inter").unwrap().to_vec(),
     );
     store.prepare(&d).unwrap();
     let family = store.family("body").to_string();

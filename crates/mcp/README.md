@@ -1,8 +1,8 @@
-# zoetrope-mcp
+# kineto-mcp
 
-An MCP (Model Context Protocol) server that exposes the native zoetrope
+An MCP (Model Context Protocol) server that exposes the native kineto
 engine to agents over stdio. It's a fourth invocation surface alongside the
-existing native CLI (`zoetrope-cast`) and the two authoring SDKs (Rust, TS)
+existing native CLI (`kineto-cast`) and the two authoring SDKs (Rust, TS)
 — same deterministic engine, same canonical document format, just reachable
 by an MCP client instead of a shell or a build script.
 
@@ -30,15 +30,15 @@ byte-for-byte.
 
 ## Build
 
-There is no published package yet — this project does not publish to
-crates.io or npm until a public name is chosen (the `zoetrope` codename is
-already taken on crates.io). You must build the binary from source:
+There is no published package yet — nothing is pushed to crates.io or npm
+until the project is ready to publish. You must build the binary from
+source:
 
 ```sh
-cargo build -p zoetrope-mcp --release
+cargo build -p kineto-mcp --release
 ```
 
-This produces `target/release/zoetrope-mcp`.
+This produces `target/release/kineto-mcp`.
 
 ## Client configuration
 
@@ -48,8 +48,8 @@ reads a JSON config of `mcpServers`:
 ```json
 {
   "mcpServers": {
-    "zoetrope": {
-      "command": "/absolute/path/to/zoetrope/target/release/zoetrope-mcp"
+    "kineto": {
+      "command": "/absolute/path/to/kineto/target/release/kineto-mcp"
     }
   }
 }
@@ -72,7 +72,7 @@ allocates pixmaps even though it renders no frames.
 
 ### `render_document`
 
-Renders a canonical zoetrope scene document to an MP4. Provide exactly one
+Renders a canonical kineto scene document to an MP4. Provide exactly one
 of `document` (inline JSON string) or `documentPath`. `out` is required
 unless `validateOnly` is true. `previewFrames` (default 5, capped at 12)
 returns evenly spaced frames as inline images so the caller can check the
@@ -144,9 +144,9 @@ first image's dimensions if omitted (provide both or neither). At most
 
 The server also exposes read-only MCP resources:
 
-- `zoetrope://schema/document` — the JSON Schema for the canonical document
+- `kineto://schema/document` — the JSON Schema for the canonical document
   format accepted by `render_document`.
-- `zoetrope://corpus/<name>` — worked example documents from the golden
+- `kineto://corpus/<name>` — worked example documents from the golden
   corpus, covering every element type, easing, crossfade, wrap, and group
   nesting.
 
@@ -157,4 +157,4 @@ Use `resources/list` to enumerate them.
 For the full design rationale (why preflighting ffmpeg rather than
 propagating the CLI's `Ok(false)` contract, the schema hand-write, resource
 shape, etc.), see
-[`docs/superpowers/specs/2026-08-27-zoetrope-mcp-design.md`](../../docs/superpowers/specs/2026-08-27-zoetrope-mcp-design.md).
+[`docs/superpowers/specs/2026-08-27-kineto-mcp-design.md`](../../docs/superpowers/specs/2026-08-27-kineto-mcp-design.md).

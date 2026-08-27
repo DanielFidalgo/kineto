@@ -1,10 +1,10 @@
+use kineto_asciicast::{cast_to_document, parse_cast, Theme};
+use kineto_core::assets::AssetStore;
+use kineto_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
+use kineto_core::render::Engine;
+use kineto_core::TIMEBASE;
 use std::error::Error;
 use std::path::PathBuf;
-use zoetrope_asciicast::{cast_to_document, parse_cast, Theme};
-use zoetrope_core::assets::AssetStore;
-use zoetrope_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
-use zoetrope_core::render::Engine;
-use zoetrope_core::TIMEBASE;
 
 fn run(input: PathBuf, output: PathBuf, fps: i64) -> Result<(), Box<dyn Error>> {
     // Read the input file
@@ -55,7 +55,7 @@ fn main() {
         Ok(Some(o)) => o,
         Ok(None) => {
             eprintln!("error: -o is required");
-            eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+            eprintln!("usage: kineto-cast <input.cast> -o <dir> [--fps N]");
             std::process::exit(1);
         }
         Err(e) => {
@@ -88,7 +88,7 @@ fn main() {
         Ok(i) => i,
         Err(_) => {
             eprintln!("error: input file is required");
-            eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+            eprintln!("usage: kineto-cast <input.cast> -o <dir> [--fps N]");
             std::process::exit(1);
         }
     };
@@ -97,7 +97,7 @@ fn main() {
     let remaining = args.finish();
     if !remaining.is_empty() {
         eprintln!("error: unknown arguments: {:?}", remaining);
-        eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+        eprintln!("usage: kineto-cast <input.cast> -o <dir> [--fps N]");
         std::process::exit(1);
     }
 

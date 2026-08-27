@@ -30,12 +30,12 @@ pub struct Server {
 
 impl Server {
     pub fn start() -> Server {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_zoetrope-mcp"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_kineto-mcp"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn zoetrope-mcp");
+            .expect("spawn kineto-mcp");
 
         // Forward stdout lines through a channel from a dedicated thread, so
         // `recv` can wait on `Receiver::recv_timeout` instead of blocking
@@ -140,7 +140,7 @@ impl Server {
             json!({
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": { "name": "zoetrope-mcp-test", "version": "0" },
+                "clientInfo": { "name": "kineto-mcp-test", "version": "0" },
             }),
         );
         self.send(&json!({

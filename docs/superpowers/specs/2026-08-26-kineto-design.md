@@ -1,18 +1,20 @@
-# Zoetrope — design spec (2026-08-26)
+# Kineto — design spec (2026-08-26)
 
-> Working codename: **zoetrope** (the pre-film device that spins still frames
-> into motion). Public name/brand decided at publish time; nothing below
-> depends on it. Fixed vocabulary regardless of brand: a **document** is the
-> serializable description of a video; a **scene** is one segment of it; the
-> **engine** is the Rust core that turns `(document, tick)` into pixels; an
-> **adapter** converts an existing event format into a document.
+> Name: **Kineto** (from *kinetic* / Kinetoscope). Renamed 2026-08-27 from
+> the working codename "zoetrope", which was already taken on crates.io;
+> `kineto` was verified free on crates.io, on bare npm, and as an npm scope
+> before the rename. Nothing below depends on the name. Fixed vocabulary:
+> a **document** is the serializable description of a video; a **scene** is
+> one segment of it; the **engine** is the Rust core that turns
+> `(document, tick)` into pixels; an **adapter** converts an existing event
+> format into a document.
 
 ## 1. Thesis
 
 **Not a screen recorder. A video compiler** — feed it structured data, get
 deterministic MP4s, in the browser or in CI.
 
-Zoetrope is a programmatic-video engine: scenes are **declarative,
+Kineto is a programmatic-video engine: scenes are **declarative,
 serializable documents** (not code, not captured pixels), rendered by a
 single Rust core that compiles to two targets:
 
@@ -28,12 +30,12 @@ Why this wins against the field:
 
 - **Remotion**: scenes are React code welded to headless Chrome; server
   rendering means Chrome fleets (Lambda), and the company license is paid.
-  Zoetrope scenes are data; rendering needs no browser; license is
+  Kineto scenes are data; rendering needs no browser; license is
   MIT OR Apache-2.0.
 - **Motion Canvas / Revideo**: canvas-in-a-browser at heart; no
   browserless server story, no cross-target determinism.
 - **Screen recorders / vhs**: capture pixels from a live run in wall-clock
-  time (vhs drives a headless browser internally). Zoetrope renders from
+  time (vhs drives a headless browser internally). Kineto renders from
   event data after the fact: headless, deterministic, re-stylable,
   faster-than-realtime, and the sources are KBs of diffable JSON, not GBs
   of MP4.
@@ -204,7 +206,7 @@ v1 element set: `image`, `text`, `rect`, `group`.
 
 Cross-SDK identity has to be byte-level to be testable: the canonical form
 is **serde_json compact output of the core Rust structs** (field order as
-declared in `zoetrope-core`, integers without decoration). The TS SDK's
+declared in `kineto-core`, integers without decoration). The TS SDK's
 serializer matches it, enforced by the cross-SDK golden test (§6). Documents
 that only *semantically* match are not good enough.
 
@@ -275,7 +277,7 @@ functions (no template DSL):
   per-element time windows, so state changes are expressed as scene
   boundaries — cuts are free), each scene monospace `text` runs +
   `rect` cells. Ships a small CLI:
-  `zoetrope-cast demo.cast -o out/` (frame sequence, or MP4 when ffmpeg is
+  `kineto-cast demo.cast -o out/` (frame sequence, or MP4 when ffmpeg is
   present). Scope fence: 16-color + 256-color SGR, cursor, clears; no
   scrollback, no alternate-screen apps beyond what the demo needs.
 
@@ -359,7 +361,7 @@ Revisited only under real pressure, never speculatively.
 1. **Tape demo:** a checked-in fixture tape (and a real mysteryshopper
    tape) exports to a captioned, crossfaded MP4 **in the browser**, at
    ≥ 1× realtime, with zero server involvement.
-2. **CLI demo:** `zoetrope-cast fixture.cast` produces an MP4 (via ffmpeg)
+2. **CLI demo:** `kineto-cast fixture.cast` produces an MP4 (via ffmpeg)
    or frame sequence **headless in CI**, no display, no browser.
 3. **Parity gate green:** native and wasm renders of the golden corpus are
    byte-identical.
@@ -370,10 +372,10 @@ Revisited only under real pressure, never speculatively.
 
 - mysteryshopper is **consumer #1**: its tape format v1 (frozen contract)
   is the tape adapter's input. The "Export MP4" button in mysteryshopper's
-  tape page is a *mysteryshopper* task that lands after zoetrope v1 — it
-  imports `packages/sdk` + the tape adapter; zoetrope takes no dependency
+  tape page is a *mysteryshopper* task that lands after kineto v1 — it
+  imports `packages/sdk` + the tape adapter; kineto takes no dependency
   on mysteryshopper.
-- Obscura is **not** part of zoetrope. Zoetrope owns its pixels; that
+- Obscura is **not** part of kineto. Kineto owns its pixels; that
   independence is deliberate (no third-party renderer fidelity risk).
 
 ## 12. Future (do not build now, do not preclude)

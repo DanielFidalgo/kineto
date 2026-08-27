@@ -1,5 +1,5 @@
 // Tape format v1 — a frozen external contract OWNED BY mysteryshopper, not
-// zoetrope. Transcribed verbatim (field names, types, comments) from the
+// kineto. Transcribed verbatim (field names, types, comments) from the
 // canonical implementation:
 //
 //   ~/personal/repos/mysteryshopper/src/tape.ts
@@ -16,7 +16,7 @@
 // `frameName()` produces `step-${String(step).padStart(2, '0')}.jpg`, e.g.
 // "step-01.jpg").
 //
-// zoetrope's tape adapter (adapter.ts) only READS this format — it must
+// kineto's tape adapter (adapter.ts) only READS this format — it must
 // never diverge from mysteryshopper's tape.ts. If that file changes
 // upstream, this transcription needs a matching update.
 

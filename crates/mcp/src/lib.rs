@@ -1,4 +1,4 @@
-//! MCP server exposing the native zoetrope engine over stdio.
+//! MCP server exposing the native kineto engine over stdio.
 
 pub mod error;
 pub mod render;
@@ -25,12 +25,12 @@ use crate::tools::RenderDocumentParams;
 /// `..Implementation::default()`.
 fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     let mut info = ServerInfo::new(capabilities);
-    info.server_info = Implementation::new("zoetrope-mcp", env!("CARGO_PKG_VERSION"));
+    info.server_info = Implementation::new("kineto-mcp", env!("CARGO_PKG_VERSION"));
     // The claim is about the *frames*, not the MP4: the container embeds
     // encoder version and thread count, so two runs of ffmpeg over an
     // identical frame sequence can differ byte-for-byte.
     info.instructions = Some(
-        "Renders zoetrope scene documents to MP4. Rendering is deterministic: \
+        "Renders kineto scene documents to MP4. Rendering is deterministic: \
          the same document always produces the same frames. Encoding to MP4 \
          requires ffmpeg on PATH; `validateOnly` calls do not need it."
             .into(),
@@ -39,27 +39,27 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
 }
 
 #[derive(Clone)]
-pub struct ZoetropeServer {
+pub struct KinetoServer {
     tool_router: ToolRouter<Self>,
 }
 
-impl Default for ZoetropeServer {
+impl Default for KinetoServer {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[tool_router(router = tool_router)]
-impl ZoetropeServer {
+impl KinetoServer {
     pub fn new() -> Self {
-        ZoetropeServer {
+        KinetoServer {
             tool_router: Self::tool_router(),
         }
     }
 
     #[tool(
         name = "render_document",
-        description = "Render a zoetrope scene document to an MP4. Rendering is \
+        description = "Render a kineto scene document to an MP4. Rendering is \
                        deterministic: the same document always produces the same \
                        frames. Returns the output path, metadata, and sampled \
                        frames as images so you can check the result. Requires \
@@ -110,7 +110,7 @@ impl ZoetropeServer {
             .unwrap_or(default_base);
 
         let assets = crate::source::resolve_assets(&doc, &base)?;
-        let mut engine = zoetrope_core::Engine::new(doc, assets)?;
+        let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, fps);
@@ -155,17 +155,17 @@ impl ZoetropeServer {
             path: params.cast_path.clone(),
             source: e,
         })?;
-        let cast = zoetrope_asciicast::parse_cast(&data)
+        let cast = kineto_asciicast::parse_cast(&data)
             .map_err(|e| ToolError::Invalid(format!("invalid asciicast: {e}")))?;
 
-        let (doc, assets) = zoetrope_asciicast::cast_to_document(&cast, &params.resolved_theme());
+        let (doc, assets) = kineto_asciicast::cast_to_document(&cast, &params.resolved_theme());
         crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
 
-        let mut store = zoetrope_core::AssetStore::new();
+        let mut store = kineto_core::AssetStore::new();
         for (id, bytes) in assets {
             store.add_bytes(&id, bytes.to_vec());
         }
-        let mut engine = zoetrope_core::Engine::new(doc, store)?;
+        let mut engine = kineto_core::Engine::new(doc, store)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);
@@ -239,7 +239,7 @@ impl ZoetropeServer {
             source: e,
         })?;
         let assets = crate::source::resolve_assets(&doc, &base)?;
-        let mut engine = zoetrope_core::Engine::new(doc, assets)?;
+        let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);
@@ -258,7 +258,7 @@ impl ZoetropeServer {
 }
 
 #[tool_handler(router = self.tool_router)]
-impl ServerHandler for ZoetropeServer {
+impl ServerHandler for KinetoServer {
     fn get_info(&self) -> ServerInfo {
         server_info(
             ServerCapabilities::builder()

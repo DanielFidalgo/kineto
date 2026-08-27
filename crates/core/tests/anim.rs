@@ -1,4 +1,4 @@
-use zoetrope_core::{anim::*, doc::*};
+use kineto_core::{anim::*, doc::*};
 
 #[test]
 fn easing_formulas() {

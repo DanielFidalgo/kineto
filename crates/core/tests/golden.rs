@@ -2,14 +2,14 @@
 //! spec §6): renders every corpus doc at its pinned ticks and checks the
 //! sha256 of each frame against `testdata/golden/hashes.json`.
 //!
-//! Regenerate with `UPDATE_GOLDEN=1 cargo test -p zoetrope-core --test
+//! Regenerate with `UPDATE_GOLDEN=1 cargo test -p kineto-core --test
 //! golden -- --test-threads=1` — `assert_hash_entry` read-modifies-writes
 //! the shared hashes file, which races under parallel test execution.
 
 mod common;
 
-use zoetrope_core::corpus::{corpus, corpus_load_assets};
-use zoetrope_core::{Document, Engine};
+use kineto_core::corpus::{corpus, corpus_load_assets};
+use kineto_core::{Document, Engine};
 
 /// Guards against an accidentally-empty corpus (also the RED starting point
 /// for this test file, before the six docs existed).

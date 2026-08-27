@@ -1,9 +1,9 @@
 // wasm-bindgen "web" target output from Task 15 (built via `wasm-pack
 // build --target web`). Imported by relative path — no publishing to npm
-// in v1 (spec §8). `zoetrope_wasm.js` carries a `@ts-self-types` pragma
-// pointing at the sibling `zoetrope_wasm.d.ts`, which is how TypeScript
+// in v1 (spec §8). `kineto_wasm.js` carries a `@ts-self-types` pragma
+// pointing at the sibling `kineto_wasm.d.ts`, which is how TypeScript
 // resolves types for this plain relative `.js` import.
-import init, { WasmEngine } from "../../../crates/wasm/pkg/zoetrope_wasm.js";
+import init, { WasmEngine } from "../../../crates/wasm/pkg/kineto_wasm.js";
 import type { ZoeDocument } from "./types";
 
 export interface EngineHandle {
@@ -21,7 +21,7 @@ export interface EngineHandle {
 }
 
 const DEFAULT_FONT_ASSET_ID = "default";
-const DEFAULT_FONT_RESERVED_SRC = "zoetrope:inter";
+const DEFAULT_FONT_RESERVED_SRC = "kineto:inter";
 
 /**
  * Memoize a zero-arg async factory, but only cache the *resolved* value —
@@ -96,7 +96,7 @@ function needsBundledDefaultFont(
 /**
  * Instantiate the wasm engine for `docJson`, staging every entry of
  * `assetBytes` (plus the SDK-bundled Inter font for the reserved
- * `"default"` / `"zoetrope:inter"` asset, when the doc references it and
+ * `"default"` / `"kineto:inter"` asset, when the doc references it and
  * no bytes were supplied) before calling `ready()`.
  *
  * `ready()` is one-shot on the wasm side — calling it a second time

@@ -1,18 +1,18 @@
 mod common;
 
-use zoetrope_core::doc::{Align, Asset, Common, Element};
-use zoetrope_core::raster::{element_matrix, BBox, Renderer};
-use zoetrope_core::{anim::Resolved, resolve_reserved_src, AssetStore, Document};
+use kineto_core::doc::{Align, Asset, Common, Element};
+use kineto_core::raster::{element_matrix, BBox, Renderer};
+use kineto_core::{anim::Resolved, resolve_reserved_src, AssetStore, Document};
 
 /// Build an `AssetStore` with Inter loaded under asset id `"body"`, prepared
 /// against a `w x h` document (mirrors `tests/text.rs`'s `inter_store`).
 fn inter_store(w: u32, h: u32) -> AssetStore {
     let mut doc = Document::new(w, h);
-    doc.add_asset("body", Asset::font("zoetrope:inter"));
+    doc.add_asset("body", Asset::font("kineto:inter"));
     let mut assets = AssetStore::new();
     assets.add_bytes(
         "body",
-        resolve_reserved_src("zoetrope:inter").unwrap().to_vec(),
+        resolve_reserved_src("kineto:inter").unwrap().to_vec(),
     );
     assets.prepare(&doc).unwrap();
     assets
@@ -142,8 +142,8 @@ fn image_stretch() {
         "grad",
         std::fs::read(common::repo("testdata/assets/grad.png")).unwrap(),
     );
-    let mut doc = zoetrope_core::Document::new(64, 64);
-    doc.add_asset("grad", zoetrope_core::doc::Asset::image("grad.png"));
+    let mut doc = kineto_core::Document::new(64, 64);
+    doc.add_asset("grad", kineto_core::doc::Asset::image("grad.png"));
     assets.prepare(&doc).unwrap();
 
     renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
@@ -172,8 +172,8 @@ fn image_rotation_opacity() {
         "grad",
         std::fs::read(common::repo("testdata/assets/grad.png")).unwrap(),
     );
-    let mut doc = zoetrope_core::Document::new(64, 64);
-    doc.add_asset("grad", zoetrope_core::doc::Asset::image("grad.png"));
+    let mut doc = kineto_core::Document::new(64, 64);
+    doc.add_asset("grad", kineto_core::doc::Asset::image("grad.png"));
     assets.prepare(&doc).unwrap();
 
     renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
@@ -181,14 +181,17 @@ fn image_rotation_opacity() {
     common::assert_golden_hash("raster-image-rot", pm.width(), pm.height(), pm.data());
 }
 
-/// "Zoetrope" in Inter 24px white at [8,8] on a 256x64 opaque-black canvas.
+/// "Hamburgefons" (the classic type-specimen word) in Inter 24px white at
+/// [8,8] on a 256x64 opaque-black canvas. Deliberately NOT the product name:
+/// a pixel golden must change only when the renderer changes, never when the
+/// project is renamed.
 /// No pixel-exact hand math here (glyph coverage is font-dependent) — pin
 /// exact output via the golden hash, and sanity-check via a coarse probe
 /// that a plausible amount of the canvas actually got painted white-ish.
 #[test]
 fn text_render() {
     let mut pm = blank_pixmap(256, 64, (0, 0, 0, 255));
-    let el = Element::text("Zoetrope", "body", 24.0, "#FFFFFF", [8.0, 8.0]);
+    let el = Element::text("Hamburgefons", "body", 24.0, "#FFFFFF", [8.0, 8.0]);
     let mut renderer = Renderer::new();
     let mut assets = inter_store(256, 64);
 
@@ -277,7 +280,7 @@ fn text_right_aligned_wide_max_w_rotated() {
 ///   Big enough (64px) to have an interior run of pixels at full mask
 ///   coverage (swash mask byte 255) away from any antialiased edge. Hand-
 ///   probed for exact bytes below.
-/// - `pinned`: `"Zoetrope"` at element opacity 0.5, same tint color —
+/// - `pinned`: `"Hamburgefons"` at element opacity 0.5, same tint color —
 ///   exercises the opacity-scaled composite path (tiny-skia's own
 ///   `PixmapPaint::opacity` / `highp` float raster pipeline) for
 ///   golden-hash coverage. Deliberately *not* hand-derived byte-for-byte:
@@ -293,7 +296,7 @@ fn text_tinted() {
     let mut pm = blank_pixmap(256, 220, (0, 0, 0, 0));
     let probe = Element::text("I", "body", 64.0, "#FF880080", [8.0, 8.0]);
     let pinned =
-        Element::text("Zoetrope", "body", 24.0, "#FF880080", [8.0, 120.0]).with_opacity(0.5);
+        Element::text("Hamburgefons", "body", 24.0, "#FF880080", [8.0, 120.0]).with_opacity(0.5);
     let mut renderer = Renderer::new();
     let mut assets = inter_store(256, 220);
 
@@ -522,20 +525,14 @@ fn group_nested_rotation() {
 #[test]
 fn warm_caches_render_identically_to_cold_ones() {
     let elements = vec![
-        Element::text("Zoetrope", "body", 20.0, "#FFFFFF", [8.0, 8.0]),
+        Element::text("Kineto", "body", 20.0, "#FFFFFF", [8.0, 8.0]),
         Element::group(
             [4.0, 40.0],
             vec![
                 Element::rect([0.0, 0.0, 30.0, 20.0], "#00FF00"),
                 Element::group(
                     [6.0, 6.0],
-                    vec![Element::text(
-                        "Zoetrope",
-                        "body",
-                        20.0,
-                        "#FF0000",
-                        [0.0, 0.0],
-                    )],
+                    vec![Element::text("Kineto", "body", 20.0, "#FF0000", [0.0, 0.0])],
                 )
                 .with_rotation(12.0),
             ],

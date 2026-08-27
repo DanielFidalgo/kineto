@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { build } from "@zoetrope/sdk";
-import { seconds } from "@zoetrope/sdk";
+import { build } from "@kineto/sdk";
+import { seconds } from "@kineto/sdk";
 import { parseTape } from "../src/adapter";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,7 +41,7 @@ describe("parseTape", () => {
 
     const json = build(doc);
     expect(json).toContain("step-2");
-    expect(json).toContain('"default":{"type":"font","src":"zoetrope:inter"}');
+    expect(json).toContain('"default":{"type":"font","src":"kineto:inter"}');
   });
 
   it("spot-checks the duration formula for a known narration length", () => {

@@ -52,11 +52,11 @@ export async function render(d: ZoeDocument, opts: RenderOptions): Promise<Blob>
   // the encode loop (`TIMEBASE / fps` — same guard as `frames(n).at(fps)`
   // in time.ts and `Engine::tick_for_frame`/`doc::frames` on the Rust side).
   if (!Number.isInteger(fps) || fps <= 0 || TIMEBASE % fps !== 0) {
-    throw new Error(`zoetrope: unsupported fps ${fps}: must divide ${TIMEBASE}`);
+    throw new Error(`kineto: unsupported fps ${fps}: must divide ${TIMEBASE}`);
   }
 
   if (typeof VideoEncoder === "undefined") {
-    throw new Error("zoetrope: WebCodecs is required in this browser (see README#browser-support)");
+    throw new Error("kineto: WebCodecs is required in this browser (see README#browser-support)");
   }
 
   const engine = await loadEngine(build(d), assets ?? new Map());
@@ -115,7 +115,7 @@ export async function render(d: ZoeDocument, opts: RenderOptions): Promise<Blob>
       }
     }
     if (config === undefined) {
-      throw new Error("zoetrope: no supported H.264 encoder config");
+      throw new Error("kineto: no supported H.264 encoder config");
     }
     enc.configure(config);
 

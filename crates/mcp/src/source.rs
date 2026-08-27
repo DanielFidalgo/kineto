@@ -3,9 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use zoetrope_core::assets::AssetStore;
-use zoetrope_core::doc::TIMEBASE;
-use zoetrope_core::{Asset, Document};
+use kineto_core::assets::AssetStore;
+use kineto_core::doc::TIMEBASE;
+use kineto_core::{Asset, Document};
 
 use crate::error::ToolError;
 
@@ -53,8 +53,8 @@ pub fn load_document(
 
 /// Stage bytes for every asset the document references.
 ///
-/// Reserved font srcs (`zoetrope:inter`, `zoetrope:jetbrains-mono`) come from
-/// the bytes bundled into `zoetrope-core`; everything else is a filesystem
+/// Reserved font srcs (`kineto:inter`, `kineto:jetbrains-mono`) come from
+/// the bytes bundled into `kineto-core`; everything else is a filesystem
 /// path resolved against `base_dir`. Absolute srcs are used as-is. There is
 /// no network fetching — a document whose pixels depend on a URL would not be
 /// reproducible.
@@ -65,7 +65,7 @@ pub fn resolve_assets(doc: &Document, base_dir: &Path) -> Result<AssetStore, Too
             Asset::Image { src } | Asset::Font { src } => src,
         };
 
-        if let Some(bytes) = zoetrope_core::resolve_reserved_src(src) {
+        if let Some(bytes) = kineto_core::resolve_reserved_src(src) {
             store.add_bytes(id, bytes.to_vec());
             continue;
         }
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn inline_document_base_dir_is_cwd() {
-        let doc = zoetrope_core::Document::new(16, 16).canonical_json();
+        let doc = kineto_core::Document::new(16, 16).canonical_json();
         let (parsed, base) = load_document(Some(&doc), None).unwrap();
         assert_eq!(parsed.size.w, 16);
         assert_eq!(base, std::env::current_dir().unwrap());
@@ -167,7 +167,7 @@ mod tests {
     fn path_document_base_dir_is_its_parent() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("scene.json");
-        std::fs::write(&path, zoetrope_core::Document::new(8, 8).canonical_json()).unwrap();
+        std::fs::write(&path, kineto_core::Document::new(8, 8).canonical_json()).unwrap();
         let (_, base) = load_document(None, Some(path.to_str().unwrap())).unwrap();
         assert_eq!(base, dir.path());
     }
@@ -180,8 +180,8 @@ mod tests {
 
     #[test]
     fn resolves_reserved_font_src_without_touching_disk() {
-        let mut doc = zoetrope_core::Document::new(8, 8);
-        doc.add_asset("f", zoetrope_core::Asset::font("zoetrope:jetbrains-mono"));
+        let mut doc = kineto_core::Document::new(8, 8);
+        doc.add_asset("f", kineto_core::Asset::font("kineto:jetbrains-mono"));
         let store = resolve_assets(&doc, std::path::Path::new("/nonexistent")).unwrap();
         // `prepare` is what actually decodes; getting here without an I/O error
         // proves the reserved src never hit the filesystem.
@@ -191,8 +191,8 @@ mod tests {
     #[test]
     fn missing_asset_file_names_the_resolved_path() {
         let dir = tempfile::tempdir().unwrap();
-        let mut doc = zoetrope_core::Document::new(8, 8);
-        doc.add_asset("i", zoetrope_core::Asset::image("missing.png"));
+        let mut doc = kineto_core::Document::new(8, 8);
+        doc.add_asset("i", kineto_core::Asset::image("missing.png"));
         let result = resolve_assets(&doc, dir.path());
         if let Err(err) = result {
             let msg = err.to_string();
@@ -214,11 +214,11 @@ mod tests {
         // Write a file to asset_dir and reference it by absolute path
         let asset_path = asset_dir.path().join("image.dat");
         std::fs::write(&asset_path, b"fake image bytes").unwrap();
-        let mut doc = zoetrope_core::Document::new(8, 8);
+        let mut doc = kineto_core::Document::new(8, 8);
         // Use the absolute path directly
         doc.add_asset(
             "img",
-            zoetrope_core::Asset::image(asset_path.to_str().unwrap()),
+            kineto_core::Asset::image(asset_path.to_str().unwrap()),
         );
         // Resolve against an unrelated base_dir; the absolute path should be used as-is
         let store = resolve_assets(&doc, base_dir.path()).unwrap();

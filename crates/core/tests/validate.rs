@@ -1,5 +1,5 @@
 mod common;
-use zoetrope_core::*;
+use kineto_core::*;
 
 /// Loads testdata/canonical/example.json as a mutable `serde_json::Value`
 /// so each test can perform targeted key/value surgery before feeding the

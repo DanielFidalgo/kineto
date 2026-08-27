@@ -15,7 +15,7 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: cargo test --workspace
-      - run: cargo run -p zoetrope-asciicast --bin zoetrope-cast -- adapters/asciicast/tests/fixture.cast -o target/cast-demo
+      - run: cargo run -p kineto-asciicast --bin kineto-cast -- adapters/asciicast/tests/fixture.cast -o target/cast-demo
       - run: test -f target/cast-demo/frame-00000.png
 
   # Product-defining gate (spec §1/§6): native and wasm must render the
@@ -34,9 +34,9 @@ jobs:
       # it) — logged so the wasm size budget (spec §8, < 3 MB gzipped) is
       # visible in CI output.
       - run: wasm-pack build crates/wasm --target web --release
-      - run: gzip -k -9 crates/wasm/pkg/zoetrope_wasm_bg.wasm && ls -l crates/wasm/pkg/zoetrope_wasm_bg.wasm.gz
+      - run: gzip -k -9 crates/wasm/pkg/kineto_wasm_bg.wasm && ls -l crates/wasm/pkg/kineto_wasm_bg.wasm.gz
       - run: wasm-pack build crates/wasm --target web --release -- --features corpus
-      - run: cargo run -p zoetrope-core --bin dump-parity --features parity
+      - run: cargo run -p kineto-core --bin dump-parity --features parity
       - run: node tests/parity/run.mjs
 
   # Task 19: render()'s in-browser WebCodecs + mp4-muxer export, exercised
@@ -54,14 +54,14 @@ jobs:
         with: { node-version: 22 }
       - run: cargo install wasm-pack
       # The SDK imports crates/wasm/pkg by relative path (Task 15/17) —
-      # build it before anything that touches @zoetrope/sdk.
+      # build it before anything that touches @kineto/sdk.
       - run: wasm-pack build crates/wasm --target web --release
       - run: npm ci
       - run: npm -ws run typecheck --if-present
       - run: npm -ws run test --if-present
       - run: npx playwright install --with-deps chromium
-      - run: npm -w @zoetrope/sdk run test:browser
-      - run: npm -w @zoetrope/demo-tape run test:browser
+      - run: npm -w @kineto/sdk run test:browser
+      - run: npm -w @kineto/demo-tape run test:browser
       # Perf diagnostic (spec §6, Task 26): render-only ms/frame and
       # realtime ratio for the fixture tape, logged for regression
       # visibility. Measured, not asserted — never fails the job on a
@@ -69,5 +69,5 @@ jobs:
       # so a slow/loaded free-tier runner (vitest timeout) can't fail the
       # whole web job either — the step still shows as failed in the
       # Actions UI when that happens, it just doesn't block the job.
-      - run: npm -w @zoetrope/demo-tape run bench
+      - run: npm -w @kineto/demo-tape run bench
         continue-on-error: true

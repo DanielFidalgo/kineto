@@ -1,4 +1,4 @@
-use zoetrope_core::{
+use kineto_core::{
     doc::{Document, Scene, Transition},
     ms,
     timeline::{layers_at, scene_starts, total_duration},

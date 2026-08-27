@@ -395,7 +395,7 @@ fn storyboard_rejects_too_many_frames() {
 
 #[test]
 fn renders_an_mp4_with_preview_frames() {
-    if !zoetrope_core::export::ffmpeg_available() {
+    if !kineto_core::export::ffmpeg_available() {
         panic!(
             "ffmpeg is required to run this test; CI installs it (see \
              .github/workflows). Install it locally to run the full suite."
@@ -483,7 +483,7 @@ fn asciicast_theme_override_reaches_the_rendered_pixels() {
     // The smoke test above only asserts the call did not error, which a tool
     // that dropped `theme` entirely would also satisfy. This renders and
     // reads the padding pixel, which is the background and nothing else.
-    if !zoetrope_core::export::ffmpeg_available() {
+    if !kineto_core::export::ffmpeg_available() {
         panic!(
             "ffmpeg is required to run this test; CI installs it (see \
              .github/workflows). Install it locally to run the full suite."

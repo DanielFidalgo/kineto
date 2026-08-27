@@ -1,5 +1,5 @@
 mod common;
-use zoetrope_core::*;
+use kineto_core::*;
 
 /// Builds the spec §3.6 example via the Rust builder surface.
 /// Task 18's TS golden test builds the SAME doc and byte-compares

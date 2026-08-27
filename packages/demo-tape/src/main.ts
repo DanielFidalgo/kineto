@@ -4,8 +4,8 @@
 // fetched off this same Vite dev server, or a real folder via
 // <input webkitdirectory>), preview it live, export it to an MP4 blob
 // with a progress bar, and reveal a download link.
-import { build, loadEngine, mount, render, TIMEBASE } from "@zoetrope/sdk";
-import type { Player, ZoeDocument } from "@zoetrope/sdk";
+import { build, loadEngine, mount, render, TIMEBASE } from "@kineto/sdk";
+import type { Player, ZoeDocument } from "@kineto/sdk";
 import { parseTape } from "./adapter";
 
 // Stamped after a successful export so export.spec.ts can read the

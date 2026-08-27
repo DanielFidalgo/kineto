@@ -39,7 +39,7 @@ const DEFAULT_BG = "#000000";
 const DEFAULT_ALIGN = "left";
 const DEFAULT_EASE = "linear";
 const DEFAULT_FONT_ID = "default";
-const DEFAULT_FONT_ASSET: ZoeAsset = { type: "font", src: "zoetrope:inter" };
+const DEFAULT_FONT_ASSET: ZoeAsset = { type: "font", src: "kineto:inter" };
 
 function serStr(s: string): string {
   return JSON.stringify(s);
@@ -177,7 +177,7 @@ function elementsUseDefaultFont(elements: readonly ZoeElement[]): boolean {
 
 /** If any text element uses font `"default"` and the document doesn't
  * already declare a `default` asset, inject
- * `default: {type:"font", src:"zoetrope:inter"}` (the SDK's bundled Inter
+ * `default: {type:"font", src:"kineto:inter"}` (the SDK's bundled Inter
  * font, spec §2). Returns `d` unchanged when no injection is needed;
  * otherwise returns a shallow copy so builder-supplied documents aren't
  * mutated by `build()`. */

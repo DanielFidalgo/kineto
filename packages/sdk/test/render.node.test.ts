@@ -111,7 +111,7 @@ describe("render() fps guard", () => {
     d.scenes = [scene("a", 705_600_000, [rect([0, 0, 4, 4], "#ff0000")])];
 
     await expect(render(d, { fps: 0 })).rejects.toThrow(
-      "zoetrope: unsupported fps 0: must divide 705600000",
+      "kineto: unsupported fps 0: must divide 705600000",
     );
   });
 
@@ -120,7 +120,7 @@ describe("render() fps guard", () => {
     d.scenes = [scene("a", 705_600_000, [rect([0, 0, 4, 4], "#ff0000")])];
 
     await expect(render(d, { fps: 23 })).rejects.toThrow(
-      "zoetrope: unsupported fps 23: must divide 705600000",
+      "kineto: unsupported fps 23: must divide 705600000",
     );
   });
 });

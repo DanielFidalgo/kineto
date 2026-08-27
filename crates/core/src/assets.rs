@@ -155,8 +155,8 @@ fn load_font(
 #[cfg(feature = "bundled-fonts")]
 pub fn resolve_reserved_src(src: &str) -> Option<&'static [u8]> {
     match src {
-        "zoetrope:inter" => Some(include_bytes!("../../../assets/fonts/Inter-Regular.ttf")),
-        "zoetrope:jetbrains-mono" => Some(include_bytes!(
+        "kineto:inter" => Some(include_bytes!("../../../assets/fonts/Inter-Regular.ttf")),
+        "kineto:jetbrains-mono" => Some(include_bytes!(
             "../../../assets/fonts/JetBrainsMono-Regular.ttf"
         )),
         _ => None,
