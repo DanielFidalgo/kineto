@@ -33,12 +33,23 @@ pub fn assert_golden(rel_path: &str, actual: &[u8]) {
 /// dumps the buffer as a PNG to `<target>/debug-goldens/<name>.png` so a
 /// human can eyeball what actually rendered.
 ///
-/// Assumes a square RGBA8 buffer (`w == h`), which holds for every raster
-/// test as of Task 8; revisit if a non-square golden shows up.
+/// `w`/`h` are required (not inferred from `rgba.len()`): reconstructing
+/// dimensions via `sqrt(len/4)` silently mis-writes any non-square buffer
+/// whose pixel count happens to be a perfect square (e.g. a 256x64 canvas
+/// is 16384px = 128², so it would get written out as 128x128 garbage with
+/// no error). Callers must pass the real dimensions of `rgba`.
 #[allow(dead_code)]
-pub fn assert_golden_hash(name: &str, rgba: &[u8]) {
+pub fn assert_golden_hash(name: &str, w: u32, h: u32, rgba: &[u8]) {
+    assert_eq!(
+        rgba.len(),
+        (w * h * 4) as usize,
+        "assert_golden_hash: rgba.len() ({}) doesn't match w*h*4 ({}x{}x4)",
+        rgba.len(),
+        w,
+        h
+    );
     let hex_hash = sha256_hex(rgba);
-    write_debug_png(name, rgba);
+    write_debug_png(name, w, h, rgba);
 
     let hashes_path = repo("testdata/golden/hashes.json");
     let mut hashes = read_hashes(&hashes_path);
@@ -80,15 +91,8 @@ fn debug_goldens_dir() -> PathBuf {
     }
 }
 
-fn write_debug_png(name: &str, rgba: &[u8]) {
-    let side = ((rgba.len() / 4) as f64).sqrt().round() as u32;
-    assert_eq!(
-        (side * side * 4) as usize,
-        rgba.len(),
-        "assert_golden_hash assumes a square RGBA8 buffer; got {} bytes",
-        rgba.len()
-    );
-    let img = image::RgbaImage::from_raw(side, side, rgba.to_vec())
+fn write_debug_png(name: &str, w: u32, h: u32, rgba: &[u8]) {
+    let img = image::RgbaImage::from_raw(w, h, rgba.to_vec())
         .expect("RGBA buffer size mismatch building debug PNG");
     let dir = debug_goldens_dir();
     std::fs::create_dir_all(&dir).unwrap();

@@ -47,7 +47,7 @@ fn rect_fill_and_opacity() {
     assert_eq!(px.blue(), 0);
     assert_eq!(px.alpha(), 255);
 
-    common::assert_golden_hash("raster-rect-opacity", pm.data());
+    common::assert_golden_hash("raster-rect-opacity", pm.width(), pm.height(), pm.data());
 }
 
 /// Same rect, rotated 45deg about its own center. A 45deg-rotated 48x48
@@ -77,7 +77,12 @@ fn rect_rotation_45deg() {
         (0, 0, 0, 255)
     );
 
-    common::assert_golden_hash("raster-rect-rotation-45", pm.data());
+    common::assert_golden_hash(
+        "raster-rect-rotation-45",
+        pm.width(),
+        pm.height(),
+        pm.data(),
+    );
 }
 
 /// `element_matrix` rotates about the box center, not its top-left corner:
