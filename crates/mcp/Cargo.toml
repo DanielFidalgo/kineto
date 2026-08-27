@@ -33,3 +33,10 @@ thiserror = "2.0.20"
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
 zoetrope-asciicast = { path = "../../adapters/asciicast" }
 zoetrope-core = { path = "../core" }
+
+[dev-dependencies]
+# rmcp does not re-export the `base64` crate it depends on internally, so
+# this is used only to decode test fixtures back to raw bytes. The server's
+# own encoding goes through `rmcp::model::PromptMessage::new_image`, which
+# uses rmcp's own `base64` (feature "base64") — see `render.rs`.
+base64 = "0.22"

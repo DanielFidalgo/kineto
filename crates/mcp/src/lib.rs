@@ -4,6 +4,7 @@ use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 use rmcp::ServerHandler;
 
 pub mod error;
+pub mod render;
 pub mod source;
 
 #[derive(Clone, Default)]
