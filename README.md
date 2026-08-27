@@ -51,6 +51,18 @@ cargo run -p zoetrope-asciicast --bin zoetrope-cast -- adapters/asciicast/tests/
 This writes a PNG frame sequence to `out/`. If `ffmpeg` is on `PATH`, it
 also muxes those frames into `out/out.mp4`.
 
+## MCP server
+
+`crates/mcp` is a fourth surface onto the same native engine — an MCP
+server (`zoetrope-mcp`) that exposes document, asciicast, and storyboard
+rendering to MCP-speaking agents over stdio, alongside the CLI above and
+the two authoring SDKs. It has no published package yet and must be built
+from source (`cargo build -p zoetrope-mcp --release`); see
+[`crates/mcp/README.md`](crates/mcp/README.md) for the ffmpeg prerequisite,
+client configuration, and worked tool examples, and the design spec at
+[`docs/superpowers/specs/2026-08-27-zoetrope-mcp-design.md`](docs/superpowers/specs/2026-08-27-zoetrope-mcp-design.md)
+for the full rationale.
+
 ## Browser support
 
 The in-browser exporter (`render()` in `@zoetrope/sdk`, and the browser demo
