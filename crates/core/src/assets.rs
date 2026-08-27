@@ -162,3 +162,32 @@ pub fn resolve_reserved_src(src: &str) -> Option<&'static [u8]> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod premultiply_tests {
+    use super::premultiply_rgba;
+
+    /// Exercises the multiplicative branch (alpha < 255) of
+    /// `tiny_skia::ColorU8::premultiply`, which our fixtures (both fully
+    /// opaque) never hit. Expected values computed by hand from tiny-skia's
+    /// own formula, `prod = c*a + 128; p = ((prod + (prod >> 8)) >> 8)`:
+    ///   r: c=200, a=128 -> prod=25728 -> (25728+100)>>8 = 100
+    ///   g: c=100, a=128 -> prod=12928 -> (12928+50)>>8  = 50
+    ///   b: c=50,  a=128 -> prod=6528  -> (6528+25)>>8   = 25
+    ///   a: unchanged = 128
+    #[test]
+    fn applies_integer_formula_when_alpha_less_than_opaque() {
+        let raw = vec![200u8, 100, 50, 128];
+        let out = premultiply_rgba(raw);
+        assert_eq!(out, vec![100u8, 50, 25, 128]);
+    }
+
+    /// Alpha == 255 takes tiny-skia's opaque fast path: channels pass
+    /// through unchanged (this is the only branch our fixtures exercise).
+    #[test]
+    fn is_identity_when_fully_opaque() {
+        let raw = vec![10u8, 20, 30, 255];
+        let out = premultiply_rgba(raw);
+        assert_eq!(out, vec![10u8, 20, 30, 255]);
+    }
+}

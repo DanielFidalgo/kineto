@@ -60,7 +60,18 @@ fn decodes_images_and_loads_fonts() {
         resolve_reserved_src("zoetrope:inter").unwrap().to_vec(),
     );
     store.prepare(&d).unwrap();
-    assert_eq!(store.image("g").width(), 8);
+    let pixmap = store.image("g");
+    assert_eq!(pixmap.width(), 8);
+    // grad.png pixel (x,y) = (x*32, y*32, 128, 255) — fully opaque, so
+    // premultiply is a no-op (tiny-skia's opaque fast path) and the
+    // decoded/premultiplied bytes equal the source values exactly.
+    let data = pixmap.data();
+    let px = |x: u32, y: u32| -> [u8; 4] {
+        let i = ((y * pixmap.width() + x) * 4) as usize;
+        [data[i], data[i + 1], data[i + 2], data[i + 3]]
+    };
+    assert_eq!(px(0, 0), [0, 0, 128, 255]); // x*32=0,   y*32=0
+    assert_eq!(px(7, 7), [224, 224, 128, 255]); // x*32=224, y*32=224
     assert_eq!(store.family("body"), "Inter");
 }
 

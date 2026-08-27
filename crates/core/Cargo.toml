@@ -13,8 +13,15 @@ default = ["bundled-fonts"]
 bundled-fonts = []
 
 [dependencies]
-cosmic-text = "0.19.0"
-fontdb = "0.23.0"
+# default-features off: upstream defaults pull in `fontconfig`, which
+# compiles real system-font-scanning code (fontconfig-parser/roxmltree)
+# into native builds. Determinism is law (spec §5) — we never want that
+# code path reachable, so we opt into only what we use: `std` (required),
+# `swash` on cosmic-text (its shaping/rasterization backend). fontdb's
+# `memmap` is kept for efficient font-data mapping; it does not pull in
+# fontconfig.
+cosmic-text = { version = "0.19.0", default-features = false, features = ["std", "swash"] }
+fontdb = { version = "0.23.0", default-features = false, features = ["std", "memmap"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
