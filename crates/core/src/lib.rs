@@ -3,6 +3,7 @@ pub mod anim;
 pub mod color;
 pub mod doc;
 pub mod scalar;
+pub mod timeline;
 pub mod validate;
 pub use color::Color;
 pub use doc::*;
