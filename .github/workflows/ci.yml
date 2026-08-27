@@ -60,5 +60,9 @@ jobs:
       # Perf diagnostic (spec §6, Task 26): render-only ms/frame and
       # realtime ratio for the fixture tape, logged for regression
       # visibility. Measured, not asserted — never fails the job on a
-      # threshold (see bench/render-bench.test.ts).
+      # threshold (see bench/render-bench.test.ts). `continue-on-error`
+      # so a slow/loaded free-tier runner (vitest timeout) can't fail the
+      # whole web job either — the step still shows as failed in the
+      # Actions UI when that happens, it just doesn't block the job.
       - run: npm -w @zoetrope/demo-tape run bench
+        continue-on-error: true
