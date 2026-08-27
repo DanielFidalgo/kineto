@@ -42,53 +42,49 @@ fn run(input: PathBuf, output: PathBuf, fps: i64) -> Result<(), Box<dyn Error>> 
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args = pico_args::Arguments::from_env();
 
-    if args.len() < 4 {
-        eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
-        std::process::exit(1);
-    }
-
-    let input = PathBuf::from(&args[1]);
-
-    let mut output = None;
-    let mut fps = 30i64;
-    let mut i = 2;
-    while i < args.len() {
-        match args[i].as_str() {
-            "-o" | "--output" => {
-                if i + 1 >= args.len() {
-                    eprintln!("error: -o requires an argument");
-                    std::process::exit(1);
-                }
-                output = Some(PathBuf::from(&args[i + 1]));
-                i += 2;
-            }
-            "--fps" => {
-                if i + 1 >= args.len() {
-                    eprintln!("error: --fps requires an argument");
-                    std::process::exit(1);
-                }
-                match args[i + 1].parse::<i64>() {
-                    Ok(f) => fps = f,
-                    Err(e) => {
-                        eprintln!("error parsing --fps: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-                i += 2;
-            }
-            _ => i += 1,
-        }
-    }
-
-    let output = match output {
-        Some(o) => o,
-        None => {
+    // Parse required output directory
+    let output: PathBuf = match args.opt_value_from_str(["-o", "--output"]) {
+        Ok(Some(o)) => o,
+        Ok(None) => {
             eprintln!("error: -o is required");
+            eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("error parsing -o: {}", e);
             std::process::exit(1);
         }
     };
+
+    // Parse optional fps (default 30)
+    let fps: i64 = match args.opt_value_from_str("--fps") {
+        Ok(Some(f)) => f,
+        Ok(None) => 30,
+        Err(e) => {
+            eprintln!("error parsing --fps: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Parse required positional input file
+    let input: PathBuf = match args.free_from_str() {
+        Ok(i) => i,
+        Err(_) => {
+            eprintln!("error: input file is required");
+            eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+            std::process::exit(1);
+        }
+    };
+
+    // Check for unknown arguments
+    let remaining = args.finish();
+    if !remaining.is_empty() {
+        eprintln!("error: unknown arguments: {:?}", remaining);
+        eprintln!("usage: zoetrope-cast <input.cast> -o <dir> [--fps N]");
+        std::process::exit(1);
+    }
 
     if let Err(e) = run(input, output, fps) {
         eprintln!("{}", e);

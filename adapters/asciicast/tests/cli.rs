@@ -89,3 +89,33 @@ fn test_zoetrope_cast_garbage_input() {
 
     assert!(!status.success(), "CLI should exit 1 for invalid input");
 }
+
+#[test]
+fn test_zoetrope_cast_unknown_flag() {
+    let out_dir = tempfile::tempdir().expect("create temp dir");
+    let out_path = out_dir.path();
+
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixture.cast");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+        .arg(&fixture_path)
+        .arg("-o")
+        .arg(out_path)
+        .arg("-x")
+        .output()
+        .expect("run zoetrope-cast");
+
+    assert!(
+        !output.status.success(),
+        "CLI should exit 1 for unknown flag -x"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("unknown arguments"),
+        "stderr should mention unknown arguments, got: {}",
+        stderr
+    );
+}
