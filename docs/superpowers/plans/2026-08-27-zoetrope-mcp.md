@@ -1391,17 +1391,14 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use crate::error::ToolError;
 use crate::tools::RenderDocumentParams;
 
-/// Carried forward from Task 1 unchanged — this rewrite must not drop it.
-/// Built via `ServerInfo::new` + field assignment rather than a struct
-/// literal: several rmcp model types are `#[non_exhaustive]`, so a literal
-/// would not compile from outside the crate.
+/// Carried forward from Task 1 EXACTLY AS IT EXISTS ON DISK — do not retype
+/// it from this block and do not drop it; this rewrite's `get_info` calls it.
+/// Both `ServerInfo` and `Implementation` are `#[non_exhaustive]` in rmcp
+/// 3.1.4, so neither can be built with a struct literal from outside the
+/// crate; Task 1 established the constructor form below.
 fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     let mut info = ServerInfo::new(capabilities);
-    info.server_info = Implementation {
-        name: "zoetrope-mcp".into(),
-        version: env!("CARGO_PKG_VERSION").into(),
-        ..Implementation::default()
-    };
+    info.server_info = Implementation::new("zoetrope-mcp", env!("CARGO_PKG_VERSION"));
     info.instructions = Some(
         "Renders zoetrope scene documents to MP4. Deterministic: the same \
          document always produces the same bytes. Requires ffmpeg on PATH."
