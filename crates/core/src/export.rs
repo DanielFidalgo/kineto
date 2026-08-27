@@ -86,9 +86,7 @@ pub fn mux_with_ffmpeg(dir: &Path, fps: i64, out: &Path) -> io::Result<bool> {
 
     let input_pattern = dir.join("frame-%05d.png");
     let fps_str = fps.to_string();
-    let input_str = input_pattern
-        .to_str()
-        .expect("path should be valid UTF-8");
+    let input_str = input_pattern.to_str().expect("path should be valid UTF-8");
     let out_str = out.to_str().expect("path should be valid UTF-8");
 
     let mut cmd = Command::new("ffmpeg");
