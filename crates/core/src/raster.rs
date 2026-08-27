@@ -11,11 +11,12 @@
 
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
-use crate::doc::Element;
-use crate::text::layout_text;
+use crate::doc::{Align, Element};
+use crate::text::{layout_text, TextLayout};
 use cosmic_text::SwashContent;
+use std::collections::HashMap;
 use tiny_skia::{
-    BlendMode, FillRule, FilterQuality, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint,
+    BlendMode, Color, FillRule, FilterQuality, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint,
     Rect as SkRect, Shader, Transform,
 };
 
@@ -118,11 +119,54 @@ fn union_bbox(a: BBox, b: BBox) -> BBox {
     }
 }
 
-/// Renders elements to pixels. Owns the `swash` glyph raster cache (Task 10)
-/// so repeated calls across frames reuse rasterized glyph bitmaps instead of
-/// re-rasterizing every frame.
+/// Everything `layout_text` is a pure function of (spec §5) — so two Text
+/// elements with an equal key are guaranteed to lay out identically, and one
+/// shaping pass can be reused for the other. The `f32` inputs are stored as
+/// their raw `to_bits()` patterns: `f32` is not `Eq`/`Hash`, and a bit-exact
+/// key is exactly the right notion of equality here anyway (two sizes that
+/// compare `==` but differ in bits cannot exist for finite values, and NaN —
+/// which `==` would reject — is rejected by validation long before this).
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct LayoutKey {
+    family: String,
+    text: String,
+    size_px_bits: u32,
+    max_w_bits: Option<u32>,
+    align: Align,
+}
+
+/// Renders elements to pixels. Owns three cross-frame caches, all of which
+/// are pure memoization — they change how long a frame takes, never which
+/// bytes it produces (the golden corpus and the native/wasm parity gate are
+/// the proof; see `tests/golden.rs` and `tests/parity/run.mjs`):
+///
+/// - `swash`: the glyph raster cache (Task 10).
+/// - `layouts`: shaped text layouts (Task 27). Text is re-shaped from
+///   scratch on every frame otherwise, even though a v1 document's text is
+///   static (spec §3.3: only translate/scale/rotation/opacity animate, and
+///   none of those feed `layout_text`) — so per-run shaping is pure waste.
+///   The cache is deliberately unbounded and never evicted: a document has a
+///   finite, small set of distinct (family, text, size, wrap, align) tuples
+///   (one per Text element at most, and the tape demo's captions repeat
+///   across scenes), and an `Engine` — which owns exactly one `Renderer` —
+///   lives only as long as the document it renders.
+/// - `layer_pool`: scratch full-canvas pixmaps for the isolated layers the
+///   Text and Group arms composite through (Task 27). Without it every such
+///   element allocates and frees a full canvas (4 MB at 1280×800) on every
+///   frame. Retained memory is bounded by the *concurrent* layer high-water
+///   mark — i.e. the document's deepest Group nesting, +1 — not by the
+///   number of Text/Group elements: siblings hand the same pixmap back and
+///   forth, so a flat scene of N text elements keeps exactly one.
+///
+/// None of this is where the tape demo's frame time goes, measured (Task 27
+/// report): full-canvas `draw_pixmap` compositing is ~95% of it. These two
+/// caches are the cheap, semantics-preserving levers spec §8 names; the
+/// expensive lever (ink-bbox-sized layers instead of full-canvas ones) is a
+/// separate change with its own byte-identity argument to make.
 pub struct Renderer {
     pub swash: cosmic_text::SwashCache,
+    layouts: HashMap<LayoutKey, TextLayout>,
+    layer_pool: Vec<Pixmap>,
 }
 
 impl Default for Renderer {
@@ -135,7 +179,78 @@ impl Renderer {
     pub fn new() -> Self {
         Renderer {
             swash: cosmic_text::SwashCache::new(),
+            layouts: HashMap::new(),
+            layer_pool: Vec::new(),
         }
+    }
+
+    /// Take a transparent `w`×`h` scratch layer from the pool, or allocate
+    /// one if the pool is empty (or — canvas size is fixed for a given
+    /// `Engine`, so this should not happen in practice — holds a pixmap of
+    /// the wrong size, in which case the stale one is simply dropped).
+    ///
+    /// Byte-identity: a pooled pixmap is cleared with `Color::TRANSPARENT`,
+    /// whose premultiplied form is all-zero — i.e. exactly the state
+    /// `Pixmap::new` hands back — so a reused layer is indistinguishable
+    /// from a fresh one. `Engine::render` already relies on this same
+    /// property for its crossfade `scratch` buffer.
+    fn acquire_layer(&mut self, w: u32, h: u32) -> Pixmap {
+        while let Some(mut p) = self.layer_pool.pop() {
+            if p.width() == w && p.height() == h {
+                p.fill(Color::TRANSPARENT);
+                return p;
+            }
+        }
+        Pixmap::new(w, h).expect("canvas dimensions are always non-zero")
+    }
+
+    /// Return a layer to the pool. Pop/push (stack) discipline is what makes
+    /// this recursion-safe for nested groups: a layer is only released after
+    /// the recursive `draw_elements` that drew into it has returned, so a
+    /// nested scope can never be handed the layer its parent is still
+    /// drawing into.
+    fn release_layer(&mut self, layer: Pixmap) {
+        self.layer_pool.push(layer);
+    }
+
+    /// Shaped layout for one Text element, from `layouts` on a hit and from
+    /// `layout_text` (inserting) on a miss.
+    ///
+    /// Returns an owned clone rather than a borrow on purpose: the caller
+    /// needs `&mut self.swash` for glyph rasterization immediately after,
+    /// and a `&TextLayout` borrowed out of `self.layouts` would keep `self`
+    /// borrowed across that. The clone is a `Vec<PlacedGlyph>` memcpy of a
+    /// few hundred bytes — orders of magnitude below the shaping pass it
+    /// replaces, and below the per-frame pixmap work around it.
+    fn layout_for(
+        &mut self,
+        assets: &mut AssetStore,
+        family: String,
+        text: &str,
+        size_px: f32,
+        max_w: Option<f32>,
+        align: Align,
+    ) -> TextLayout {
+        let key = LayoutKey {
+            family,
+            text: text.to_string(),
+            size_px_bits: size_px.to_bits(),
+            max_w_bits: max_w.map(f32::to_bits),
+            align,
+        };
+        if let Some(hit) = self.layouts.get(&key) {
+            return hit.clone();
+        }
+        let layout = layout_text(
+            assets.font_system(),
+            &key.family,
+            text,
+            size_px,
+            max_w,
+            align,
+        );
+        self.layouts.insert(key, layout.clone());
+        layout
     }
 
     /// Draw `elements` (already in document/paint order, spec §3.3) onto
@@ -219,11 +334,12 @@ impl Renderer {
                     // `assets.family(font)` borrows `assets` immutably; copy
                     // it to an owned `String` before `assets.font_system()`
                     // needs `assets` mutably for `layout_text` below (the
-                    // two borrows can't overlap otherwise).
+                    // two borrows can't overlap otherwise). The owned
+                    // `String` doubles as part of the layout cache key.
                     let family = assets.family(font).to_string();
-                    let layout = layout_text(
-                        assets.font_system(),
-                        &family,
+                    let layout = self.layout_for(
+                        assets,
+                        family,
                         text,
                         size_px.0 as f32,
                         max_w.as_ref().map(|w| w.0 as f32),
@@ -253,8 +369,7 @@ impl Renderer {
                     // composite the same way) will carry the same note
                     // until a canvas-sized-plus-margin (or unbounded) layer
                     // is worth the cost.
-                    let mut layer = Pixmap::new(canvas.width(), canvas.height())
-                        .expect("canvas dimensions are always non-zero");
+                    let mut layer = self.acquire_layer(canvas.width(), canvas.height());
                     let (cr, cg, cb, ca) = color.rgba8();
 
                     // `self.swash` (rasterizes) and `assets.font_system()`
@@ -319,6 +434,7 @@ impl Renderer {
                         quality: FilterQuality::Bilinear,
                     };
                     canvas.draw_pixmap(0, 0, layer.as_ref(), &paint, matrix, None);
+                    self.release_layer(layer);
                 }
                 Element::Group {
                     origin,
@@ -366,8 +482,7 @@ impl Renderer {
                     // before this group's own transform is applied is
                     // lost even if the transform would bring it back into
                     // frame.
-                    let mut layer = Pixmap::new(canvas.width(), canvas.height())
-                        .expect("canvas dimensions are always non-zero");
+                    let mut layer = self.acquire_layer(canvas.width(), canvas.height());
                     self.draw_elements(
                         &mut layer.as_mut(),
                         children,
@@ -382,6 +497,7 @@ impl Renderer {
                         quality: FilterQuality::Bilinear,
                     };
                     canvas.draw_pixmap(0, 0, layer.as_ref(), &paint, matrix, None);
+                    self.release_layer(layer);
                 }
             }
         }

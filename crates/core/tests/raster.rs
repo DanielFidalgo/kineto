@@ -510,3 +510,106 @@ fn group_nested_rotation() {
 
     common::assert_golden_hash("raster-group-nested", pm.width(), pm.height(), pm.data());
 }
+
+/// Task 27's iron rule, pinned directly rather than only via the golden
+/// corpus: the `Renderer`'s text-layout cache and scratch-layer pool are
+/// memoization, so a *warm* renderer must produce the exact same bytes as a
+/// *cold* one. The scene deliberately hits every path the two caches touch
+/// at once — a nested Group (so a layer is acquired while an outer layer is
+/// still held, which is what the pool's pop/push discipline has to get
+/// right), two Text elements sharing one layout key (the cache-hit path),
+/// and a rotation (so the layer composite is not a trivial identity blit).
+#[test]
+fn warm_caches_render_identically_to_cold_ones() {
+    let elements = vec![
+        Element::text("Zoetrope", "body", 20.0, "#FFFFFF", [8.0, 8.0]),
+        Element::group(
+            [4.0, 40.0],
+            vec![
+                Element::rect([0.0, 0.0, 30.0, 20.0], "#00FF00"),
+                Element::group(
+                    [6.0, 6.0],
+                    vec![Element::text(
+                        "Zoetrope",
+                        "body",
+                        20.0,
+                        "#FF0000",
+                        [0.0, 0.0],
+                    )],
+                )
+                .with_rotation(12.0),
+            ],
+        )
+        .with_opacity(0.7),
+    ];
+    let mut assets = inter_store(160, 96);
+
+    let render = |renderer: &mut Renderer, assets: &mut AssetStore| {
+        let mut pm = blank_pixmap(160, 96, (0, 0, 0, 255));
+        renderer.draw_elements(&mut pm.as_mut(), &elements, assets, 0, (0.0, 0.0));
+        pm
+    };
+
+    let mut warm = Renderer::new();
+    let cold_pass = render(&mut warm, &mut assets);
+    // Second pass on the same renderer: every layout is a cache hit and
+    // every layer comes back out of the pool.
+    let warm_pass = render(&mut warm, &mut assets);
+    // Third pass on a renderer that has never seen this document.
+    let fresh_pass = render(&mut Renderer::new(), &mut assets);
+
+    let painted = cold_pass
+        .data()
+        .chunks_exact(4)
+        .filter(|px| px != &[0u8, 0, 0, 255])
+        .count();
+    assert!(painted > 100, "scene should actually paint something");
+
+    assert_eq!(
+        cold_pass.data(),
+        warm_pass.data(),
+        "warm caches changed the output bytes"
+    );
+    assert_eq!(
+        cold_pass.data(),
+        fresh_pass.data(),
+        "a cold renderer disagreed with the first pass"
+    );
+}
+
+/// The layout cache must key on what `layout_text` actually consumes and
+/// nothing else. `color` is applied at blit time, not at layout time, so two
+/// Text elements identical except for color share a cache entry — and must
+/// still render in their own colors. (Keying on color would be merely
+/// wasteful; *ignoring* color while caching the pixels would be the bug this
+/// pins.)
+#[test]
+fn layout_cache_shared_across_colors_still_renders_each_color() {
+    let mut renderer = Renderer::new();
+    let mut assets = inter_store(96, 48);
+
+    let mut red = blank_pixmap(96, 48, (0, 0, 0, 255));
+    let red_el = Element::text("Hi", "body", 24.0, "#FF0000", [8.0, 8.0]);
+    renderer.draw_elements(&mut red.as_mut(), &[red_el], &mut assets, 0, (0.0, 0.0));
+
+    // Same layout key as above => a cache hit; only the color differs.
+    let mut blue = blank_pixmap(96, 48, (0, 0, 0, 255));
+    let blue_el = Element::text("Hi", "body", 24.0, "#0000FF", [8.0, 8.0]);
+    renderer.draw_elements(&mut blue.as_mut(), &[blue_el], &mut assets, 0, (0.0, 0.0));
+
+    assert_ne!(
+        red.data(),
+        blue.data(),
+        "cache hit leaked the first element's color into the second"
+    );
+    // Ink lands in the red channel for one and the blue channel for the
+    // other: same glyph positions (shared layout), different tint.
+    let red_ink = red.data().chunks_exact(4).filter(|px| px[0] > 0).count();
+    let blue_ink = blue.data().chunks_exact(4).filter(|px| px[2] > 0).count();
+    assert!(red_ink > 0 && red_ink == blue_ink);
+    assert_eq!(
+        0,
+        red.data().chunks_exact(4).filter(|px| px[2] > 0).count(),
+        "red text should not paint any blue"
+    );
+}

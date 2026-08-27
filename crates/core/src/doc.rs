@@ -103,7 +103,9 @@ pub enum Element {
     },
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+// `Eq + Hash` (beyond the `PartialEq` the doc model needs) so `Align` can be
+// part of the renderer's text-layout cache key (see `raster::LayoutKey`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Align {
     #[default]
