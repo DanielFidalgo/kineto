@@ -4,7 +4,19 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["bundled-fonts"]
+# Native hosts bundle Inter + JetBrains Mono via include_bytes! so docs can
+# reference them by reserved src without a file path. crates/wasm disables
+# this (default-features = false) so the fonts are never compiled into wasm
+# (size budget, spec §5) — the JS side supplies bytes instead.
+bundled-fonts = []
+
 [dependencies]
+cosmic-text = "0.19.0"
+fontdb = "0.23.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"
+tiny-skia = "0.12.0"
