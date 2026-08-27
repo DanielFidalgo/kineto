@@ -435,10 +435,15 @@ mod tests {
 
     #[test]
     fn rejects_fps_that_does_not_divide_the_timebase() {
+        // TIMEBASE factors as 2^9 * 3^2 * 5^5 * 7^2, so a legal fps is any
+        // product of those primes within those exponents. 11 has a prime
+        // factor the timebase lacks; 27 is 3^3, which overruns its exponent.
         assert!(check_fps(30).is_ok());
+        assert!(check_fps(24).is_ok());
         assert!(check_fps(0).is_err());
         assert!(check_fps(-1).is_err());
-        assert!(check_fps(7).is_err());
+        assert!(check_fps(11).is_err());
+        assert!(check_fps(27).is_err());
     }
 }
 ```
@@ -1123,10 +1128,28 @@ fn invalid_document_is_a_tool_error_with_a_readable_message() {
     let mut server = Server::start();
     server.initialize();
 
+    // NOTE: the document must be structurally complete. `Document::from_json`
+    // runs the unknown-field walk, then the typed decode, and only then
+    // `validate_semantics` — which is where the version check lives
+    // (crates/core/src/validate.rs:224). A bare `{"v":99}` fails the typed
+    // decode on the missing required fields and never reaches it, producing a
+    // `DocError::Json` about `timebase` instead.
+    let wrong_version = json!({
+        "v": 99,
+        "timebase": 705600000,
+        "size": { "w": 320, "h": 180 },
+        "scenes": [{
+            "id": "s",
+            "duration": 705600000,
+            "elements": []
+        }]
+    })
+    .to_string();
+
     let resp = call(
         &mut server,
         "render_document",
-        json!({ "document": r#"{"v":99}"#, "validateOnly": true }),
+        json!({ "document": wrong_version, "validateOnly": true }),
     );
 
     let result = &resp["result"];
@@ -1163,7 +1186,9 @@ fn bad_fps_is_a_tool_error_not_a_panic() {
     let resp = call(
         &mut server,
         "render_document",
-        json!({ "document": tiny_doc(), "fps": 7, "validateOnly": true }),
+        // 11 has a prime factor TIMEBASE (2^9 * 3^2 * 5^5 * 7^2) lacks.
+        // Note 7 IS legal — it divides the timebase twice over.
+        json!({ "document": tiny_doc(), "fps": 11, "validateOnly": true }),
     );
 
     assert_eq!(resp["result"]["isError"], json!(true));
@@ -1366,6 +1391,22 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use crate::error::ToolError;
 use crate::tools::RenderDocumentParams;
 
+/// Carried forward from Task 1 EXACTLY AS IT EXISTS ON DISK — do not retype
+/// it from this block and do not drop it; this rewrite's `get_info` calls it.
+/// Both `ServerInfo` and `Implementation` are `#[non_exhaustive]` in rmcp
+/// 3.1.4, so neither can be built with a struct literal from outside the
+/// crate; Task 1 established the constructor form below.
+fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
+    let mut info = ServerInfo::new(capabilities);
+    info.server_info = Implementation::new("zoetrope-mcp", env!("CARGO_PKG_VERSION"));
+    info.instructions = Some(
+        "Renders zoetrope scene documents to MP4. Deterministic: the same \
+         document always produces the same bytes. Requires ffmpeg on PATH."
+            .into(),
+    );
+    info
+}
+
 #[derive(Clone)]
 pub struct ZoetropeServer {
     tool_router: ToolRouter<Self>,
@@ -1438,7 +1479,6 @@ impl ZoetropeServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for ZoetropeServer {
     fn get_info(&self) -> ServerInfo {
-        // `server_info` is the helper introduced in Task 1; keep it.
         server_info(ServerCapabilities::builder().enable_tools().build())
     }
 }

@@ -20,10 +20,10 @@ use zoetrope_core::{seconds, Asset, Document, Element, Scene};
 /// JetBrains Mono's 0.6em advance / 1.3em line-height at `size_px`px
 /// (locked constants — see task-22 brief; matches Task 7's line-height
 /// rule), so cells and glyphs stay aligned without per-glyph measurement.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
-    pub bg: &'static str,
-    pub fg: &'static str,
+    pub bg: String,
+    pub fg: String,
     pub size_px: f64,
     pub cell_w: f64,
     pub cell_h: f64,
@@ -33,8 +33,8 @@ pub struct Theme {
 impl Default for Theme {
     fn default() -> Self {
         Theme {
-            bg: "#0A0A0A",
-            fg: "#D4D4D4",
+            bg: "#0A0A0A".to_string(),
+            fg: "#D4D4D4".to_string(),
             size_px: 20.0,
             cell_w: 12.0,
             cell_h: 26.0,
@@ -63,7 +63,7 @@ pub fn cast_to_document(cast: &Cast, theme: &Theme) -> (Document, Vec<(String, &
     let w = round_up_even(cast.cols as f64 * theme.cell_w + 2.0 * theme.pad);
     let h = round_up_even(cast.rows as f64 * theme.cell_h + 2.0 * theme.pad);
 
-    let mut doc = Document::new(w, h).with_fps(30).with_bg(theme.bg);
+    let mut doc = Document::new(w, h).with_fps(30).with_bg(theme.bg.as_str());
     doc.add_asset(FONT_ID, Asset::font(FONT_SRC));
 
     for (i, state) in states.iter().enumerate() {
@@ -165,7 +165,7 @@ fn cells_match(a: Cell, b: Cell) -> bool {
 fn cursor_element(col: u16, row: u16, theme: &Theme) -> Element {
     let x = theme.pad + col as f64 * theme.cell_w;
     let y = theme.pad + row as f64 * theme.cell_h;
-    Element::rect([x, y, theme.cell_w, theme.cell_h], theme.fg).with_opacity(0.6)
+    Element::rect([x, y, theme.cell_w, theme.cell_h], theme.fg.as_str()).with_opacity(0.6)
 }
 
 fn rgb_to_hex((r, g, b): (u8, u8, u8)) -> String {

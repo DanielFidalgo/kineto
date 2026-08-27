@@ -1,0 +1,43 @@
+[package]
+name = "zoetrope-mcp"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "zoetrope-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# default-features off: upstream defaults would be acceptable, but pinning the
+# set explicitly keeps the heavy optional tree (reqwest, hyper, oauth2,
+# jsonwebtoken, process-wrap) permanently off. `base64` is NOT optional to us:
+# MCP inline image content is base64-encoded and every render tool returns
+# sampled frames as images. `transport-io` is the stdio transport; no HTTP
+# transport is ever enabled (spec §9).
+rmcp = { version = "3.1.4", default-features = false, features = [
+    "server",
+    "macros",
+    "transport-io",
+    "base64",
+] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+schemars = "1.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+tempfile = "3.27.0"
+thiserror = "2.0.20"
+# `rt` (not `rt-multi-thread`): a stdio server is I/O-bound with one peer, so
+# the current-thread runtime is sufficient and keeps the dependency surface
+# smaller.
+tokio = { version = "1", features = ["rt", "macros", "io-std"] }
+zoetrope-asciicast = { path = "../../adapters/asciicast" }
+zoetrope-core = { path = "../core" }
+# rmcp enables the `base64` crate internally (its own "base64" feature) but
+# exposes no public encoding API of its own — `ContentBlock::image` takes an
+# already-encoded `String`. Pinned to 0.23 to match the version rmcp already
+# pulls in, so the tree carries one copy instead of two.
+base64 = "0.23"
+
+[dev-dependencies]
+sha2 = "0.11.0"
