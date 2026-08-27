@@ -18,3 +18,5 @@ export {
   withCommon,
 } from "./builders";
 export { build, validateIds } from "./canonical";
+export { render } from "./render";
+export type { RenderOptions } from "./render";

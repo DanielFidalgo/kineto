@@ -31,3 +31,24 @@ jobs:
       - run: wasm-pack build crates/wasm --target web --release -- --features corpus
       - run: cargo run -p zoetrope-core --bin dump-parity --features parity
       - run: node tests/parity/run.mjs
+
+  # Task 19: render()'s in-browser WebCodecs + mp4-muxer export, exercised
+  # end-to-end in a real (headless) Chromium against the wasm engine — see
+  # packages/sdk/test-browser/render.spec.ts.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cargo install wasm-pack
+      # The SDK imports crates/wasm/pkg by relative path (Task 15/17) —
+      # build it before anything that touches @zoetrope/sdk.
+      - run: wasm-pack build crates/wasm --target web --release
+      - run: npm ci
+      - run: npm -ws run typecheck --if-present
+      - run: npm -ws run test --if-present
+      - run: npx playwright install --with-deps chromium
+      - run: npm -w @zoetrope/sdk run test:browser
