@@ -9,3 +9,7 @@ avt = "0.18.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"
+# Default features on (bundled-fonts): this adapter is native-only (CLI,
+# Task 23), so it needs `resolve_reserved_src` to stage the bundled
+# JetBrains Mono bytes for its converted documents.
+zoetrope-core = { path = "../../crates/core" }

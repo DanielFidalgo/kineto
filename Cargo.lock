@@ -843,6 +843,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "zoetrope-core",
 ]
 
 [[package]]
