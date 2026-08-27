@@ -435,10 +435,15 @@ mod tests {
 
     #[test]
     fn rejects_fps_that_does_not_divide_the_timebase() {
+        // TIMEBASE factors as 2^9 * 3^2 * 5^5 * 7^2, so a legal fps is any
+        // product of those primes within those exponents. 11 has a prime
+        // factor the timebase lacks; 27 is 3^3, which overruns its exponent.
         assert!(check_fps(30).is_ok());
+        assert!(check_fps(24).is_ok());
         assert!(check_fps(0).is_err());
         assert!(check_fps(-1).is_err());
-        assert!(check_fps(7).is_err());
+        assert!(check_fps(11).is_err());
+        assert!(check_fps(27).is_err());
     }
 }
 ```
@@ -1181,7 +1186,9 @@ fn bad_fps_is_a_tool_error_not_a_panic() {
     let resp = call(
         &mut server,
         "render_document",
-        json!({ "document": tiny_doc(), "fps": 7, "validateOnly": true }),
+        // 11 has a prime factor TIMEBASE (2^9 * 3^2 * 5^5 * 7^2) lacks.
+        // Note 7 IS legal — it divides the timebase twice over.
+        json!({ "document": tiny_doc(), "fps": 11, "validateOnly": true }),
     );
 
     assert_eq!(resp["result"]["isError"], json!(true));
