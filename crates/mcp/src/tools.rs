@@ -145,6 +145,50 @@ impl ThemeParams {
     }
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StoryboardFrameParams {
+    /// Path to a PNG or JPEG image.
+    pub image: String,
+    /// How long this frame is held, in milliseconds. Must be positive.
+    pub duration_ms: i64,
+    /// Optional caption, drawn in a band across the bottom of the frame.
+    #[serde(default)]
+    pub caption: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderStoryboardParams {
+    /// Ordered frames. Must not be empty.
+    pub frames: Vec<StoryboardFrameParams>,
+
+    /// Output `.mp4` path. Required unless `validateOnly` is true.
+    #[serde(default)]
+    pub out: Option<String>,
+
+    /// Frames per second. Must divide 705600000 exactly.
+    #[serde(default = "default_fps")]
+    pub fps: i64,
+
+    /// Canvas width in pixels. Defaults to the first image's width.
+    #[serde(default)]
+    pub width: Option<u32>,
+
+    /// Canvas height in pixels. Defaults to the first image's height.
+    #[serde(default)]
+    pub height: Option<u32>,
+
+    /// Build and validate without rendering anything.
+    #[serde(default)]
+    pub validate_only: bool,
+
+    /// How many evenly spaced frames to return as inline images. 0 disables;
+    /// capped at 12.
+    #[serde(default = "default_preview_frames")]
+    pub preview_frames: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

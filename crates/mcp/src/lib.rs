@@ -3,6 +3,7 @@
 pub mod error;
 pub mod render;
 pub mod source;
+pub mod storyboard;
 pub mod tools;
 
 use std::path::PathBuf;
@@ -142,6 +143,77 @@ impl ZoetropeServer {
             store.add_bytes(&id, bytes.to_vec());
         }
         let mut engine = zoetrope_core::Engine::new(doc, store)?;
+
+        if params.validate_only {
+            let outcome = crate::render::describe(&engine, params.fps);
+            return Ok(crate::tools::success(&outcome, Vec::new()));
+        }
+
+        let out = params.out.ok_or_else(|| {
+            ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
+        })?;
+
+        let outcome = crate::render::render_to_mp4(&mut engine, params.fps, &out)?;
+        let previews =
+            crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
+        Ok(crate::tools::success(&outcome, previews))
+    }
+
+    #[tool(
+        name = "render_storyboard",
+        description = "Render an ordered list of images into an MP4, each held \
+                       for a given duration with an optional caption. Use this \
+                       to turn a sequence of screenshots into a watchable clip \
+                       — for example, showing the steps of a browser run. \
+                       Requires ffmpeg on PATH."
+    )]
+    pub async fn render_storyboard(
+        &self,
+        Parameters(params): Parameters<crate::tools::RenderStoryboardParams>,
+    ) -> CallToolResult {
+        match Self::render_storyboard_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn render_storyboard_impl(
+        params: crate::tools::RenderStoryboardParams,
+    ) -> Result<CallToolResult, ToolError> {
+        crate::source::check_fps(params.fps)?;
+
+        let frames: Vec<crate::storyboard::Frame> = params
+            .frames
+            .iter()
+            .map(|f| crate::storyboard::Frame {
+                image: f.image.clone(),
+                duration_ms: f.duration_ms,
+                caption: f.caption.clone(),
+            })
+            .collect();
+
+        let size = match (params.width, params.height) {
+            (Some(w), Some(h)) => Some((w, h)),
+            (None, None) => None,
+            _ => {
+                return Err(ToolError::Invalid(
+                    "provide both `width` and `height`, or neither".into(),
+                ));
+            }
+        };
+
+        let doc = crate::storyboard::build(&frames, size)?;
+
+        // Storyboard image srcs are the caller's own paths — absolute, or
+        // relative to the server's working directory. `resolve_assets`
+        // handles both.
+        let base = std::env::current_dir().map_err(|e| ToolError::Io {
+            context: "reading current directory",
+            path: ".".into(),
+            source: e,
+        })?;
+        let assets = crate::source::resolve_assets(&doc, &base)?;
+        let mut engine = zoetrope_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);

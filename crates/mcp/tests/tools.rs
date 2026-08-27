@@ -243,3 +243,49 @@ fn missing_cast_file_names_the_path() {
         "message was: {text}"
     );
 }
+
+#[test]
+fn storyboard_validates_from_image_paths() {
+    let mut server = Server::start();
+    server.initialize();
+    let dir = tempfile::tempdir().unwrap();
+
+    let mut frames = Vec::new();
+    for name in ["a.png", "b.png"] {
+        let path = dir.path().join(name);
+        image::RgbaImage::from_pixel(160, 90, image::Rgba([40, 40, 40, 255]))
+            .save(&path)
+            .unwrap();
+        frames.push(json!({
+            "image": path.to_str().unwrap(),
+            "durationMs": 500,
+            "caption": format!("step {name}")
+        }));
+    }
+
+    let resp = call(
+        &mut server,
+        "render_storyboard",
+        json!({ "frames": frames, "validateOnly": true }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+    assert_eq!(result["structuredContent"]["width"], 160);
+    // 1000ms total at 30fps
+    assert_eq!(result["structuredContent"]["frameCount"], 30);
+}
+
+#[test]
+fn storyboard_rejects_an_empty_frame_list() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_storyboard",
+        json!({ "frames": [], "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+}
