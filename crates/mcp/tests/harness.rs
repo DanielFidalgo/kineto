@@ -7,13 +7,24 @@
 #![allow(dead_code)]
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdout, Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use serde_json::{json, Value};
 
+/// Bound on how long `recv` waits for a line on stdout. Generous enough that
+/// a real render (Task 4 onward: tools that rasterize frames and shell out
+/// to ffmpeg) never trips it, but short enough that a hung handler fails the
+/// test in seconds rather than stalling until CI's job-level timeout.
+const RECV_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub struct Server {
     child: Child,
-    reader: BufReader<ChildStdout>,
+    stdout_rx: Receiver<String>,
+    stderr: Arc<Mutex<String>>,
     next_id: i64,
 }
 
@@ -22,13 +33,51 @@ impl Server {
         let mut child = Command::new(env!("CARGO_BIN_EXE_zoetrope-mcp"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("spawn zoetrope-mcp");
-        let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
+
+        // Forward stdout lines through a channel from a dedicated thread, so
+        // `recv` can wait on `Receiver::recv_timeout` instead of blocking
+        // indefinitely on `BufRead::read_line`.
+        let stdout = child.stdout.take().expect("stdout piped");
+        let (stdout_tx, stdout_rx) = mpsc::channel();
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stdout);
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) | Err(_) => break, // EOF or read error: stop forwarding
+                    Ok(_) => {
+                        if stdout_tx.send(line).is_err() {
+                            break; // Server dropped, nobody to receive
+                        }
+                    }
+                }
+            }
+        });
+
+        // Capture stderr continuously (rather than discarding it) so a
+        // server-side panic or error has somewhere to surface: both the
+        // closed-stdout and the timeout failure below include it.
+        let stderr_pipe = child.stderr.take().expect("stderr piped");
+        let stderr = Arc::new(Mutex::new(String::new()));
+        let stderr_writer = Arc::clone(&stderr);
+        thread::spawn(move || {
+            let mut reader = BufReader::new(stderr_pipe);
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => stderr_writer.lock().unwrap().push_str(&line),
+                }
+            }
+        });
+
         Server {
             child,
-            reader,
+            stdout_rx,
+            stderr,
             next_id: 1,
         }
     }
@@ -40,12 +89,35 @@ impl Server {
         stdin.flush().expect("flush");
     }
 
+    /// Wait up to `RECV_TIMEOUT` for one response line. Panics with a
+    /// diagnostic message — including any stderr captured so far — if the
+    /// server closes stdout, or if a handler hangs and never responds.
     pub fn recv(&mut self) -> Value {
-        let mut line = String::new();
-        let n = self.reader.read_line(&mut line).expect("read from server");
-        assert!(n > 0, "server closed stdout before responding");
-        serde_json::from_str(&line)
-            .unwrap_or_else(|e| panic!("server emitted non-JSON line {line:?}: {e}"))
+        match self.stdout_rx.recv_timeout(RECV_TIMEOUT) {
+            Ok(line) => serde_json::from_str(&line).unwrap_or_else(|e| {
+                panic!(
+                    "server emitted non-JSON line {line:?}: {e}\n--- captured stderr ---\n{}",
+                    self.stderr_snapshot()
+                )
+            }),
+            Err(RecvTimeoutError::Disconnected) => panic!(
+                "server closed stdout before responding\n--- captured stderr ---\n{}",
+                self.stderr_snapshot()
+            ),
+            Err(RecvTimeoutError::Timeout) => panic!(
+                "server did not respond within {RECV_TIMEOUT:?}\n--- captured stderr ---\n{}",
+                self.stderr_snapshot()
+            ),
+        }
+    }
+
+    fn stderr_snapshot(&self) -> String {
+        let captured = self.stderr.lock().unwrap().clone();
+        if captured.is_empty() {
+            "(empty)".to_string()
+        } else {
+            captured
+        }
     }
 
     /// Send a request with an auto-assigned id and read exactly one response.
