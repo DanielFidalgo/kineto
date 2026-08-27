@@ -8,6 +8,9 @@ authoring surfaces — a Rust crate and a TS package — are typed builders that
 emit the same canonical JSON; the engine only ever sees the document.
 Positioning: *"video as a build artifact."* Working codename — public
 name/brand decided at publish time; keep brand strings out of code.
+**Note (2026-08-27): `zoetrope` is already taken on crates.io** — the
+codename can never be the published name; at brand time pick a fresh name
+and verify crates.io + npm availability before any rename/publish work.
 
 ## Start here
 
