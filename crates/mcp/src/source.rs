@@ -156,9 +156,33 @@ mod tests {
             let msg = err.to_string();
             assert!(msg.contains("missing.png"), "message was: {msg}");
             assert!(msg.contains("'i'"), "message was: {msg}");
+            assert!(
+                msg.contains(dir.path().to_str().unwrap()),
+                "message must carry the resolved path, not the raw src: {msg}"
+            );
         } else {
             panic!("expected error but got success");
         }
+    }
+
+    #[test]
+    fn resolves_absolute_path_asset_ignoring_base_dir() {
+        let asset_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        // Write a file to asset_dir and reference it by absolute path
+        let asset_path = asset_dir.path().join("image.dat");
+        std::fs::write(&asset_path, b"fake image bytes").unwrap();
+        let mut doc = zoetrope_core::Document::new(8, 8);
+        // Use the absolute path directly
+        doc.add_asset(
+            "img",
+            zoetrope_core::Asset::image(asset_path.to_str().unwrap()),
+        );
+        // Resolve against an unrelated base_dir; the absolute path should be used as-is
+        let store = resolve_assets(&doc, base_dir.path()).unwrap();
+        // If the asset was staged successfully, we got the file from the absolute path
+        // (if base_dir had been used, we'd get a file-not-found error)
+        drop(store);
     }
 
     #[test]
