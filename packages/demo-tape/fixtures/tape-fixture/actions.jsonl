@@ -1,0 +1,4 @@
+{"v":1,"url":"https://shop.example","task":"checkout","viewport":{"width":1280,"height":800},"started_at":"2026-08-26T12:00:00Z"}
+{"t_ms":1200,"step":1,"narration":"Landing on the page. Clean layout, no cookie wall in sight.","action":"nav(\"https://shop.example\")","frame":"step-01.jpg"}
+{"t_ms":4200,"step":2,"narration":"Found a product page. Adding the item to the cart.","action":"click(7)","frame":"step-02.jpg"}
+{"t_ms":7600,"step":3,"narration":"Reached checkout. Guest checkout is available, no forced signup.","action":"click(12)","frame":"step-03.jpg"}
