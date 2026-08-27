@@ -86,6 +86,7 @@ fn frames_panics_on_non_divisor_fps() {
 fn example_full_doc() -> Document {
     let mut d = Document::new(640, 360);
     d.add_asset("f01", Asset::image("frame.png"));
+    d.add_asset("mono", Asset::font("JetBrainsMono-Regular.ttf"));
     let group = Element::group(
         [10.0, 20.0],
         vec![

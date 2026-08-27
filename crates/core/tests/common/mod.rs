@@ -6,6 +6,9 @@ pub fn repo(p: &str) -> PathBuf {
 }
 /// Compare `actual` against a checked-in golden file.
 /// Run with UPDATE_GOLDEN=1 to (re)write the golden instead.
+/// Not every test binary that includes this shared `mod common` uses this
+/// helper (each integration test file compiles its own copy of `common`).
+#[allow(dead_code)]
 pub fn assert_golden(rel_path: &str, actual: &[u8]) {
     let path = repo(rel_path);
     if std::env::var("UPDATE_GOLDEN").is_ok() {
