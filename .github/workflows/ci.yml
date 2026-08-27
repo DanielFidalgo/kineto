@@ -10,6 +10,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - run: cargo run -p zoetrope-asciicast --bin zoetrope-cast -- adapters/asciicast/tests/fixture.cast -o target/cast-demo
+      - run: test -f target/cast-demo/frame-00000.png
 
   # Product-defining gate (spec §1/§6): native and wasm must render the
   # golden corpus byte-identically. See tests/parity/run.mjs and
