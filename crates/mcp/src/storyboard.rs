@@ -179,11 +179,25 @@ mod tests {
         }];
         let doc = build(&frames, None).unwrap();
 
-        assert_eq!(
-            doc.scenes[0].elements.len(),
-            3,
-            "image + caption band + text"
+        let elements = &doc.scenes[0].elements;
+        assert_eq!(elements.len(), 3, "image + caption band + text");
+        assert!(
+            matches!(elements[0], zoetrope_core::Element::Image { .. }),
+            "element 0 should be the image, got {:?}",
+            elements[0]
         );
+        assert!(
+            matches!(elements[1], zoetrope_core::Element::Rect { .. }),
+            "element 1 should be the caption band, got {:?}",
+            elements[1]
+        );
+        match &elements[2] {
+            zoetrope_core::Element::Text { text, font, .. } => {
+                assert_eq!(text, "clicked Checkout");
+                assert_eq!(font, CAPTION_FONT_ID);
+            }
+            other => panic!("element 2 should be the caption text, got {other:?}"),
+        }
         assert!(doc.assets.contains_key(CAPTION_FONT_ID));
     }
 
@@ -196,6 +210,11 @@ mod tests {
             caption: None,
         }];
         let doc = build(&frames, None).unwrap();
+        assert_eq!(
+            doc.scenes[0].elements.len(),
+            1,
+            "no caption means image only"
+        );
         assert!(!doc.assets.contains_key(CAPTION_FONT_ID));
     }
 
