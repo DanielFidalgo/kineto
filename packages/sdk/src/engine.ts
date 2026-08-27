@@ -23,17 +23,33 @@ export interface EngineHandle {
 const DEFAULT_FONT_ASSET_ID = "default";
 const DEFAULT_FONT_RESERVED_SRC = "zoetrope:inter";
 
+/**
+ * Memoize a zero-arg async factory, but only cache the *resolved* value —
+ * a rejection is not cached, so the next call re-invokes `fn` instead of
+ * repeating the same failure forever. Exported (but not re-exported from
+ * `index.ts`) purely so it can be unit-tested in isolation without
+ * touching the real wasm module.
+ */
+export function memoizeAsync<T>(fn: () => Promise<T>): () => Promise<T> {
+  let cached: Promise<T> | undefined;
+  return () => {
+    if (cached === undefined) {
+      cached = fn().catch((err: unknown) => {
+        // Clear the cache *before* rethrowing so a transient failure
+        // (e.g. a network blip fetching the .wasm) doesn't permanently
+        // poison every later call — the next call re-runs `fn`.
+        cached = undefined;
+        throw err;
+      });
+    }
+    return cached;
+  };
+}
+
 // `init()` instantiates the wasm module as a side effect; wasm-bindgen
 // does not support instantiating it twice, so memoize the promise across
-// calls to `loadEngine`.
-let wasmInit: Promise<unknown> | undefined;
-
-function ensureWasmInit(): Promise<unknown> {
-  if (wasmInit === undefined) {
-    wasmInit = init();
-  }
-  return wasmInit;
-}
+// calls to `loadEngine` (but only on success — see `memoizeAsync`).
+const ensureWasmInit = memoizeAsync(() => init());
 
 // Node has no `window`; browsers (including workers) have no
 // `process.versions.node`. Simplest reliable discriminator for "are we
