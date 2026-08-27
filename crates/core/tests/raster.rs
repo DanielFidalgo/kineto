@@ -113,3 +113,56 @@ fn element_matrix_rotates_about_center() {
     m.map_points(&mut p);
     assert!((p[0].x - 5.0).abs() < 1e-4 && (p[0].y - 10.0).abs() < 1e-4);
 }
+
+/// Draw grad.png (8×8) stretched into rect [8,8,32,32] on 64×64 canvas.
+/// grad.png pixel (x,y) = (x*32, y*32, 128, 255) and is fully opaque.
+/// Probe pixel (10,10): should NOT be background (0,0,0,255) since it falls
+/// inside the stretched image rect [8,8,32,32].
+#[test]
+fn image_stretch() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::image("grad", [8.0, 8.0, 32.0, 32.0]);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    assets.add_bytes(
+        "grad",
+        std::fs::read(common::repo("testdata/assets/grad.png")).unwrap(),
+    );
+    let mut doc = zoetrope_core::Document::new(64, 64);
+    doc.add_asset("grad", zoetrope_core::doc::Asset::image("grad.png"));
+    assets.prepare(&doc).unwrap();
+
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let px = pm.pixel(10, 10).unwrap();
+    // Pixel (10,10) should not be background; it falls within the stretched image rect.
+    assert_ne!(
+        (px.red(), px.green(), px.blue(), px.alpha()),
+        (0, 0, 0, 255),
+        "pixel (10,10) should not be background"
+    );
+
+    common::assert_golden_hash("raster-image-stretch", pm.width(), pm.height(), pm.data());
+}
+
+/// Draw grad.png stretched into [8,8,32,32], rotated 30deg, opacity 0.5 on 64×64 canvas.
+#[test]
+fn image_rotation_opacity() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::image("grad", [8.0, 8.0, 32.0, 32.0])
+        .with_rotation(30.0)
+        .with_opacity(0.5);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    assets.add_bytes(
+        "grad",
+        std::fs::read(common::repo("testdata/assets/grad.png")).unwrap(),
+    );
+    let mut doc = zoetrope_core::Document::new(64, 64);
+    doc.add_asset("grad", zoetrope_core::doc::Asset::image("grad.png"));
+    assets.prepare(&doc).unwrap();
+
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    common::assert_golden_hash("raster-image-rot", pm.width(), pm.height(), pm.data());
+}

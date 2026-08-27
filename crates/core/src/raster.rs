@@ -12,7 +12,10 @@
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
 use crate::doc::Element;
-use tiny_skia::{FillRule, Paint, PathBuilder, PixmapMut, Rect as SkRect, Shader, Transform};
+use tiny_skia::{
+    BlendMode, FillRule, FilterQuality, Paint, PathBuilder, PixmapMut, PixmapPaint, Rect as SkRect,
+    Shader, Transform,
+};
 
 /// Axis-aligned base bounding box, in the element's parent-local coordinate
 /// space (i.e. before that element's own `translate/scale/rotation`, but
@@ -172,8 +175,31 @@ impl Renderer {
 
                     canvas.fill_path(&path, &paint, FillRule::Winding, matrix, None);
                 }
-                Element::Image { .. } => {
-                    // implemented in Task 9
+                Element::Image {
+                    asset,
+                    rect,
+                    common,
+                } => {
+                    let resolved = resolve_common(common, t);
+                    let bbox = BBox {
+                        x: rect[0].0 as f32 + offset.0,
+                        y: rect[1].0 as f32 + offset.1,
+                        w: rect[2].0 as f32,
+                        h: rect[3].0 as f32,
+                    };
+
+                    let src = assets.image(asset);
+                    let matrix = element_matrix(&bbox, &resolved)
+                        .pre_translate(bbox.x, bbox.y)
+                        .pre_scale(bbox.w / src.width() as f32, bbox.h / src.height() as f32);
+
+                    let paint = PixmapPaint {
+                        opacity: resolved.opacity as f32,
+                        blend_mode: BlendMode::SourceOver,
+                        quality: FilterQuality::Bilinear,
+                    };
+
+                    canvas.draw_pixmap(0, 0, src.as_ref(), &paint, matrix, None);
                 }
                 Element::Text { .. } => {
                     // implemented in Task 10
