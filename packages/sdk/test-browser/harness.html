@@ -1,0 +1,17 @@
+<!doctype html>
+<!--
+  Task 19 browser test harness. Loaded by Playwright via Vite's dev server
+  (see playwright.config.ts). harness.ts imports the SDK straight from
+  source and exposes its public surface on `window.zoetrope` so
+  render.spec.ts can build a document and call `render()` from inside
+  `page.evaluate`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>zoetrope render() harness</title>
+  </head>
+  <body>
+    <script type="module" src="./harness.ts"></script>
+  </body>
+</html>

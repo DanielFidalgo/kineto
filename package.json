@@ -1,0 +1,6 @@
+{
+  "name": "zoetrope-workspace",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=22" }
+}

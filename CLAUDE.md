@@ -8,6 +8,9 @@ authoring surfaces — a Rust crate and a TS package — are typed builders that
 emit the same canonical JSON; the engine only ever sees the document.
 Positioning: *"video as a build artifact."* Working codename — public
 name/brand decided at publish time; keep brand strings out of code.
+**Note (2026-08-27): `zoetrope` is already taken on crates.io** — the
+codename can never be the published name; at brand time pick a fresh name
+and verify crates.io + npm availability before any rename/publish work.
 
 ## Start here
 
@@ -19,11 +22,28 @@ name/brand decided at publish time; keep brand strings out of code.
    `mp4-muxer` JS lib behind `render()`; a Rust muxer is the **first
    post-v1 engine milestone**; no Rust encoder in v1 (rationale recorded
    in spec §4.3/§12).
-3. **Plan (written, awaiting user review):**
-   `docs/superpowers/plans/2026-08-26-zoetrope-v1.md` — 26 TDD tasks in 6
-   phases. NEXT GATE: user approves the plan, then execute it with
-   `superpowers:subagent-driven-development` (per the global guide). Do
-   not start coding before that approval.
+3. **Status: v1 BUILT (2026-08-27)** — plan
+   `docs/superpowers/plans/2026-08-26-zoetrope-v1.md` executed to
+   completion via subagent-driven development (27 tasks + final review),
+   merged to main. All success criteria met locally: browser tape demo
+   exports MP4 at **2.10× realtime** (`packages/demo-tape`, port 5200);
+   `zoetrope-cast` CLI renders headless (frames + MP4 via ffmpeg);
+   **parity gate 18/18 byte-identical** (native aarch64 vs wasm+simd128);
+   cross-SDK canonical goldens green; wasm 945 KB gzipped (< 3 MB budget).
+4. **NEXT GATE (needs the user): no git remote exists.** Create the
+   GitHub repo, push, and watch one full CI run (`rust`, `wasm-parity`,
+   `web` jobs) — parity has never executed on x86_64; if it diverges
+   there, the pre-agreed lever is disabling tiny-skia's `simd` feature
+   and regenerating goldens (documented in the Task 16 report reasoning).
+5. **Known issues (post-v1 backlog):** full-canvas layers pre-clip
+   text/group ink at static positions before transforms (documented in
+   `raster.rs`; ink-bbox layers are the future fix, byte-risky under
+   rotation); glyphs re-rasterize per frame (`get_image_uncached`,
+   ~0.5 ms/frame); text-in-group pivot uses zero-size text bbox;
+   canonical float byte-identity holds for integral |v|<2^53 or magnitude
+   ~[1e-5, 1e15] (documented in `scalar.rs`/`canonical.ts`); nothing in
+   CI asserts the shipped wasm is SIMD-built (a stray RUSTFLAGS env would
+   silently drop it, costing ~4×).
 
 ## Locked decisions (recall — the spec has the detail)
 

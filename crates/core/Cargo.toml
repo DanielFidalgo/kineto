@@ -1,0 +1,42 @@
+[package]
+name = "zoetrope-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["bundled-fonts"]
+# Native hosts bundle Inter + JetBrains Mono via include_bytes! so docs can
+# reference them by reserved src without a file path. crates/wasm disables
+# this (default-features = false) so the fonts are never compiled into wasm
+# (size budget, spec §5) — the JS side supplies bytes instead.
+bundled-fonts = []
+# Gates the `dump-parity` bin (Task 16): pulls in `sha2` as a real
+# dependency only for that build, so the byte-parity gate's native half can
+# hash rendered frames without adding sha2 to every consumer of this crate.
+parity = ["dep:sha2", "bundled-fonts"]
+
+[dependencies]
+# default-features off: upstream defaults pull in `fontconfig`, which
+# compiles real system-font-scanning code (fontconfig-parser/roxmltree)
+# into native builds. Determinism is law (spec §5) — we never want that
+# code path reachable, so we opt into only what we use: `std` (required),
+# `swash` on cosmic-text (its shaping/rasterization backend). fontdb's
+# `memmap` is kept for efficient font-data mapping; it does not pull in
+# fontconfig.
+cosmic-text = { version = "0.19.0", default-features = false, features = ["std", "swash"] }
+fontdb = { version = "0.23.0", default-features = false, features = ["std", "memmap"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = { version = "0.11.0", optional = true }
+thiserror = "2.0.20"
+tiny-skia = "0.12.0"
+
+[dev-dependencies]
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+
+[[bin]]
+name = "dump-parity"
+required-features = ["parity"]

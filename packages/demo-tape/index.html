@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  Task 25: zoetrope's flagship demo (spec success criterion 1) — a
+  mysteryshopper tape ("actions.jsonl" + step screenshots) compiled to a
+  captioned, crossfaded MP4 entirely in the browser (WebCodecs export, $0
+  server cost). Plain DOM, no framework — see src/main.ts.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>zoetrope — tape to MP4</title>
+    <style>
+      body {
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #111;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      #capability-error {
+        background: #fdecea;
+        border: 1px solid #f5c6cb;
+        color: #611a15;
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+      }
+      #capability-error[hidden] {
+        display: none;
+      }
+      .controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+      }
+      canvas#preview {
+        display: block;
+        max-width: 100%;
+        background: #000;
+        border: 1px solid #ccc;
+      }
+      .export {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      progress#progress[hidden],
+      a#download[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>zoetrope — mysteryshopper tape exporter</h1>
+    <p>Compile a mysteryshopper tape into a captioned, crossfaded MP4 — rendered entirely in this tab.</p>
+
+    <div id="capability-error" role="alert" hidden></div>
+
+    <div class="controls">
+      <button id="load-fixture" type="button">Load fixture tape</button>
+      <label>
+        Load a tape folder:
+        <input id="tape-input" type="file" webkitdirectory multiple />
+      </label>
+    </div>
+
+    <canvas id="preview"></canvas>
+
+    <div class="export">
+      <button id="export" type="button" disabled>Export MP4</button>
+      <progress id="progress" value="0" max="1" hidden></progress>
+      <a id="download" hidden download="tape.mp4">Download MP4</a>
+    </div>
+
+    <p id="status"></p>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
