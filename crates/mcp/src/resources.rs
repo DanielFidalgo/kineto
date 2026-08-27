@@ -6,19 +6,19 @@
 
 use rmcp::model::Resource;
 
-pub const SCHEMA_URI: &str = "zoetrope://schema/document";
-const CORPUS_PREFIX: &str = "zoetrope://corpus/";
+pub const SCHEMA_URI: &str = "kineto://schema/document";
+const CORPUS_PREFIX: &str = "kineto://corpus/";
 
 pub fn list() -> Vec<Resource> {
     let mut out = vec![Resource::new(SCHEMA_URI, "document-schema")
-        .with_title("Zoetrope document JSON Schema")
+        .with_title("Kineto document JSON Schema")
         .with_description(
             "JSON Schema for the canonical scene document accepted by \
                  render_document.",
         )
         .with_mime_type("application/json")];
 
-    for entry in zoetrope_core::corpus::corpus() {
+    for entry in kineto_core::corpus::corpus() {
         out.push(
             Resource::new(format!("{CORPUS_PREFIX}{}", entry.name), entry.name)
                 .with_title(format!("Example document: {}", entry.name))
@@ -37,7 +37,7 @@ pub fn read(uri: &str) -> Option<String> {
         return Some(DOCUMENT_SCHEMA.to_string());
     }
     let name = uri.strip_prefix(CORPUS_PREFIX)?;
-    zoetrope_core::corpus::corpus()
+    kineto_core::corpus::corpus()
         .into_iter()
         .find(|e| e.name == name)
         .map(|e| e.doc.canonical_json())
@@ -45,13 +45,13 @@ pub fn read(uri: &str) -> Option<String> {
 
 /// Hand-written rather than derived.
 ///
-/// `schemars::schema_for!` would require `zoetrope_core::Document` to derive
+/// `schemars::schema_for!` would require `kineto_core::Document` to derive
 /// `JsonSchema`, which would put `schemars` into `crates/core` and break the
 /// leaf-crate constraint. The format is frozen at `v: 1`, so a literal is
 /// stable — and it can carry better descriptions than a derived schema would.
 pub const DOCUMENT_SCHEMA: &str = r##"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Zoetrope document",
+  "title": "Kineto document",
   "description": "A complete, serializable description of a video. Time is in integer ticks at 705600000 ticks/second; fps is only an export hint.",
   "type": "object",
   "required": ["v", "timebase", "size", "scenes"],
@@ -102,7 +102,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
             "type": { "const": "font" },
             "src": {
               "type": "string",
-              "description": "Path to a TTF/OTF, or a reserved src for a bundled font: 'zoetrope:inter' or 'zoetrope:jetbrains-mono'. There are no system fonts."
+              "description": "Path to a TTF/OTF, or a reserved src for a bundled font: 'kineto:inter' or 'kineto:jetbrains-mono'. There are no system fonts."
             }
           }
         }
@@ -230,12 +230,12 @@ mod tests {
 
     #[test]
     fn every_corpus_entry_is_listed_and_readable() {
-        for entry in zoetrope_core::corpus::corpus() {
-            let uri = format!("zoetrope://corpus/{}", entry.name);
+        for entry in kineto_core::corpus::corpus() {
+            let uri = format!("kineto://corpus/{}", entry.name);
             let text = read(&uri).unwrap_or_else(|| panic!("{uri} not readable"));
-            zoetrope_core::Document::from_json(&text)
+            kineto_core::Document::from_json(&text)
                 .unwrap_or_else(|e| panic!("{uri} is not a valid document: {e}"));
         }
-        assert_eq!(list().len(), zoetrope_core::corpus::corpus().len() + 1);
+        assert_eq!(list().len(), kineto_core::corpus::corpus().len() + 1);
     }
 }

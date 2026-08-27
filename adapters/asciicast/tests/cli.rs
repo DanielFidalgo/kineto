@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
-fn test_zoetrope_cast_success() {
+fn test_kineto_cast_success() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
@@ -10,12 +10,12 @@ fn test_zoetrope_cast_success() {
         .join("tests")
         .join("fixture.cast");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let output = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&fixture_path)
         .arg("-o")
         .arg(out_path)
         .output()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     if !output.status.success() {
         eprintln!(
@@ -33,7 +33,7 @@ fn test_zoetrope_cast_success() {
 }
 
 #[test]
-fn test_zoetrope_cast_stdout_mentions_frames() {
+fn test_kineto_cast_stdout_mentions_frames() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
@@ -41,12 +41,12 @@ fn test_zoetrope_cast_stdout_mentions_frames() {
         .join("tests")
         .join("fixture.cast");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let output = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&fixture_path)
         .arg("-o")
         .arg(out_path)
         .output()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(output.status.success(), "CLI should exit 0");
 
@@ -59,39 +59,39 @@ fn test_zoetrope_cast_stdout_mentions_frames() {
 }
 
 #[test]
-fn test_zoetrope_cast_nonexistent_file() {
+fn test_kineto_cast_nonexistent_file() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
-    let status = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let status = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg("nonexistent.cast")
         .arg("-o")
         .arg(out_path)
         .status()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(!status.success(), "CLI should exit 1 for missing file");
 }
 
 #[test]
-fn test_zoetrope_cast_garbage_input() {
+fn test_kineto_cast_garbage_input() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
     let garbage_file = out_dir.path().join("garbage.cast");
     std::fs::write(&garbage_file, b"this is not valid cast format").expect("write garbage");
 
-    let status = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let status = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&garbage_file)
         .arg("-o")
         .arg(out_path)
         .status()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(!status.success(), "CLI should exit 1 for invalid input");
 }
 
 #[test]
-fn test_zoetrope_cast_fps_zero() {
+fn test_kineto_cast_fps_zero() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
@@ -99,14 +99,14 @@ fn test_zoetrope_cast_fps_zero() {
         .join("tests")
         .join("fixture.cast");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let output = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&fixture_path)
         .arg("-o")
         .arg(out_path)
         .arg("--fps")
         .arg("0")
         .output()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(
         !output.status.success(),
@@ -128,7 +128,7 @@ fn test_zoetrope_cast_fps_zero() {
 }
 
 #[test]
-fn test_zoetrope_cast_fps_non_divisor() {
+fn test_kineto_cast_fps_non_divisor() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
@@ -136,14 +136,14 @@ fn test_zoetrope_cast_fps_non_divisor() {
         .join("tests")
         .join("fixture.cast");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let output = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&fixture_path)
         .arg("-o")
         .arg(out_path)
         .arg("--fps")
         .arg("23")
         .output()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(
         !output.status.success(),
@@ -158,7 +158,7 @@ fn test_zoetrope_cast_fps_non_divisor() {
 }
 
 #[test]
-fn test_zoetrope_cast_unknown_flag() {
+fn test_kineto_cast_unknown_flag() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();
 
@@ -166,13 +166,13 @@ fn test_zoetrope_cast_unknown_flag() {
         .join("tests")
         .join("fixture.cast");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+    let output = Command::new(env!("CARGO_BIN_EXE_kineto-cast"))
         .arg(&fixture_path)
         .arg("-o")
         .arg(out_path)
         .arg("-x")
         .output()
-        .expect("run zoetrope-cast");
+        .expect("run kineto-cast");
 
     assert!(
         !output.status.success(),

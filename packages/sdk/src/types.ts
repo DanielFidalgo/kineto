@@ -1,4 +1,4 @@
-// Canonical JSON shape for a zoetrope `Document` (see
+// Canonical JSON shape for a kineto `Document` (see
 // `crates/core/src/doc.rs`). Field names are exactly the camelCase names
 // serde emits (`#[serde(rename_all = "camelCase")]` /
 // `rename_all_fields = "camelCase"`) so `JSON.stringify` of a value built

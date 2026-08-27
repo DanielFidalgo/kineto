@@ -7,7 +7,7 @@ import { loadEngine } from "../src/engine";
 // coverage is Task 19's browser tests; this is a best-effort node check
 // per the Task 17 brief.
 //
-// The "web" target's default init() does `fetch(new URL('zoetrope_wasm_bg.wasm',
+// The "web" target's default init() does `fetch(new URL('kineto_wasm_bg.wasm',
 // import.meta.url))`, and Node's built-in `fetch` does not implement the
 // `file:` scheme ("TypeError: fetch failed" / "not implemented... yet...").
 // engine.ts itself stays browser-idiomatic (no node-specific branch in its

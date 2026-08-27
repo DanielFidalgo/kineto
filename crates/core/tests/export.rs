@@ -1,7 +1,7 @@
 mod common;
 
-use zoetrope_core::doc::{ms, Element, Scene, Transition, TIMEBASE};
-use zoetrope_core::{AssetStore, Document, Engine};
+use kineto_core::doc::{ms, Element, Scene, Transition, TIMEBASE};
+use kineto_core::{AssetStore, Document, Engine};
 
 /// 32x32 canvas, opaque-black bg (default). Scene "a" (300ms): full-canvas
 /// opaque red rect. Scene "b" (300ms, 200ms crossfade in): full-canvas
@@ -27,7 +27,7 @@ fn export_frames_writes_correct_frame_count() {
     let total_duration = engine.total_duration();
 
     let tempdir = tempfile::tempdir().unwrap();
-    let count = zoetrope_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
+    let count = kineto_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
 
     // Expected: ceil(total_duration / (TIMEBASE/30))
     let expected_count = (total_duration + (TIMEBASE / 30) - 1) / (TIMEBASE / 30);
@@ -44,7 +44,7 @@ fn export_frames_creates_frame_files() {
     let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
 
     let tempdir = tempfile::tempdir().unwrap();
-    let count = zoetrope_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
+    let count = kineto_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
 
     // Check that frame-00000.png exists
     let frame_0 = tempdir.path().join("frame-00000.png");
@@ -68,7 +68,7 @@ fn exported_frame_has_correct_dimensions() {
     let (width, height) = (engine.width(), engine.height());
 
     let tempdir = tempfile::tempdir().unwrap();
-    zoetrope_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
+    kineto_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
 
     // Decode frame-00000.png and check dimensions
     let frame_0 = tempdir.path().join("frame-00000.png");
@@ -92,7 +92,7 @@ fn exported_frame_0_has_red_pixel() {
     let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
 
     let tempdir = tempfile::tempdir().unwrap();
-    zoetrope_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
+    kineto_core::export::export_frames(&mut engine, 30, tempdir.path()).unwrap();
 
     // Decode frame-00000.png and check a pixel
     let frame_0 = tempdir.path().join("frame-00000.png");
@@ -114,7 +114,7 @@ fn exported_frame_0_has_red_pixel() {
 #[cfg(not(target_arch = "wasm32"))]
 fn ffmpeg_available_returns_bool() {
     // This should not panic
-    let _available = zoetrope_core::export::ffmpeg_available();
+    let _available = kineto_core::export::ffmpeg_available();
 }
 
 #[test]
@@ -126,9 +126,9 @@ fn mux_with_ffmpeg_skips_when_unavailable() {
 
     std::fs::create_dir(&frames_dir).unwrap();
 
-    if !zoetrope_core::export::ffmpeg_available() {
+    if !kineto_core::export::ffmpeg_available() {
         // When ffmpeg is unavailable, mux should return Ok(false)
-        let result = zoetrope_core::export::mux_with_ffmpeg(&frames_dir, 30, &out_path).unwrap();
+        let result = kineto_core::export::mux_with_ffmpeg(&frames_dir, 30, &out_path).unwrap();
         assert!(!result, "should return false when ffmpeg unavailable");
     }
 }
@@ -136,7 +136,7 @@ fn mux_with_ffmpeg_skips_when_unavailable() {
 #[test]
 #[cfg(not(target_arch = "wasm32"))]
 fn mux_with_ffmpeg_creates_mp4_when_available() {
-    if !zoetrope_core::export::ffmpeg_available() {
+    if !kineto_core::export::ffmpeg_available() {
         eprintln!("skipping mux_with_ffmpeg test: ffmpeg not available");
         return;
     }
@@ -148,10 +148,10 @@ fn mux_with_ffmpeg_creates_mp4_when_available() {
     let frames_dir = tempdir.path().join("frames");
     std::fs::create_dir(&frames_dir).unwrap();
 
-    zoetrope_core::export::export_frames(&mut engine, 30, &frames_dir).unwrap();
+    kineto_core::export::export_frames(&mut engine, 30, &frames_dir).unwrap();
 
     let out_path = tempdir.path().join("out.mp4");
-    let muxed = zoetrope_core::export::mux_with_ffmpeg(&frames_dir, 30, &out_path).unwrap();
+    let muxed = kineto_core::export::mux_with_ffmpeg(&frames_dir, 30, &out_path).unwrap();
     assert!(muxed, "should return true on successful ffmpeg");
 
     // Check that the MP4 file was created

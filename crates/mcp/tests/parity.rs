@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use kineto_mcp::source::{load_document, resolve_assets};
 use sha2::{Digest, Sha256};
-use zoetrope_mcp::source::{load_document, resolve_assets};
 
 fn repo(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -25,13 +25,13 @@ fn corpus_rendered_through_the_server_path_matches_golden_hashes() {
     let assets_dir = repo("testdata/assets");
     let mut checked = 0usize;
 
-    for entry in zoetrope_core::corpus::corpus() {
+    for entry in kineto_core::corpus::corpus() {
         // Round-trip through canonical JSON so the server's parser is what
         // builds the document, exactly as it would for a real tool call.
         let json = entry.doc.canonical_json();
         let (doc, _) = load_document(Some(&json), None).expect("corpus doc parses");
         let assets = resolve_assets(&doc, &assets_dir).expect("corpus assets resolve");
-        let mut engine = zoetrope_core::Engine::new(doc, assets).expect("engine builds");
+        let mut engine = kineto_core::Engine::new(doc, assets).expect("engine builds");
 
         for tick in &entry.ticks {
             let key = format!("{}@{}", entry.name, tick);
@@ -50,7 +50,7 @@ fn corpus_rendered_through_the_server_path_matches_golden_hashes() {
     // The number is knowable, so assert it exactly: the six corpus entries
     // contribute 18 `name@tick` keys between them. `> 0` would still pass if
     // a key-format drift silently skipped 17 of the 18.
-    let expected: usize = zoetrope_core::corpus::corpus()
+    let expected: usize = kineto_core::corpus::corpus()
         .iter()
         .map(|e| e.ticks.len())
         .sum();

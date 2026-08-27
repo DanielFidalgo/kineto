@@ -1,14 +1,14 @@
 // Byte-parity gate (Task 16, spec §1/§6), wasm half. Renders every
 // `(corpus doc, tick)` pair through the wasm engine and diffs its sha256
 // against `target/parity/native-hashes.json`, written by the native half
-// (`cargo run -p zoetrope-core --bin dump-parity --features parity`).
+// (`cargo run -p kineto-core --bin dump-parity --features parity`).
 //
 // MUST be run from the repo root: every path below (the wasm-pack output
 // under crates/wasm/pkg, target/parity/native-hashes.json, and the asset
 // files under assets/ and testdata/assets/) is relative to `cwd`, not to
 // this file's own location.
 //
-//   1. cargo run -p zoetrope-core --bin dump-parity --features parity
+//   1. cargo run -p kineto-core --bin dump-parity --features parity
 //   2. wasm-pack build crates/wasm --target web --release -- --features corpus
 //   3. node tests/parity/run.mjs
 
@@ -20,11 +20,11 @@ import initWasm, {
   corpus_doc_json,
   corpus_ticks,
   corpus_asset_srcs,
-} from "../../crates/wasm/pkg/zoetrope_wasm.js";
+} from "../../crates/wasm/pkg/kineto_wasm.js";
 
 await initWasm({
   module_or_path: await readFile(
-    new URL("../../crates/wasm/pkg/zoetrope_wasm_bg.wasm", import.meta.url),
+    new URL("../../crates/wasm/pkg/kineto_wasm_bg.wasm", import.meta.url),
   ),
 });
 
@@ -37,8 +37,8 @@ const native = JSON.parse(
 // `include_bytes!`s; everything else is a corpus fixture under
 // testdata/assets/.
 const RESERVED = {
-  "zoetrope:inter": "assets/fonts/Inter-Regular.ttf",
-  "zoetrope:jetbrains-mono": "assets/fonts/JetBrainsMono-Regular.ttf",
+  "kineto:inter": "assets/fonts/Inter-Regular.ttf",
+  "kineto:jetbrains-mono": "assets/fonts/JetBrainsMono-Regular.ttf",
 };
 
 let fail = 0;

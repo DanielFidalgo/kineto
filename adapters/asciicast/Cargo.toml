@@ -1,11 +1,11 @@
 [package]
-name = "zoetrope-asciicast"
+name = "kineto-asciicast"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "zoetrope-cast"
+name = "kineto-cast"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,7 +17,7 @@ thiserror = "2.0.20"
 # Default features on (bundled-fonts): this adapter is native-only (CLI,
 # Task 23), so it needs `resolve_reserved_src` to stage the bundled
 # JetBrains Mono bytes for its converted documents.
-zoetrope-core = { path = "../../crates/core" }
+kineto-core = { path = "../../crates/core" }
 
 [dev-dependencies]
 tempfile = "3.27.0"

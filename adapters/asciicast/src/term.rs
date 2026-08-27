@@ -6,7 +6,7 @@
 //! emulator and snapshots the visible grid after each batch of
 //! same-timestamp events, resolving indexed/RGB terminal colors to plain
 //! `(u8, u8, u8)` triples via the locked palette below. Task 22 converts
-//! the resulting [`GridState`]s into zoetrope `Document`s; this module
+//! the resulting [`GridState`]s into kineto `Document`s; this module
 //! knows nothing about that — it only produces plain data.
 
 use serde::Deserialize;

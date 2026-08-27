@@ -1,4 +1,4 @@
-//! `crates/wasm`: the wasm-bindgen shim around `zoetrope_core::Engine`.
+//! `crates/wasm`: the wasm-bindgen shim around `kineto_core::Engine`.
 //!
 //! Thin delegation only — no rendering logic lives here. `packages/sdk`
 //! (`engine.ts`, Task 17) binds to exactly the `WasmEngine` surface below;
@@ -9,19 +9,19 @@
 //! just want to pass a number. Every legal tick fits in `f64`'s 53-bit
 //! exact-integer range, so the cast is lossless in practice.
 //!
-//! `default-features = false` on the `zoetrope-core` dependency is load
+//! `default-features = false` on the `kineto-core` dependency is load
 //! bearing: it excludes the `bundled-fonts` feature (Inter/JetBrains Mono
 //! `include_bytes!`), keeping those fonts out of the wasm binary entirely
 //! (size budget, spec §8). The JS host supplies font bytes via `add_asset`
 //! instead.
 
+use kineto_core::render::unpremultiply;
+use kineto_core::{AssetStore, DocError, Document, Engine};
 use std::fmt;
 use wasm_bindgen::prelude::*;
-use zoetrope_core::render::unpremultiply;
-use zoetrope_core::{AssetStore, DocError, Document, Engine};
 
 /// Everything that can go wrong in the shim's own plumbing, on top of
-/// `zoetrope_core::DocError` (bad/unvalidated documents, decode failures).
+/// `kineto_core::DocError` (bad/unvalidated documents, decode failures).
 /// Kept as a plain Rust error (not `JsError`) so the fallible logic below
 /// stays natively unit-testable: constructing a `JsError`/`JsValue` calls
 /// into wasm-bindgen's JS-imported glue, which panics with "cannot call
@@ -184,16 +184,16 @@ impl WasmEngine {
 }
 
 /// Corpus exports for parity builds (Task 16): re-exposes
-/// `zoetrope_core::corpus` across the wasm boundary without pulling any
+/// `kineto_core::corpus` across the wasm boundary without pulling any
 /// extra dependency into the binding (asset (id, src) pairs are encoded as
 /// `"id\tsrc"` strings rather than a struct/tuple type).
 #[cfg(feature = "corpus")]
 mod corpus_bindings {
+    use kineto_core::corpus::corpus;
+    use kineto_core::{Asset, Document};
     use wasm_bindgen::prelude::*;
-    use zoetrope_core::corpus::corpus;
-    use zoetrope_core::{Asset, Document};
 
-    fn find(name: &str) -> zoetrope_core::corpus::CorpusDoc {
+    fn find(name: &str) -> kineto_core::corpus::CorpusDoc {
         corpus()
             .into_iter()
             .find(|c| c.name == name)
@@ -238,7 +238,7 @@ mod corpus_bindings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zoetrope_core::doc::{ms, Asset, Document as CoreDocument, Scene};
+    use kineto_core::doc::{ms, Asset, Document as CoreDocument, Scene};
 
     fn minimal_doc_json() -> String {
         let mut doc = CoreDocument::new(64, 48);

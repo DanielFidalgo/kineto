@@ -1,11 +1,11 @@
-# Zoetrope MCP server — design spec (2026-08-27)
+# Kineto MCP server — design spec (2026-08-27)
 
-> Supplements, does not supersede, `2026-08-26-zoetrope-design.md`. Every
+> Supplements, does not supersede, `2026-08-26-kineto-design.md`. Every
 > law in that spec still holds — determinism, no system fonts, no
 > fast-math, byte-identical parity. This document adds a **fourth
 > authoring/invocation surface** alongside the CLI, the Rust SDK, and the
-> TS SDK. Working codename **zoetrope** as before; the server's
-> user-visible name is brand-adjacent and is decided at brand time.
+> TS SDK. The project was renamed to **Kineto** on 2026-08-27; the server
+> binary and its `serverInfo.name` are `kineto-mcp`.
 
 ## 1. Thesis
 
@@ -17,7 +17,7 @@ can turn structured event data it already possesses into a watchable MP4.
 The bet being tested is narrow and stated plainly so it can be falsified:
 **agents cannot show their work.** An agent's output is text, but much of
 what agents do is temporal — a terminal session, a browser run, a series
-of timestamped screenshots. Those are already zoetrope's input shape. If
+of timestamped screenshots. Those are already kineto's input shape. If
 that demand is real, usage will show it and a larger repositioning becomes
 a later, evidence-backed decision. If it is not real, this spec cost one
 leaf crate and changed nothing else.
@@ -25,7 +25,7 @@ leaf crate and changed nothing else.
 What this is explicitly **not**: a tool for models to author motion
 graphics from imagination. Authoring is a poor fit for MCP — the model
 cannot see its output, it competes with Remotion and with generative video,
-and zoetrope's differentiator (determinism, byte-identical output, no
+and kineto's differentiator (determinism, byte-identical output, no
 per-frame code) is worthless to someone who only wants something to look
 nice. Determinism serves CI, not creativity. `render_document` exists as
 the primitive that the other tools are built on, not as an invitation.
@@ -33,7 +33,7 @@ the primitive that the other tools are built on, not as an invitation.
 ### 1.1 What already exists
 
 The native target is headless today and needs no change to be driven by a
-server. `zoetrope-cast` (`adapters/asciicast/src/main.rs`) runs with no
+server. `kineto-cast` (`adapters/asciicast/src/main.rs`) runs with no
 display and no browser; `Engine::render(tick) -> &[u8]`
 (`crates/core/src/render.rs:96`) is pure CPU tiny-skia + cosmic-text; and
 `export.rs` is gated `#[cfg(not(target_arch = "wasm32"))]`. "Headless"
@@ -41,7 +41,7 @@ is not part of this work. Only the protocol surface is.
 
 ### 1.2 The one real gap
 
-Native zoetrope has **no encoder and no muxer**. `mux_with_ffmpeg`
+Native kineto has **no encoder and no muxer**. `mux_with_ffmpeg`
 (`crates/core/src/export.rs:80`) shells out to `ffmpeg -c:v libx264`. This
 is a bigger gap than the post-v1 "Rust muxer" milestone implies: that
 milestone concerns the browser path, where WebCodecs already encodes.
@@ -85,8 +85,8 @@ serde_json = "1.0.151"
 schemars = "1.0"
 thiserror = "2.0.20"
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
-zoetrope-core = { path = "../core" }
-zoetrope-asciicast = { path = "../../adapters/asciicast" }
+kineto-core = { path = "../core" }
+kineto-asciicast = { path = "../../adapters/asciicast" }
 ```
 
 **Verified against this workspace:** `rmcp` 3.1.4 declares
@@ -172,7 +172,7 @@ a `src: String` (`crates/core/src/doc.rs:46`). The server resolves each
 `src` as follows:
 
 1. If `src` is a reserved font src, defer to
-   `zoetrope_core::assets::resolve_reserved_src` (bundled Inter and
+   `kineto_core::assets::resolve_reserved_src` (bundled Inter and
    JetBrains Mono).
 2. Otherwise treat it as a filesystem path, resolved relative to
    `asset_base_dir`, read into bytes, and registered via
@@ -238,7 +238,7 @@ successful availability check as a distinct mux-failure error.
 
 A local stdio server reads and writes wherever the calling agent can
 already read and write. It inherits that trust rather than widening it —
-the agent invoking this server can already run `zoetrope-cast` with the
+the agent invoking this server can already run `kineto-cast` with the
 same paths. Consequently there is no path sandbox, and `..` in an asset
 `src` is not treated as an attack.
 
@@ -262,9 +262,9 @@ Not in this version:
 - **Hosted service.** This is the only scenario that would make a Rust
   H.264 encoder mandatory, and it violates the $0 constraint.
 - **A Rust encoder or muxer.** Unchanged from the v1 spec.
-- **Server naming.** The server name is user-visible in MCP client config
-  and therefore brand-adjacent. Codename internally; rename at brand time
-  with everything else. Keep brand strings out of code.
+- **Server naming.** Settled: the binary and `serverInfo.name` are
+  `kineto-mcp`. The name is user-visible in MCP client config, so changing
+  it later is a breaking change to every user's configuration.
 - Everything in the v1 spec §9 YAGNI fence.
 
 ## 10. Testing

@@ -1,4 +1,4 @@
-//! zoetrope core engine
+//! kineto core engine
 pub mod anim;
 pub mod assets;
 pub mod color;

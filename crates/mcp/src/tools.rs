@@ -17,7 +17,7 @@ pub fn default_preview_frames() -> usize {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderDocumentParams {
-    /// Canonical zoetrope document JSON. Provide exactly one of `document` or
+    /// Canonical kineto document JSON. Provide exactly one of `document` or
     /// `documentPath`.
     #[serde(default)]
     pub document: Option<String>,
@@ -139,17 +139,17 @@ impl RenderAsciicastParams {
     /// A method rather than three lines inside the tool body so a test can
     /// drive it from deserialized wire arguments: `ThemeParams::apply` tested
     /// alone proves nothing about whether its result is ever used.
-    pub fn resolved_theme(&self) -> zoetrope_asciicast::Theme {
+    pub fn resolved_theme(&self) -> kineto_asciicast::Theme {
         match &self.theme {
-            Some(t) => t.apply(zoetrope_asciicast::Theme::default()),
-            None => zoetrope_asciicast::Theme::default(),
+            Some(t) => t.apply(kineto_asciicast::Theme::default()),
+            None => kineto_asciicast::Theme::default(),
         }
     }
 }
 
 impl ThemeParams {
     /// Apply the caller's overrides onto the adapter's defaults.
-    pub fn apply(&self, mut theme: zoetrope_asciicast::Theme) -> zoetrope_asciicast::Theme {
+    pub fn apply(&self, mut theme: kineto_asciicast::Theme) -> kineto_asciicast::Theme {
         if let Some(bg) = &self.bg {
             theme.bg = bg.clone();
         }
@@ -213,7 +213,7 @@ pub struct RenderStoryboardParams {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zoetrope_asciicast::Theme;
+    use kineto_asciicast::Theme;
 
     #[test]
     fn apply_overrides_only_the_set_fields() {
@@ -233,9 +233,9 @@ mod tests {
         assert_eq!(theme.pad, default.pad);
     }
 
-    fn tiny_cast() -> zoetrope_asciicast::Cast {
+    fn tiny_cast() -> kineto_asciicast::Cast {
         let header = serde_json::json!({ "version": 2, "width": 20, "height": 4 });
-        zoetrope_asciicast::parse_cast(&format!("{header}\n[0.0, \"o\", \"hello\"]\n")).unwrap()
+        kineto_asciicast::parse_cast(&format!("{header}\n[0.0, \"o\", \"hello\"]\n")).unwrap()
     }
 
     /// The theme override must survive the whole path, not merely be applied
@@ -246,7 +246,7 @@ mod tests {
     fn an_overridden_theme_reaches_the_built_document() {
         let cast = tiny_cast();
 
-        let (default_doc, _) = zoetrope_asciicast::cast_to_document(&cast, &Theme::default());
+        let (default_doc, _) = kineto_asciicast::cast_to_document(&cast, &Theme::default());
         assert_eq!(
             default_doc.bg.0, "#0A0A0A",
             "control: the adapter's own default background"
@@ -257,7 +257,7 @@ mod tests {
             "theme": { "bg": "#101820" }
         }))
         .unwrap();
-        let (doc, _) = zoetrope_asciicast::cast_to_document(&cast, &params.resolved_theme());
+        let (doc, _) = kineto_asciicast::cast_to_document(&cast, &params.resolved_theme());
 
         assert_eq!(doc.bg.0, "#101820");
     }
@@ -268,7 +268,7 @@ mod tests {
             serde_json::from_value(serde_json::json!({ "castPath": "/unused.cast" })).unwrap();
         assert_eq!(params.resolved_theme(), Theme::default());
 
-        let (doc, _) = zoetrope_asciicast::cast_to_document(&tiny_cast(), &params.resolved_theme());
+        let (doc, _) = kineto_asciicast::cast_to_document(&tiny_cast(), &params.resolved_theme());
         assert_eq!(doc.bg.0, "#0A0A0A");
     }
 

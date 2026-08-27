@@ -1,4 +1,4 @@
-// mysteryshopper tape -> zoetrope document adapter (spec §4.4 / task 24).
+// mysteryshopper tape -> kineto document adapter (spec §4.4 / task 24).
 //
 // Consumes a parsed tape format v1 directory (see tape-format.ts for the
 // frozen contract this reads) and produces the LOCKED demo scene template:
@@ -18,8 +18,8 @@ import {
   seconds,
   text,
   withCommon,
-} from "@zoetrope/sdk";
-import type { ZoeDocument } from "@zoetrope/sdk";
+} from "@kineto/sdk";
+import type { ZoeDocument } from "@kineto/sdk";
 import type { TapeFrame, TapeHeader } from "./tape-format";
 
 const ACTIONS_FILE = "actions.jsonl";
@@ -72,7 +72,7 @@ function parseJsonLine<T>(line: string, lineNumber: number): T {
 }
 
 /**
- * Parse a mysteryshopper tape (per tape-format.ts) into a zoetrope
+ * Parse a mysteryshopper tape (per tape-format.ts) into a kineto
  * `ZoeDocument` plus the raw screenshot bytes it references.
  *
  * `files` is keyed by filename exactly as it appears in the tape

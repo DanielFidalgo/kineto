@@ -1,7 +1,7 @@
 mod common;
 
-use zoetrope_core::doc::{ms, Element, Scene, Transition};
-use zoetrope_core::{AssetStore, Document, Engine};
+use kineto_core::doc::{ms, Element, Scene, Transition};
+use kineto_core::{AssetStore, Document, Engine};
 
 /// 32x32 canvas, opaque-black bg (default). Scene "a" (300ms): full-canvas
 /// opaque red rect. Scene "b" (300ms, 200ms crossfade in): full-canvas
@@ -133,10 +133,10 @@ fn repeated_render_at_same_tick_is_idempotent() {
 #[test]
 fn tick_for_frame_matches_timebase_formula() {
     let engine = Engine::new(crossfade_doc(), AssetStore::new()).unwrap();
-    assert_eq!(engine.tick_for_frame(1, 30), zoetrope_core::TIMEBASE / 30);
+    assert_eq!(engine.tick_for_frame(1, 30), kineto_core::TIMEBASE / 30);
     assert_eq!(
         engine.tick_for_frame(2, 30),
-        2 * (zoetrope_core::TIMEBASE / 30)
+        2 * (kineto_core::TIMEBASE / 30)
     );
 }
 

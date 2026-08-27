@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // Task 20: mount() preview player (spec §4.3), verified through a real
 // browser canvas — same harness as Task 19's render() test (see
-// harness.ts): the SDK is exposed on `window.zoetrope`, so this test can
+// harness.ts): the SDK is exposed on `window.kineto`, so this test can
 // build a document and drive `mount()` from inside `page.evaluate`.
 //
 // Tick-advancement verification: Player's public surface is exactly
@@ -22,10 +22,10 @@ test.describe("mount()", () => {
     page,
   }) => {
     await page.goto("/test-browser/harness.html");
-    await page.waitForFunction(() => window.__zoetropeReady === true);
+    await page.waitForFunction(() => window.__kinetoReady === true);
 
     const result = await page.evaluate(async () => {
-      const { doc, scene, rect, withCommon, anim, key, mount, TIMEBASE } = window.zoetrope;
+      const { doc, scene, rect, withCommon, anim, key, mount, TIMEBASE } = window.kineto;
 
       const sceneDuration = 2 * TIMEBASE; // 2s — long enough that 300ms of
       // real-time playback is a clearly visible fraction of the fade.
@@ -74,6 +74,6 @@ test.describe("mount()", () => {
     expect(result.startPixel).toEqual([0, 255, 0, 255]);
     expect(result.afterPlayPixel).not.toEqual(result.startPixel);
     expect(result.seekThrewAfterDispose).toBe(true);
-    expect(result.seekThrewMessage).toBe("zoetrope: player disposed");
+    expect(result.seekThrewMessage).toBe("kineto: player disposed");
   });
 });

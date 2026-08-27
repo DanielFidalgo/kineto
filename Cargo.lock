@@ -535,6 +535,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "kineto-asciicast"
+version = "0.1.0"
+dependencies = [
+ "avt",
+ "kineto-core",
+ "pico-args",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "kineto-core"
+version = "0.1.0"
+dependencies = [
+ "cosmic-text",
+ "fontdb",
+ "image",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tiny-skia",
+]
+
+[[package]]
+name = "kineto-mcp"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "image",
+ "kineto-asciicast",
+ "kineto-core",
+ "rmcp",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "kineto-wasm"
+version = "0.1.0"
+dependencies = [
+ "kineto-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,60 +1396,6 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[package]]
-name = "zoetrope-asciicast"
-version = "0.1.0"
-dependencies = [
- "avt",
- "pico-args",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "zoetrope-core",
-]
-
-[[package]]
-name = "zoetrope-core"
-version = "0.1.0"
-dependencies = [
- "cosmic-text",
- "fontdb",
- "image",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tiny-skia",
-]
-
-[[package]]
-name = "zoetrope-mcp"
-version = "0.1.0"
-dependencies = [
- "base64",
- "image",
- "rmcp",
- "schemars",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tokio",
- "zoetrope-asciicast",
- "zoetrope-core",
-]
-
-[[package]]
-name = "zoetrope-wasm"
-version = "0.1.0"
-dependencies = [
- "wasm-bindgen",
- "zoetrope-core",
-]
 
 [[package]]
 name = "zune-core"

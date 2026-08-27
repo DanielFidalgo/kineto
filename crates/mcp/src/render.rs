@@ -5,9 +5,9 @@
 use std::path::Path;
 
 use base64::prelude::{Engine as _, BASE64_STANDARD};
+use kineto_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
+use kineto_core::Engine;
 use serde::Serialize;
-use zoetrope_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
-use zoetrope_core::Engine;
 
 use crate::error::ToolError;
 
@@ -73,7 +73,7 @@ pub fn frames_for(total_duration: i64, fps: i64) -> u64 {
     if total_duration <= 0 || fps <= 0 {
         return 0;
     }
-    let step = zoetrope_core::doc::TIMEBASE / fps;
+    let step = kineto_core::doc::TIMEBASE / fps;
     if step <= 0 {
         return 0;
     }
@@ -89,7 +89,7 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
         fps,
         frame_count: frame_count(engine, fps),
         duration_ticks: ticks,
-        duration_seconds: ticks as f64 / zoetrope_core::doc::TIMEBASE as f64,
+        duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
     }
 }
 
@@ -104,7 +104,7 @@ pub fn sample_frames(
     for index in preview_frame_indices(total, count) {
         let tick = engine.tick_for_frame(index as i64, fps);
         let mut rgba = engine.render(tick).to_vec();
-        zoetrope_core::render::unpremultiply(&mut rgba);
+        kineto_core::render::unpremultiply(&mut rgba);
 
         let (w, h) = (engine.width(), engine.height());
         let img =
@@ -184,7 +184,7 @@ pub fn render_to_mp4(engine: &mut Engine, fps: i64, out: &str) -> Result<RenderO
         fps,
         frame_count: count,
         duration_ticks: ticks,
-        duration_seconds: ticks as f64 / zoetrope_core::doc::TIMEBASE as f64,
+        duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
     })
 }
 
@@ -229,7 +229,7 @@ mod tests {
         // Three samples, not one: with a single sample only frame 0 is ever
         // compared, and an index-mapping bug that only bites away from the
         // first frame would pass.
-        use zoetrope_core::export::export_frames;
+        use kineto_core::export::export_frames;
 
         let mut engine = small_engine();
         let dir = tempfile::tempdir().unwrap();
@@ -262,7 +262,7 @@ mod tests {
         // (`tick_for_frame(n, fps) < total_duration`). This asserts the two
         // agree, including at exact multiples and one tick either side.
         fn by_loop(total: i64, fps: i64) -> u64 {
-            let step = zoetrope_core::doc::TIMEBASE / fps;
+            let step = kineto_core::doc::TIMEBASE / fps;
             let mut n = 0u64;
             while (n as i64) * step < total {
                 n += 1;
@@ -271,7 +271,7 @@ mod tests {
         }
 
         for fps in [1, 24, 25, 30, 50, 60, 1000] {
-            let step = zoetrope_core::doc::TIMEBASE / fps;
+            let step = kineto_core::doc::TIMEBASE / fps;
             for total in [
                 0,
                 1,
@@ -282,7 +282,7 @@ mod tests {
                 2 * step,
                 2 * step + 1,
                 97 * step + 3,
-                zoetrope_core::doc::TIMEBASE,
+                kineto_core::doc::TIMEBASE,
             ] {
                 assert_eq!(
                     frames_for(total, fps),
@@ -300,7 +300,7 @@ mod tests {
         // pure counting. This asserts the answer for the largest legal
         // duration there is: only a closed form can produce it at all.
         let total = i64::MAX;
-        let step = zoetrope_core::doc::TIMEBASE / 30;
+        let step = kineto_core::doc::TIMEBASE / 30;
         let expected = (total as u64).div_ceil(step as u64);
         assert_eq!(frames_for(total, 30), expected);
         assert_eq!(frames_for(total, 30), 392_150_171_635);
@@ -322,14 +322,14 @@ mod tests {
     }
 
     /// A 320x180 one-second document: small, deterministic, no assets.
-    fn small_engine() -> zoetrope_core::Engine {
-        use zoetrope_core::{Document, Element, Scene};
+    fn small_engine() -> kineto_core::Engine {
+        use kineto_core::{Document, Element, Scene};
         let mut doc = Document::new(320, 180);
         doc.push_scene(
-            Scene::new("s", zoetrope_core::doc::TIMEBASE)
+            Scene::new("s", kineto_core::doc::TIMEBASE)
                 .with_element(Element::rect([0.0, 0.0, 320.0, 180.0], "#3366FF")),
         );
-        zoetrope_core::Engine::new(doc, zoetrope_core::AssetStore::new()).unwrap()
+        kineto_core::Engine::new(doc, kineto_core::AssetStore::new()).unwrap()
     }
 
     fn base64_decode(s: &str) -> Vec<u8> {

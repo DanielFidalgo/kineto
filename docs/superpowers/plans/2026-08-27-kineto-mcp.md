@@ -1,12 +1,12 @@
-# Zoetrope MCP Server Implementation Plan
+# Kineto MCP Server Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose the existing headless native zoetrope engine to agents as a
+**Goal:** Expose the existing headless native kineto engine to agents as a
 stdio MCP server with three render tools and two read-only resource families.
 
 **Architecture:** A new leaf binary crate `crates/mcp` depends on
-`zoetrope-core` and `zoetrope-asciicast` and speaks MCP over stdio via the
+`kineto-core` and `kineto-asciicast` and speaks MCP over stdio via the
 official `rmcp` SDK. It adds no dependency to any existing crate and does not
 enter the wasm build graph. Internally it is four small modules — error
 mapping, document/asset loading, render+preview, storyboard document
@@ -14,10 +14,10 @@ building — with a thin tool layer on top. Every render path funnels through
 one function so behavior cannot drift between tools.
 
 **Tech Stack:** Rust 1.97, `rmcp` 3.1.4 (stdio transport, `schemars`-derived
-tool schemas), tokio (io only), `zoetrope-core` (tiny-skia + cosmic-text),
+tool schemas), tokio (io only), `kineto-core` (tiny-skia + cosmic-text),
 ffmpeg via shell-out for muxing.
 
-**Spec:** `docs/superpowers/specs/2026-08-27-zoetrope-mcp-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-27-kineto-mcp-design.md`
 
 ## Global Constraints
 
@@ -36,7 +36,7 @@ repo guide; do not restate or renegotiate them per task.
   the features `["server", "macros", "transport-io", "base64"]`. Do not enable
   `client`, `reqwest`, or any `transport-streamable-http-*` feature.
 - **Missing ffmpeg is a loud error, never a silent PNG-sequence fallback.**
-  `zoetrope_core::export::mux_with_ffmpeg` returns `Ok(false)` both when ffmpeg
+  `kineto_core::export::mux_with_ffmpeg` returns `Ok(false)` both when ffmpeg
   is absent and when it ran and failed; the server must distinguish these and
   surface both as errors.
 - **Tool failures are `Ok(CallToolResult::error(...))`, not `Err(ErrorData)`.**
@@ -45,7 +45,7 @@ repo guide; do not restate or renegotiate them per task.
   requests the server cannot route at all.
 - **License headers/manifest fields:** `license = "MIT OR Apache-2.0"` via
   `license.workspace = true`, `edition.workspace = true`.
-- **No brand strings in code.** The codename `zoetrope` is what exists today;
+- **No brand strings in code.** The codename `kineto` is what exists today;
   the published name is decided at brand time.
 - **TDD, conventional commits, commit after every green test cycle.**
 - **Comment non-obvious `default-features` choices in the manifest**, matching
@@ -57,7 +57,7 @@ repo guide; do not restate or renegotiate them per task.
 |---|---|
 | `crates/mcp/Cargo.toml` | Manifest, pinned rmcp feature set |
 | `crates/mcp/src/main.rs` | Binary entry: build server, serve stdio, wait |
-| `crates/mcp/src/lib.rs` | `ZoetropeServer` struct, `ServerHandler` impl, module wiring |
+| `crates/mcp/src/lib.rs` | `KinetoServer` struct, `ServerHandler` impl, module wiring |
 | `crates/mcp/src/error.rs` | `ToolError` and its conversion into `CallToolResult` |
 | `crates/mcp/src/source.rs` | Document loading and asset resolution from the filesystem |
 | `crates/mcp/src/render.rs` | ffmpeg preflight, mux pipeline, frame sampling |
@@ -90,8 +90,8 @@ schemas, so that is what gets asserted exactly.
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `zoetrope_mcp::ZoetropeServer` with `ZoetropeServer::new() -> Self`
-  and `impl ServerHandler for ZoetropeServer`. Binary name `zoetrope-mcp`.
+- Produces: `kineto_mcp::KinetoServer` with `KinetoServer::new() -> Self`
+  and `impl ServerHandler for KinetoServer`. Binary name `kineto-mcp`.
   Test harness `harness::Server` with `start()`, `send(&Value)`,
   `recv() -> Value`, `initialize() -> Value`, `request(&Value) -> Value`.
 
@@ -114,13 +114,13 @@ Create `crates/mcp/Cargo.toml`:
 
 ```toml
 [package]
-name = "zoetrope-mcp"
+name = "kineto-mcp"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "zoetrope-mcp"
+name = "kineto-mcp"
 path = "src/main.rs"
 
 [dependencies]
@@ -146,8 +146,8 @@ thiserror = "2.0.20"
 # the current-thread runtime is sufficient and keeps the dependency surface
 # smaller.
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
-zoetrope-asciicast = { path = "../../adapters/asciicast" }
-zoetrope-core = { path = "../core" }
+kineto-asciicast = { path = "../../adapters/asciicast" }
+kineto-core = { path = "../core" }
 ```
 
 - [ ] **Step 3: Write the test harness**
@@ -177,12 +177,12 @@ pub struct Server {
 
 impl Server {
     pub fn start() -> Server {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_zoetrope-mcp"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_kineto-mcp"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .expect("spawn zoetrope-mcp");
+            .expect("spawn kineto-mcp");
         let reader = BufReader::new(child.stdout.take().expect("stdout piped"));
         Server { child, reader, next_id: 1 }
     }
@@ -222,7 +222,7 @@ impl Server {
             json!({
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": { "name": "zoetrope-mcp-test", "version": "0" },
+                "clientInfo": { "name": "kineto-mcp-test", "version": "0" },
             }),
         );
         self.send(&json!({
@@ -256,7 +256,7 @@ fn initialize_returns_server_info() {
     let resp = server.initialize();
 
     let result = resp.get("result").expect("initialize returned an error");
-    assert_eq!(result["serverInfo"]["name"], "zoetrope-mcp");
+    assert_eq!(result["serverInfo"]["name"], "kineto-mcp");
     // Asserted as "present", not as an exact string: the negotiated version
     // is rmcp's to choose and will move with SDK upgrades.
     assert!(
@@ -268,7 +268,7 @@ fn initialize_returns_server_info() {
 
 - [ ] **Step 5: Run the test to verify it fails**
 
-Run: `cargo test -p zoetrope-mcp --test protocol`
+Run: `cargo test -p kineto-mcp --test protocol`
 Expected: FAIL — the crate has no `src/` yet, so this is a compile error
 (`couldn't read crates/mcp/src/main.rs`).
 
@@ -277,17 +277,17 @@ Expected: FAIL — the crate has no `src/` yet, so this is a compile error
 Create `crates/mcp/src/lib.rs`:
 
 ```rust
-//! MCP server exposing the native zoetrope engine over stdio.
+//! MCP server exposing the native kineto engine over stdio.
 
 use rmcp::ServerHandler;
 use rmcp::model::{Implementation, ServerCapabilities, ServerInfo};
 
 #[derive(Clone, Default)]
-pub struct ZoetropeServer {}
+pub struct KinetoServer {}
 
-impl ZoetropeServer {
+impl KinetoServer {
     pub fn new() -> Self {
-        ZoetropeServer {}
+        KinetoServer {}
     }
 }
 
@@ -298,19 +298,19 @@ impl ZoetropeServer {
 fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     let mut info = ServerInfo::new(capabilities);
     info.server_info = Implementation {
-        name: "zoetrope-mcp".into(),
+        name: "kineto-mcp".into(),
         version: env!("CARGO_PKG_VERSION").into(),
         ..Implementation::default()
     };
     info.instructions = Some(
-        "Renders zoetrope scene documents to MP4. Deterministic: the same \
+        "Renders kineto scene documents to MP4. Deterministic: the same \
          document always produces the same bytes. Requires ffmpeg on PATH."
             .into(),
     );
     info
 }
 
-impl ServerHandler for ZoetropeServer {
+impl ServerHandler for KinetoServer {
     fn get_info(&self) -> ServerInfo {
         server_info(ServerCapabilities::builder().build())
     }
@@ -321,11 +321,11 @@ Create `crates/mcp/src/main.rs`:
 
 ```rust
 use rmcp::ServiceExt;
-use zoetrope_mcp::ZoetropeServer;
+use kineto_mcp::KinetoServer;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let service = ZoetropeServer::new().serve(rmcp::transport::stdio()).await?;
+    let service = KinetoServer::new().serve(rmcp::transport::stdio()).await?;
     service.waiting().await?;
     Ok(())
 }
@@ -333,15 +333,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - [ ] **Step 7: Run the test to verify it passes**
 
-Run: `cargo test -p zoetrope-mcp --test protocol`
+Run: `cargo test -p kineto-mcp --test protocol`
 Expected: PASS
 
 - [ ] **Step 8: Verify the leaf-crate constraint holds**
 
-Run: `cargo tree -p zoetrope-core --invert -p zoetrope-mcp`
-Expected: no output / no path — `zoetrope-core` must not depend on the server.
+Run: `cargo tree -p kineto-core --invert -p kineto-mcp`
+Expected: no output / no path — `kineto-core` must not depend on the server.
 
-Run: `cargo build -p zoetrope-wasm --target wasm32-unknown-unknown`
+Run: `cargo build -p kineto-wasm --target wasm32-unknown-unknown`
 Expected: success, unchanged. The new crate must not enter the wasm graph.
 
 - [ ] **Step 9: Commit**
@@ -361,7 +361,7 @@ git commit -m "feat(mcp): scaffold stdio MCP server crate with initialize handsh
 - Modify: `crates/mcp/src/lib.rs` (add `pub mod error; pub mod source;`)
 
 **Interfaces:**
-- Consumes: `zoetrope_mcp::ZoetropeServer` (Task 1).
+- Consumes: `kineto_mcp::KinetoServer` (Task 1).
 - Produces:
   - `error::ToolError` (enum, `thiserror`) with `ToolError::into_result(self) -> rmcp::model::CallToolResult`.
   - `source::load_document(document: Option<&str>, document_path: Option<&str>) -> Result<(Document, PathBuf), ToolError>` — returns the document and the directory asset paths resolve against.
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn inline_document_base_dir_is_cwd() {
-        let doc = zoetrope_core::Document::new(16, 16).canonical_json();
+        let doc = kineto_core::Document::new(16, 16).canonical_json();
         let (parsed, base) = load_document(Some(&doc), None).unwrap();
         assert_eq!(parsed.size.w, 16);
         assert_eq!(base, std::env::current_dir().unwrap());
@@ -401,7 +401,7 @@ mod tests {
     fn path_document_base_dir_is_its_parent() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("scene.json");
-        std::fs::write(&path, zoetrope_core::Document::new(8, 8).canonical_json()).unwrap();
+        std::fs::write(&path, kineto_core::Document::new(8, 8).canonical_json()).unwrap();
         let (_, base) = load_document(None, Some(path.to_str().unwrap())).unwrap();
         assert_eq!(base, dir.path());
     }
@@ -414,8 +414,8 @@ mod tests {
 
     #[test]
     fn resolves_reserved_font_src_without_touching_disk() {
-        let mut doc = zoetrope_core::Document::new(8, 8);
-        doc.add_asset("f", zoetrope_core::Asset::font("zoetrope:jetbrains-mono"));
+        let mut doc = kineto_core::Document::new(8, 8);
+        doc.add_asset("f", kineto_core::Asset::font("kineto:jetbrains-mono"));
         let store = resolve_assets(&doc, std::path::Path::new("/nonexistent")).unwrap();
         // `prepare` is what actually decodes; getting here without an I/O error
         // proves the reserved src never hit the filesystem.
@@ -425,8 +425,8 @@ mod tests {
     #[test]
     fn missing_asset_file_names_the_resolved_path() {
         let dir = tempfile::tempdir().unwrap();
-        let mut doc = zoetrope_core::Document::new(8, 8);
-        doc.add_asset("i", zoetrope_core::Asset::image("missing.png"));
+        let mut doc = kineto_core::Document::new(8, 8);
+        doc.add_asset("i", kineto_core::Asset::image("missing.png"));
         let err = resolve_assets(&doc, dir.path()).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("missing.png"), "message was: {msg}");
@@ -453,7 +453,7 @@ dependency from Task 1.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --lib`
+Run: `cargo test -p kineto-mcp --lib`
 Expected: FAIL — compile error, `load_document` / `resolve_assets` /
 `check_fps` / `ToolError` not found.
 
@@ -471,7 +471,7 @@ Create `crates/mcp/src/error.rs`:
 //! never reaches the model.
 
 use rmcp::model::{CallToolResult, ContentBlock};
-use zoetrope_core::DocError;
+use kineto_core::DocError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ToolError {
@@ -502,7 +502,7 @@ pub enum ToolError {
     Fps(i64),
 
     #[error(
-        "ffmpeg was not found on PATH. zoetrope renders frames itself but \
+        "ffmpeg was not found on PATH. kineto renders frames itself but \
          relies on ffmpeg to encode and mux MP4. Install it (macOS: \
          `brew install ffmpeg`; Debian/Ubuntu: `apt install ffmpeg`) and retry."
     )]
@@ -535,9 +535,9 @@ Prepend to `crates/mcp/src/source.rs` (above the existing test module):
 
 use std::path::{Path, PathBuf};
 
-use zoetrope_core::assets::AssetStore;
-use zoetrope_core::doc::TIMEBASE;
-use zoetrope_core::{Asset, Document};
+use kineto_core::assets::AssetStore;
+use kineto_core::doc::TIMEBASE;
+use kineto_core::{Asset, Document};
 
 use crate::error::ToolError;
 
@@ -585,8 +585,8 @@ pub fn load_document(
 
 /// Stage bytes for every asset the document references.
 ///
-/// Reserved font srcs (`zoetrope:inter`, `zoetrope:jetbrains-mono`) come from
-/// the bytes bundled into `zoetrope-core`; everything else is a filesystem
+/// Reserved font srcs (`kineto:inter`, `kineto:jetbrains-mono`) come from
+/// the bytes bundled into `kineto-core`; everything else is a filesystem
 /// path resolved against `base_dir`. Absolute srcs are used as-is. There is
 /// no network fetching — a document whose pixels depend on a URL would not be
 /// reproducible.
@@ -597,7 +597,7 @@ pub fn resolve_assets(doc: &Document, base_dir: &Path) -> Result<AssetStore, Too
             Asset::Image { src } | Asset::Font { src } => src,
         };
 
-        if let Some(bytes) = zoetrope_core::resolve_reserved_src(src) {
+        if let Some(bytes) = kineto_core::resolve_reserved_src(src) {
             store.add_bytes(id, bytes.to_vec());
             continue;
         }
@@ -633,11 +633,11 @@ pub fn check_fps(fps: i64) -> Result<(), ToolError> {
 Note: `resolve_reserved_src` is re-exported from the crate root only under the
 `bundled-fonts` feature, which is on by default and which this crate relies on.
 If the import fails, use the full path
-`zoetrope_core::assets::resolve_reserved_src`.
+`kineto_core::assets::resolve_reserved_src`.
 
 - [ ] **Step 5: Wire the modules**
 
-Add to `crates/mcp/src/lib.rs`, above the `ZoetropeServer` definition:
+Add to `crates/mcp/src/lib.rs`, above the `KinetoServer` definition:
 
 ```rust
 pub mod error;
@@ -646,7 +646,7 @@ pub mod source;
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-mcp --lib`
+Run: `cargo test -p kineto-mcp --lib`
 Expected: PASS (8 tests)
 
 - [ ] **Step 7: Commit**
@@ -719,7 +719,7 @@ mod tests {
         // This is what makes the spec's byte-identity claim testable. A 320x180
         // document is under PREVIEW_MAX_EDGE, so no resampling happens and the
         // preview PNG must be byte-identical to the exported one.
-        use zoetrope_core::export::export_frames;
+        use kineto_core::export::export_frames;
 
         let mut engine = small_engine();
         let dir = tempfile::tempdir().unwrap();
@@ -734,14 +734,14 @@ mod tests {
     }
 
     /// A 320x180 one-second document: small, deterministic, no assets.
-    fn small_engine() -> zoetrope_core::Engine {
-        use zoetrope_core::{Document, Element, Scene};
+    fn small_engine() -> kineto_core::Engine {
+        use kineto_core::{Document, Element, Scene};
         let mut doc = Document::new(320, 180);
         doc.push_scene(
-            Scene::new("s", zoetrope_core::doc::TIMEBASE)
+            Scene::new("s", kineto_core::doc::TIMEBASE)
                 .with_element(Element::rect([0.0, 0.0, 320.0, 180.0], "#3366FF")),
         );
-        zoetrope_core::Engine::new(doc, zoetrope_core::AssetStore::new()).unwrap()
+        kineto_core::Engine::new(doc, kineto_core::AssetStore::new()).unwrap()
     }
 
     fn base64_decode(s: &str) -> Vec<u8> {
@@ -760,7 +760,7 @@ encoding goes through rmcp.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --lib render`
+Run: `cargo test -p kineto-mcp --lib render`
 Expected: FAIL — compile error, `preview_frame_indices` / `sample_frames` /
 `PREVIEW_MAX_COUNT` not found.
 
@@ -777,8 +777,8 @@ use std::path::Path;
 
 use rmcp::base64::Engine as _;
 use serde::Serialize;
-use zoetrope_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
-use zoetrope_core::Engine;
+use kineto_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
+use kineto_core::Engine;
 
 use crate::error::ToolError;
 
@@ -840,7 +840,7 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
         fps,
         frame_count: frame_count(engine, fps),
         duration_ticks: ticks,
-        duration_seconds: ticks as f64 / zoetrope_core::doc::TIMEBASE as f64,
+        duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
     }
 }
 
@@ -855,7 +855,7 @@ pub fn sample_frames(
     for index in preview_frame_indices(total, count) {
         let tick = engine.tick_for_frame(index as i64, fps);
         let mut rgba = engine.render(tick).to_vec();
-        zoetrope_core::render::unpremultiply(&mut rgba);
+        kineto_core::render::unpremultiply(&mut rgba);
 
         let (w, h) = (engine.width(), engine.height());
         let img = image::RgbaImage::from_raw(w, h, rgba)
@@ -942,7 +942,7 @@ pub fn render_to_mp4(
         fps,
         frame_count: count,
         duration_ticks: ticks,
-        duration_seconds: ticks as f64 / zoetrope_core::doc::TIMEBASE as f64,
+        duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
     })
 }
 ```
@@ -953,7 +953,7 @@ Add `pub mod render;` to `crates/mcp/src/lib.rs`.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-mcp --lib render`
+Run: `cargo test -p kineto-mcp --lib render`
 Expected: PASS (6 tests)
 
 - [ ] **Step 6: Tie the server's loading path to the committed parity goldens**
@@ -985,7 +985,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use sha2::{Digest, Sha256};
-use zoetrope_mcp::source::{load_document, resolve_assets};
+use kineto_mcp::source::{load_document, resolve_assets};
 
 fn repo(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
@@ -1002,13 +1002,13 @@ fn corpus_rendered_through_the_server_path_matches_golden_hashes() {
     let assets_dir = repo("testdata/assets");
     let mut checked = 0usize;
 
-    for entry in zoetrope_core::corpus::corpus() {
+    for entry in kineto_core::corpus::corpus() {
         // Round-trip through canonical JSON so the server's parser is what
         // builds the document, exactly as it would for a real tool call.
         let json = entry.doc.canonical_json();
         let (doc, _) = load_document(Some(&json), None).expect("corpus doc parses");
         let assets = resolve_assets(&doc, &assets_dir).expect("corpus assets resolve");
-        let mut engine = zoetrope_core::Engine::new(doc, assets).expect("engine builds");
+        let mut engine = kineto_core::Engine::new(doc, assets).expect("engine builds");
 
         for tick in &entry.ticks {
             let key = format!("{}@{}", entry.name, tick);
@@ -1034,7 +1034,7 @@ test would pass green while checking zero frames.
 
 - [ ] **Step 7: Run the parity test**
 
-Run: `cargo test -p zoetrope-mcp --test parity`
+Run: `cargo test -p kineto-mcp --test parity`
 Expected: PASS, and it must report a nonzero number of assertions — if it
 fails on the `checked > 0` line, fix the key format rather than the assertion.
 
@@ -1060,7 +1060,7 @@ git commit -m "feat(mcp): render pipeline with ffmpeg preflight and frame previe
 - Produces:
   - `tools::RenderDocumentParams` (`Deserialize + JsonSchema`).
   - `tools::success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult` — the shared result shape used by all three tools.
-  - `ZoetropeServer::render_document` registered as MCP tool `render_document`.
+  - `KinetoServer::render_document` registered as MCP tool `render_document`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1204,7 +1204,7 @@ fn bad_fps_is_a_tool_error_not_a_panic() {
 
 #[test]
 fn renders_an_mp4_with_preview_frames() {
-    if !zoetrope_core::export::ffmpeg_available() {
+    if !kineto_core::export::ffmpeg_available() {
         panic!(
             "ffmpeg is required to run this test; CI installs it (see \
              .github/workflows). Install it locally to run the full suite."
@@ -1246,10 +1246,10 @@ Add to `crates/mcp/Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-zoetrope-core = { path = "../core" }
+kineto-core = { path = "../core" }
 ```
 
-(`zoetrope-core` is already a normal dependency, so this line is only needed if
+(`kineto-core` is already a normal dependency, so this line is only needed if
 the integration test cannot see it — it can, so omit unless the build complains.)
 
 Append to `crates/mcp/tests/protocol.rs`:
@@ -1279,7 +1279,7 @@ fn tools_list_advertises_render_document() {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --test tools --test protocol`
+Run: `cargo test -p kineto-mcp --test tools --test protocol`
 Expected: FAIL — `tools/list` returns no tools and `tools/call` returns a
 method-not-found error, so every assertion above fails.
 
@@ -1307,7 +1307,7 @@ fn default_preview_frames() -> usize {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderDocumentParams {
-    /// Canonical zoetrope document JSON. Provide exactly one of `document` or
+    /// Canonical kineto document JSON. Provide exactly one of `document` or
     /// `documentPath`.
     #[serde(default)]
     pub document: Option<String>,
@@ -1374,7 +1374,7 @@ pub fn success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult
 Rewrite `crates/mcp/src/lib.rs`:
 
 ```rust
-//! MCP server exposing the native zoetrope engine over stdio.
+//! MCP server exposing the native kineto engine over stdio.
 
 pub mod error;
 pub mod render;
@@ -1398,9 +1398,9 @@ use crate::tools::RenderDocumentParams;
 /// crate; Task 1 established the constructor form below.
 fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     let mut info = ServerInfo::new(capabilities);
-    info.server_info = Implementation::new("zoetrope-mcp", env!("CARGO_PKG_VERSION"));
+    info.server_info = Implementation::new("kineto-mcp", env!("CARGO_PKG_VERSION"));
     info.instructions = Some(
-        "Renders zoetrope scene documents to MP4. Deterministic: the same \
+        "Renders kineto scene documents to MP4. Deterministic: the same \
          document always produces the same bytes. Requires ffmpeg on PATH."
             .into(),
     );
@@ -1408,27 +1408,27 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
 }
 
 #[derive(Clone)]
-pub struct ZoetropeServer {
+pub struct KinetoServer {
     tool_router: ToolRouter<Self>,
 }
 
-impl Default for ZoetropeServer {
+impl Default for KinetoServer {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[tool_router(router = tool_router)]
-impl ZoetropeServer {
+impl KinetoServer {
     pub fn new() -> Self {
-        ZoetropeServer {
+        KinetoServer {
             tool_router: Self::tool_router(),
         }
     }
 
     #[tool(
         name = "render_document",
-        description = "Render a zoetrope scene document to an MP4. Rendering is \
+        description = "Render a kineto scene document to an MP4. Rendering is \
                        deterministic: the same document always produces the same \
                        bytes. Returns the output path, metadata, and sampled \
                        frames as images so you can check the result. Requires \
@@ -1458,7 +1458,7 @@ impl ZoetropeServer {
             .unwrap_or(default_base);
 
         let assets = crate::source::resolve_assets(&doc, &base)?;
-        let mut engine = zoetrope_core::Engine::new(doc, assets)?;
+        let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);
@@ -1477,7 +1477,7 @@ impl ZoetropeServer {
 }
 
 #[tool_handler(router = self.tool_router)]
-impl ServerHandler for ZoetropeServer {
+impl ServerHandler for KinetoServer {
     fn get_info(&self) -> ServerInfo {
         server_info(ServerCapabilities::builder().enable_tools().build())
     }
@@ -1486,7 +1486,7 @@ impl ServerHandler for ZoetropeServer {
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-mcp`
+Run: `cargo test -p kineto-mcp`
 Expected: PASS. The `renders_an_mp4_with_preview_frames` test requires ffmpeg;
 install it locally if it fails on that check.
 
@@ -1509,7 +1509,7 @@ git commit -m "feat(mcp): render_document tool with validation, previews, and st
 
 **Interfaces:**
 - Consumes: everything from Task 4.
-- Produces: `tools::RenderAsciicastParams`, `tools::ThemeParams`, MCP tool `render_asciicast`. `zoetrope_asciicast::Theme` gains `String` color fields.
+- Produces: `tools::RenderAsciicastParams`, `tools::ThemeParams`, MCP tool `render_asciicast`. `kineto_asciicast::Theme` gains `String` color fields.
 
 This is the one task that edits a crate other than `crates/mcp`. It adds no
 dependency, so the leaf-crate constraint holds.
@@ -1584,7 +1584,7 @@ fn missing_cast_file_names_the_path() {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --test tools`
+Run: `cargo test -p kineto-mcp --test tools`
 Expected: FAIL — `render_asciicast` is not a known tool.
 
 - [ ] **Step 3: Widen `Theme`**
@@ -1624,7 +1624,7 @@ Then fix the three call sites, which relied on `&'static str`:
 - Line ~168: `Element::rect([x, y, theme.cell_w, theme.cell_h], theme.fg)` →
   `..., theme.fg.as_str())`
 
-Run: `cargo test -p zoetrope-asciicast`
+Run: `cargo test -p kineto-asciicast`
 Expected: PASS — this is a pure type widening, so the adapter's existing
 tests must still pass unchanged. If any golden bytes move, stop: that means
 the change was not neutral.
@@ -1680,7 +1680,7 @@ pub struct RenderAsciicastParams {
 
 impl ThemeParams {
     /// Apply the caller's overrides onto the adapter's defaults.
-    pub fn apply(&self, mut theme: zoetrope_asciicast::Theme) -> zoetrope_asciicast::Theme {
+    pub fn apply(&self, mut theme: kineto_asciicast::Theme) -> kineto_asciicast::Theme {
         if let Some(bg) = &self.bg {
             theme.bg = bg.clone();
         }
@@ -1697,7 +1697,7 @@ impl ThemeParams {
 
 - [ ] **Step 5: Add the tool**
 
-Inside the `#[tool_router(router = tool_router)] impl ZoetropeServer` block in
+Inside the `#[tool_router(router = tool_router)] impl KinetoServer` block in
 `crates/mcp/src/lib.rs`, add:
 
 ```rust
@@ -1729,20 +1729,20 @@ Inside the `#[tool_router(router = tool_router)] impl ZoetropeServer` block in
             path: params.cast_path.clone(),
             source: e,
         })?;
-        let cast = zoetrope_asciicast::parse_cast(&data)
+        let cast = kineto_asciicast::parse_cast(&data)
             .map_err(|e| ToolError::Invalid(format!("invalid asciicast: {e}")))?;
 
         let theme = match &params.theme {
-            Some(t) => t.apply(zoetrope_asciicast::Theme::default()),
-            None => zoetrope_asciicast::Theme::default(),
+            Some(t) => t.apply(kineto_asciicast::Theme::default()),
+            None => kineto_asciicast::Theme::default(),
         };
-        let (doc, assets) = zoetrope_asciicast::cast_to_document(&cast, &theme);
+        let (doc, assets) = kineto_asciicast::cast_to_document(&cast, &theme);
 
-        let mut store = zoetrope_core::AssetStore::new();
+        let mut store = kineto_core::AssetStore::new();
         for (id, bytes) in assets {
             store.add_bytes(&id, bytes.to_vec());
         }
-        let mut engine = zoetrope_core::Engine::new(doc, store)?;
+        let mut engine = kineto_core::Engine::new(doc, store)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);
@@ -1766,7 +1766,7 @@ read that file and mirror it rather than guessing.
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-asciicast -p zoetrope-mcp`
+Run: `cargo test -p kineto-asciicast -p kineto-mcp`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
@@ -1906,14 +1906,14 @@ mod tests {
         let doc = build(&frames, None).unwrap();
         let base = std::env::current_dir().unwrap();
         let store = crate::source::resolve_assets(&doc, &base).unwrap();
-        zoetrope_core::Engine::new(doc, store).expect("engine accepts the built document");
+        kineto_core::Engine::new(doc, store).expect("engine accepts the built document");
     }
 }
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --lib storyboard`
+Run: `cargo test -p kineto-mcp --lib storyboard`
 Expected: FAIL — compile error, `build` / `Frame` / `CAPTION_FONT_ID` not found.
 
 - [ ] **Step 3: Write the builder**
@@ -1928,8 +1928,8 @@ Prepend to `crates/mcp/src/storyboard.rs`:
 
 use std::path::Path;
 
-use zoetrope_core::doc::TIMEBASE;
-use zoetrope_core::{Asset, Document, Element, Scene};
+use kineto_core::doc::TIMEBASE;
+use kineto_core::{Asset, Document, Element, Scene};
 
 use crate::error::ToolError;
 
@@ -1937,7 +1937,7 @@ use crate::error::ToolError;
 const TICKS_PER_MS: i64 = TIMEBASE / 1000;
 
 pub const CAPTION_FONT_ID: &str = "caption-font";
-pub const CAPTION_FONT_SRC: &str = "zoetrope:jetbrains-mono";
+pub const CAPTION_FONT_SRC: &str = "kineto:jetbrains-mono";
 
 const CAPTION_BAND_H: f64 = 56.0;
 const CAPTION_SIZE_PX: f64 = 22.0;
@@ -2139,7 +2139,7 @@ Inside the `#[tool_router]` impl in `crates/mcp/src/lib.rs`, add:
             source: e,
         })?;
         let assets = crate::source::resolve_assets(&doc, &base)?;
-        let mut engine = zoetrope_core::Engine::new(doc, assets)?;
+        let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
             let outcome = crate::render::describe(&engine, params.fps);
@@ -2216,7 +2216,7 @@ cannot see the normal dependency — it can, so this should not be needed.
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-mcp`
+Run: `cargo test -p kineto-mcp`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
@@ -2239,8 +2239,8 @@ git commit -m "feat(mcp): render_storyboard tool for image-sequence reporting"
 - Consumes: everything above.
 - Produces: `resources::list() -> Vec<Resource>`, `resources::read(uri: &str) -> Option<String>`.
 
-URIs: `zoetrope://schema/document` for the derived JSON Schema, and
-`zoetrope://corpus/<name>` for each entry from `zoetrope_core::corpus::corpus()`.
+URIs: `kineto://schema/document` for the derived JSON Schema, and
+`kineto://corpus/<name>` for each entry from `kineto_core::corpus::corpus()`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2256,13 +2256,13 @@ fn resources_list_includes_the_schema_and_the_corpus() {
     let resources = resp["result"]["resources"].as_array().expect("resources array");
 
     assert!(
-        resources.iter().any(|r| r["uri"] == "zoetrope://schema/document"),
+        resources.iter().any(|r| r["uri"] == "kineto://schema/document"),
         "schema resource missing from {resources:?}"
     );
     assert!(
         resources.iter().filter(|r| r["uri"]
             .as_str()
-            .is_some_and(|u| u.starts_with("zoetrope://corpus/")))
+            .is_some_and(|u| u.starts_with("kineto://corpus/")))
             .count()
             > 0,
         "no corpus resources in {resources:?}"
@@ -2283,7 +2283,7 @@ fn reading_a_corpus_resource_returns_a_renderable_document() {
         .find_map(|r| {
             r["uri"]
                 .as_str()
-                .filter(|u| u.starts_with("zoetrope://corpus/"))
+                .filter(|u| u.starts_with("kineto://corpus/"))
                 .map(str::to_string)
         })
         .expect("a corpus resource");
@@ -2292,7 +2292,7 @@ fn reading_a_corpus_resource_returns_a_renderable_document() {
     let text = resp["result"]["contents"][0]["text"].as_str().expect("text contents");
 
     // The examples we hand a model must actually be valid documents.
-    zoetrope_core::Document::from_json(text).expect("corpus resource is a valid document");
+    kineto_core::Document::from_json(text).expect("corpus resource is a valid document");
 }
 
 #[test]
@@ -2302,7 +2302,7 @@ fn reading_an_unknown_uri_is_an_error() {
 
     let resp = server.request(
         "resources/read",
-        serde_json::json!({ "uri": "zoetrope://corpus/does-not-exist" }),
+        serde_json::json!({ "uri": "kineto://corpus/does-not-exist" }),
     );
     assert!(resp.get("error").is_some(), "expected a JSON-RPC error, got {resp}");
 }
@@ -2314,7 +2314,7 @@ unroutable URI is genuinely a protocol error.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p zoetrope-mcp --test protocol`
+Run: `cargo test -p kineto-mcp --test protocol`
 Expected: FAIL — `resources/list` returns an empty list and `resources/read`
 returns method-not-found.
 
@@ -2331,13 +2331,13 @@ Create `crates/mcp/src/resources.rs`:
 
 use rmcp::model::Resource;
 
-pub const SCHEMA_URI: &str = "zoetrope://schema/document";
-const CORPUS_PREFIX: &str = "zoetrope://corpus/";
+pub const SCHEMA_URI: &str = "kineto://schema/document";
+const CORPUS_PREFIX: &str = "kineto://corpus/";
 
 pub fn list() -> Vec<Resource> {
     let mut out = vec![
         Resource::new(SCHEMA_URI, "document-schema")
-            .with_title("Zoetrope document JSON Schema")
+            .with_title("Kineto document JSON Schema")
             .with_description(
                 "JSON Schema for the canonical scene document accepted by \
                  render_document.",
@@ -2345,7 +2345,7 @@ pub fn list() -> Vec<Resource> {
             .with_mime_type("application/json"),
     ];
 
-    for entry in zoetrope_core::corpus::corpus() {
+    for entry in kineto_core::corpus::corpus() {
         out.push(
             Resource::new(format!("{CORPUS_PREFIX}{}", entry.name), entry.name)
                 .with_title(format!("Example document: {}", entry.name))
@@ -2364,7 +2364,7 @@ pub fn read(uri: &str) -> Option<String> {
         return Some(DOCUMENT_SCHEMA.to_string());
     }
     let name = uri.strip_prefix(CORPUS_PREFIX)?;
-    zoetrope_core::corpus::corpus()
+    kineto_core::corpus::corpus()
         .into_iter()
         .find(|e| e.name == name)
         .map(|e| e.doc.canonical_json())
@@ -2372,13 +2372,13 @@ pub fn read(uri: &str) -> Option<String> {
 
 /// Hand-written rather than derived.
 ///
-/// `schemars::schema_for!` would require `zoetrope_core::Document` to derive
+/// `schemars::schema_for!` would require `kineto_core::Document` to derive
 /// `JsonSchema`, which would put `schemars` into `crates/core` and break the
 /// leaf-crate constraint. The format is frozen at `v: 1`, so a literal is
 /// stable — and it can carry better descriptions than a derived schema would.
 pub const DOCUMENT_SCHEMA: &str = r##"{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Zoetrope document",
+  "title": "Kineto document",
   "description": "A complete, serializable description of a video. Time is in integer ticks at 705600000 ticks/second; fps is only an export hint.",
   "type": "object",
   "required": ["v", "timebase", "size", "scenes"],
@@ -2429,7 +2429,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
             "type": { "const": "font" },
             "src": {
               "type": "string",
-              "description": "Path to a TTF/OTF, or a reserved src for a bundled font: 'zoetrope:inter' or 'zoetrope:jetbrains-mono'. There are no system fonts."
+              "description": "Path to a TTF/OTF, or a reserved src for a bundled font: 'kineto:inter' or 'kineto:jetbrains-mono'. There are no system fonts."
             }
           }
         }
@@ -2557,13 +2557,13 @@ mod tests {
 
     #[test]
     fn every_corpus_entry_is_listed_and_readable() {
-        for entry in zoetrope_core::corpus::corpus() {
-            let uri = format!("zoetrope://corpus/{}", entry.name);
+        for entry in kineto_core::corpus::corpus() {
+            let uri = format!("kineto://corpus/{}", entry.name);
             let text = read(&uri).unwrap_or_else(|| panic!("{uri} not readable"));
-            zoetrope_core::Document::from_json(&text)
+            kineto_core::Document::from_json(&text)
                 .unwrap_or_else(|e| panic!("{uri} is not a valid document: {e}"));
         }
-        assert_eq!(list().len(), zoetrope_core::corpus::corpus().len() + 1);
+        assert_eq!(list().len(), kineto_core::corpus::corpus().len() + 1);
     }
 }
 ```
@@ -2621,7 +2621,7 @@ If `ErrorData::resource_not_found` does not exist in 3.1.4, use
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cargo test -p zoetrope-mcp`
+Run: `cargo test -p kineto-mcp`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -2664,7 +2664,7 @@ Add this step to the `rust` job, before the test step:
 
 Confirm the job's test step covers the whole workspace (`cargo test
 --workspace` or equivalent). If it names crates explicitly, add
-`-p zoetrope-mcp`.
+`-p kineto-mcp`.
 
 Do **not** touch the `wasm-parity` or `web` jobs: `crates/mcp` is native-only
 and is not in the wasm build graph.
@@ -2672,7 +2672,7 @@ and is not in the wasm build graph.
 - [ ] **Step 3: Write the crate README**
 
 Create `crates/mcp/README.md` covering: what the server is, the ffmpeg
-prerequisite, how to build (`cargo build -p zoetrope-mcp --release`), an
+prerequisite, how to build (`cargo build -p kineto-mcp --release`), an
 example MCP client config block pointing at the built binary, and one worked
 example call for each of the three tools. State plainly that there is no
 published package yet and the binary must be built from source.
@@ -2692,8 +2692,8 @@ Run each of these and confirm the actual output before claiming completion:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo build -p zoetrope-wasm --target wasm32-unknown-unknown
-cargo tree -p zoetrope-core --invert -p zoetrope-mcp
+cargo build -p kineto-wasm --target wasm32-unknown-unknown
+cargo tree -p kineto-core --invert -p kineto-mcp
 ```
 
 Expected: fmt clean; clippy clean; all tests pass; wasm builds; the `cargo
@@ -2705,12 +2705,12 @@ Build it and pipe a real handshake through it, to confirm it behaves outside
 the test harness:
 
 ```bash
-cargo build -p zoetrope-mcp
+cargo build -p kineto-mcp
 printf '%s\n%s\n%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual","version":"0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  | ./target/debug/zoetrope-mcp
+  | ./target/debug/kineto-mcp
 ```
 
 Expected: two JSON-RPC response lines, the second listing all three tools.
@@ -2739,7 +2739,7 @@ rather than trusting:
 None of these change the design; if one differs, adapt locally and keep going.
 
 **The `schemars::schema_for!(Document)` problem in Task 7 is real, not
-hypothetical.** `zoetrope_core::Document` does not derive `JsonSchema`, and
+hypothetical.** `kineto_core::Document` does not derive `JsonSchema`, and
 adding the derive would push `schemars` into `crates/core` and break the
 leaf-crate constraint. Hand-write the schema. Do not add the derive.
 

@@ -10,12 +10,12 @@
 //! to the process's cwd, so it's cwd-independent (unlike `run.mjs`, which
 //! *does* require repo-root cwd — see that file's header comment).
 //!
-//! Run: `cargo run -p zoetrope-core --bin dump-parity --features parity`
+//! Run: `cargo run -p kineto-core --bin dump-parity --features parity`
 
+use kineto_core::corpus::{corpus, corpus_load_assets};
+use kineto_core::Engine;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zoetrope_core::corpus::{corpus, corpus_load_assets};
-use zoetrope_core::Engine;
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);

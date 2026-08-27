@@ -152,11 +152,11 @@ describe("canonical serializer — cross-SDK golden", () => {
       ]),
     );
     const j = build(d);
-    expect(j).toContain('"default":{"type":"font","src":"zoetrope:inter"}');
+    expect(j).toContain('"default":{"type":"font","src":"kineto:inter"}');
   });
 
   it("does not inject the default font asset when not needed", () => {
     const j = build(wrapInDoc(image("f01", [0, 0, 10, 10])));
-    expect(j).not.toContain("zoetrope:inter");
+    expect(j).not.toContain("kineto:inter");
   });
 });

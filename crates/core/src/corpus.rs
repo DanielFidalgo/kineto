@@ -121,8 +121,8 @@ fn image_transform() -> CorpusDoc {
 fn text_wrap() -> CorpusDoc {
     let dur = ms(500);
     let mut doc = Document::new(W, H);
-    doc.add_asset("inter", Asset::font("zoetrope:inter"));
-    doc.add_asset("mono", Asset::font("zoetrope:jetbrains-mono"));
+    doc.add_asset("inter", Asset::font("kineto:inter"));
+    doc.add_asset("mono", Asset::font("kineto:jetbrains-mono"));
     let para = "Deterministic video, twice.";
     let scene = Scene::new("s", dur)
         .with_element(
@@ -211,7 +211,7 @@ fn kitchen_sink() -> CorpusDoc {
     let mut doc = Document::new(W, H);
     doc.add_asset("grad", Asset::image("grad.png"));
     doc.add_asset("photo", Asset::image("photo.jpg"));
-    doc.add_asset("mono", Asset::font("zoetrope:jetbrains-mono"));
+    doc.add_asset("mono", Asset::font("kineto:jetbrains-mono"));
     doc.push_scene(
         Scene::new("step-1", dur)
             .with_element(Element::image("grad", [0.0, 0.0, W as f64, H as f64]))
@@ -247,12 +247,12 @@ fn kitchen_sink() -> CorpusDoc {
 }
 
 /// Decode/load every asset `doc` references, for native rendering: reserved
-/// `zoetrope:*` srcs resolve via `resolve_reserved_src`; everything else is
+/// `kineto:*` srcs resolve via `resolve_reserved_src`; everything else is
 /// read from `testdata/assets/<src>`. Native-and-`bundled-fonts`-only — it
 /// calls `resolve_reserved_src`, which only exists with that feature on, and
 /// touches `std::fs`, which wasm32 doesn't have. The wasm harness (Task 16)
 /// supplies asset bytes its own way, so this is not part of the
-/// wasm-compiled surface (`crates/wasm` depends on `zoetrope-core` with
+/// wasm-compiled surface (`crates/wasm` depends on `kineto-core` with
 /// `default-features = false`, i.e. `bundled-fonts` off, even for its own
 /// native unit tests — see `crates/wasm`'s `Cargo.toml`).
 #[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]

@@ -1,7 +1,7 @@
 mod common;
 
-use zoetrope_asciicast::{cast_to_document, parse_cast, Theme};
-use zoetrope_core::{seconds, Document};
+use kineto_asciicast::{cast_to_document, parse_cast, Theme};
+use kineto_core::{seconds, Document};
 
 const FIXTURE: &str = include_str!("fixture.cast");
 

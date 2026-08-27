@@ -8,7 +8,7 @@ fn initialize_returns_server_info() {
     let resp = server.initialize();
 
     let result = resp.get("result").expect("initialize returned an error");
-    assert_eq!(result["serverInfo"]["name"], "zoetrope-mcp");
+    assert_eq!(result["serverInfo"]["name"], "kineto-mcp");
     // Asserted as "present", not as an exact string: the negotiated version
     // is rmcp's to choose and will move with SDK upgrades.
     assert!(
@@ -62,7 +62,7 @@ fn resources_list_includes_the_schema_and_the_corpus() {
     assert!(
         resources
             .iter()
-            .any(|r| r["uri"] == "zoetrope://schema/document"),
+            .any(|r| r["uri"] == "kineto://schema/document"),
         "schema resource missing from {resources:?}"
     );
     assert!(
@@ -70,7 +70,7 @@ fn resources_list_includes_the_schema_and_the_corpus() {
             .iter()
             .filter(|r| r["uri"]
                 .as_str()
-                .is_some_and(|u| u.starts_with("zoetrope://corpus/")))
+                .is_some_and(|u| u.starts_with("kineto://corpus/")))
             .count()
             > 0,
         "no corpus resources in {resources:?}"
@@ -93,7 +93,7 @@ fn reading_a_corpus_resource_returns_a_renderable_document() {
         .find_map(|r| {
             r["uri"]
                 .as_str()
-                .filter(|u| u.starts_with("zoetrope://corpus/"))
+                .filter(|u| u.starts_with("kineto://corpus/"))
                 .map(str::to_string)
         })
         .expect("a corpus resource");
@@ -104,7 +104,7 @@ fn reading_a_corpus_resource_returns_a_renderable_document() {
         .expect("text contents");
 
     // The examples we hand a model must actually be valid documents.
-    zoetrope_core::Document::from_json(text).expect("corpus resource is a valid document");
+    kineto_core::Document::from_json(text).expect("corpus resource is a valid document");
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn reading_an_unknown_uri_is_an_error() {
     // assertion below pass vacuously.
     let known = server.request(
         "resources/read",
-        serde_json::json!({ "uri": "zoetrope://schema/document" }),
+        serde_json::json!({ "uri": "kineto://schema/document" }),
     );
     assert!(
         known.get("result").is_some(),
@@ -126,7 +126,7 @@ fn reading_an_unknown_uri_is_an_error() {
 
     let resp = server.request(
         "resources/read",
-        serde_json::json!({ "uri": "zoetrope://corpus/does-not-exist" }),
+        serde_json::json!({ "uri": "kineto://corpus/does-not-exist" }),
     );
     assert!(
         resp.get("error").is_some(),

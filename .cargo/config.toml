@@ -28,7 +28,7 @@
 # `simd128` shipped in Chrome 91, Firefox 89, Safari 16.4. WebCodecs, which
 # the browser export path already hard-requires (spec §4), shipped in
 # Chrome 94 and Safari 16.4 and is still absent from Firefox. Every browser
-# that can run a zoetrope export at all already has SIMD, so this does not
+# that can run a kineto export at all already has SIMD, so this does not
 # narrow the supported set by a single version.
 #
 # WHY THIS FILE IS AT THE WORKSPACE ROOT AND NOT IN `crates/wasm/`
@@ -39,7 +39,7 @@
 #     crates/wasm` from anywhere, because wasm-pack runs cargo with its cwd
 #     set to the crate directory (verified: the built binary contained
 #     13,795 v128 instructions).
-#   - ...but it is silently skipped by `cargo build -p zoetrope-wasm
+#   - ...but it is silently skipped by `cargo build -p kineto-wasm
 #     --target wasm32-unknown-unknown` run from the repo root (verified with
 #     `-v`: no `target-feature=+simd128` in the rustc invocation). That
 #     produces a working but 4x-slower binary with no warning anywhere.

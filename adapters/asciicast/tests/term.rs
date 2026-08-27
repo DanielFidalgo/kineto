@@ -1,4 +1,4 @@
-use zoetrope_asciicast::{grid_states, parse_cast, CastError};
+use kineto_asciicast::{grid_states, parse_cast, CastError};
 
 const FIXTURE: &str = include_str!("fixture.cast");
 
@@ -58,7 +58,7 @@ fn colored_ok_line_resolves_green_fg() {
     let cast = parse_cast(FIXTURE).expect("fixture should parse");
     let states = grid_states(&cast);
 
-    // Index 2: after "$ zoetrope render\n" (index 0/1) comes the colored
+    // Index 2: after "$ kineto render\n" (index 0/1) comes the colored
     // "OK 42 frames" line.
     let state = &states[2];
     let row1 = &state.rows[1];

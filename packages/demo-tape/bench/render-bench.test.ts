@@ -29,7 +29,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, it } from "vitest";
-import { build, loadEngine } from "@zoetrope/sdk";
+import { build, loadEngine } from "@kineto/sdk";
 import { parseTape } from "../src/adapter";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,7 +40,7 @@ const FRAME_COUNT = 90;
 
 // Same Node-only fetch shim as packages/sdk/test/engine.node.test.ts:
 // wasm-pack's "web" target init() does
-// `fetch(new URL('zoetrope_wasm_bg.wasm', import.meta.url))`, and Node's
+// `fetch(new URL('kineto_wasm_bg.wasm', import.meta.url))`, and Node's
 // built-in fetch does not implement the `file:` scheme.
 const realFetch = globalThis.fetch;
 beforeAll(() => {

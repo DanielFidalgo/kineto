@@ -1,4 +1,4 @@
-//! Grid states -> zoetrope `Document` conversion (Task 22).
+//! Grid states -> kineto `Document` conversion (Task 22).
 //!
 //! [`cast_to_document`] turns the [`GridState`] snapshots produced by
 //! [`crate::grid_states`] into a cut-joined `Document` (spec §4.4: no
@@ -14,7 +14,7 @@
 //! even though the boldness itself has no visual effect yet.
 
 use crate::{Cast, Cell, GridState};
-use zoetrope_core::{seconds, Asset, Document, Element, Scene};
+use kineto_core::{seconds, Asset, Document, Element, Scene};
 
 /// Sizing/coloring knobs for [`cast_to_document`]. `cell_w`/`cell_h` are
 /// JetBrains Mono's 0.6em advance / 1.3em line-height at `size_px`px
@@ -46,9 +46,9 @@ impl Default for Theme {
 /// Doc-level asset id used for the terminal font on every converted
 /// document (referenced by every `text` element's `font` field).
 const FONT_ID: &str = "term";
-/// Reserved src resolved by `zoetrope_core::resolve_reserved_src` to the
+/// Reserved src resolved by `kineto_core::resolve_reserved_src` to the
 /// bundled JetBrains Mono bytes (native-only, `bundled-fonts` feature).
-const FONT_SRC: &str = "zoetrope:jetbrains-mono";
+const FONT_SRC: &str = "kineto:jetbrains-mono";
 
 /// Convert a parsed `.cast` into a `Document` plus the asset bytes the
 /// caller (Task 23's CLI) must stage into an `AssetStore` before
@@ -74,7 +74,7 @@ pub fn cast_to_document(cast: &Cast, theme: &Theme) -> (Document, Vec<(String, &
         doc.push_scene(scene_for_state(i, state, duration, theme));
     }
 
-    let bytes = zoetrope_core::resolve_reserved_src(FONT_SRC)
+    let bytes = kineto_core::resolve_reserved_src(FONT_SRC)
         .expect("bundled JetBrains Mono font missing (bundled-fonts feature must be enabled)");
     (doc, vec![(FONT_ID.to_string(), bytes)])
 }

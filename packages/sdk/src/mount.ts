@@ -28,7 +28,7 @@ export interface Player {
   dispose(): void;
 }
 
-const DISPOSED_ERROR = "zoetrope: player disposed";
+const DISPOSED_ERROR = "kineto: player disposed";
 
 /**
  * Mount `d` onto `canvas` for interactive preview: sizes the canvas to
@@ -54,7 +54,7 @@ export async function mount(
   canvas.height = height;
   const ctx2d = canvas.getContext("2d");
   if (ctx2d === null) {
-    throw new Error("zoetrope: canvas 2D context unavailable");
+    throw new Error("kineto: canvas 2D context unavailable");
   }
   // Rebound to a `const` of the non-null type so TS's null-narrowing
   // holds inside the closures below (`paint`'s narrowing of `ctx2d`
