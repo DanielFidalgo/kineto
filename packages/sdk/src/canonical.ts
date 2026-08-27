@@ -49,7 +49,11 @@ function serStr(s: string): string {
  * `serialize_i64`, else as a float. `String(n)` already produces the bare
  * form for JS integral numbers (no trailing `.0`) and matches JS's
  * shortest-round-trip formatting for fractional ones, which is what makes
- * this byte-identical to Rust's Ryu output within our numeric domain. */
+ * this byte-identical to Rust's Ryu output within our numeric domain.
+ * True domain: byte-identity is guaranteed for values that are integral
+ * (|v| < 2^53) or whose magnitude falls in roughly [1e-5, 1e15]; outside
+ * that range Ryu (Rust) and `String(n)` (JS) can diverge, since each
+ * switches to scientific notation at different magnitude thresholds. */
 function serNum(n: number): string {
   if (!Number.isFinite(n)) {
     throw new RangeError(`cannot serialize non-finite number: ${n}`);

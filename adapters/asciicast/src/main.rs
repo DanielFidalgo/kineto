@@ -4,6 +4,7 @@ use zoetrope_asciicast::{cast_to_document, parse_cast, Theme};
 use zoetrope_core::assets::AssetStore;
 use zoetrope_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
 use zoetrope_core::render::Engine;
+use zoetrope_core::TIMEBASE;
 
 fn run(input: PathBuf, output: PathBuf, fps: i64) -> Result<(), Box<dyn Error>> {
     // Read the input file
@@ -31,11 +32,16 @@ fn run(input: PathBuf, output: PathBuf, fps: i64) -> Result<(), Box<dyn Error>> 
     let frame_count = export_frames(&mut engine, fps, &output)?;
     println!("wrote {} frames to {}", frame_count, output.display());
 
-    // Try to mux with ffmpeg if available
+    // Try to mux with ffmpeg if available. `mux_with_ffmpeg` returns
+    // `Ok(false)` both when ffmpeg is absent and when it ran but exited
+    // nonzero — only `Ok(true)` means an MP4 actually landed on disk, so
+    // only that case gets the success message (never print a claim the
+    // bool doesn't back up).
     if ffmpeg_available() {
         let mp4_path = output.join("out.mp4");
-        mux_with_ffmpeg(&output, fps, &mp4_path)?;
-        println!("wrote {}/out.mp4", output.display());
+        if mux_with_ffmpeg(&output, fps, &mp4_path)? {
+            println!("wrote {}/out.mp4", output.display());
+        }
     }
 
     Ok(())
@@ -67,6 +73,15 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    // Validate fps up front, before any work (reading input, creating the
+    // output dir, rendering): same guard as `Engine::tick_for_frame`, but
+    // surfaced as a clean exit-1 error instead of a panic, since this is
+    // user-supplied CLI input, not a programming error.
+    if fps <= 0 || TIMEBASE % fps != 0 {
+        eprintln!("error: unsupported fps {fps}: must divide {TIMEBASE}");
+        std::process::exit(1);
+    }
 
     // Parse required positional input file
     let input: PathBuf = match args.free_from_str() {

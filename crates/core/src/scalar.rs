@@ -3,6 +3,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// f64 that serializes as a JSON integer when integral (|v| < 2^53),
 /// else as shortest-round-trip float. Matches JS JSON.stringify, which is
 /// what makes cross-SDK byte identity possible (§3.7).
+/// True domain: byte-identity is guaranteed for values that are integral
+/// (|v| < 2^53) or whose magnitude falls in roughly [1e-5, 1e15]; outside
+/// that range Rust's Ryu and JS's `String(n)` can diverge, since each
+/// switches to scientific notation at different magnitude thresholds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Scalar(pub f64);
 

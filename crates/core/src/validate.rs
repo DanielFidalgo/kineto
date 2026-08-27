@@ -227,6 +227,9 @@ fn validate_semantics(doc: &Document) -> Result<(), DocError> {
     if doc.timebase != crate::doc::TIMEBASE {
         return Err(DocError::Timebase(doc.timebase));
     }
+    if !Color::parse_ok(&doc.bg.0) {
+        return Err(DocError::BadColor(doc.bg.0.clone()));
+    }
     for id in doc.assets.keys() {
         if !valid_id(id) {
             return Err(DocError::BadId(id.clone()));

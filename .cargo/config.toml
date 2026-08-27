@@ -41,9 +41,16 @@
 #     13,795 v128 instructions).
 #   - ...but it is silently skipped by `cargo build -p zoetrope-wasm
 #     --target wasm32-unknown-unknown` run from the repo root (verified with
-#     `-v`: no `target-feature=+simd128` in the rustc invocation), which
-#     also covers the CI wasm32 clippy step. That produces a working but
-#     4x-slower binary with no warning anywhere.
+#     `-v`: no `target-feature=+simd128` in the rustc invocation). That
+#     produces a working but 4x-slower binary with no warning anywhere.
+#     CI never invokes raw `cargo build`/`cargo clippy` against
+#     wasm32-unknown-unknown — the only wasm32 compiles in `ci.yml` are
+#     `wasm-pack build crates/wasm ...` (the `wasm-parity` and `web` jobs),
+#     which always run from `crates/wasm/` and so pick this table up either
+#     way. This file's job is to protect any *future or manual* raw-cargo
+#     wasm32 build (e.g. someone reaching for `cargo build --target
+#     wasm32-unknown-unknown` directly instead of `wasm-pack`) from silently
+#     losing SIMD depending on which directory they run it from.
 # At the root it applies to every invocation from every directory. It stays
 # out of native builds because it is keyed on the wasm target, not `[build]`
 # — `cargo test --workspace` and native clippy are untouched (`[build]

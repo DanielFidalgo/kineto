@@ -196,6 +196,13 @@ fn bad_color() {
     assert_eq!(err(&v), DocError::BadColor("#12345".into()));
 }
 
+#[test]
+fn bad_bg_color() {
+    let mut v = example_value();
+    v["bg"] = serde_json::json!("junk");
+    assert_eq!(err(&v), DocError::BadColor("junk".into()));
+}
+
 // ---- keyframe tracks ----
 
 #[test]

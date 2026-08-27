@@ -58,8 +58,13 @@ above) requires [WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/Web
 — specifically a global `VideoEncoder` that supports H.264. This means:
 
 - **Supported**: current Chrome, Edge, and other Chromium-based browsers.
-- **Not supported**: browsers without a `VideoEncoder` global (e.g. Firefox
-  and Safari do not ship WebCodecs support at the time of writing).
+  Safari shipped WebCodecs in 16.4, but whether its `VideoEncoder` accepts
+  H.264 depends on the Safari version and the device's hardware encoder —
+  `render()` probes this itself via `VideoEncoder.isConfigSupported` across
+  `CODEC_CANDIDATES` and throws `"zoetrope: no supported H.264 encoder
+  config"` if none match, rather than assuming support either way.
+- **Not supported**: browsers without a `VideoEncoder` global at all (e.g.
+  Firefox does not ship WebCodecs support at the time of writing).
 
 When WebCodecs is unavailable, `render()` throws before doing any work,
 with this exact message:

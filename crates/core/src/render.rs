@@ -68,7 +68,21 @@ impl Engine {
     }
 
     /// The tick for output frame number `n` at export rate `fps`.
+    ///
+    /// # Panics
+    /// Panics if `fps <= 0` or `fps` does not evenly divide `TIMEBASE`
+    /// (705,600,000) — same guard, same message shape, as `doc::frames`.
+    /// Guarding here (not just at the SDK/doc-builder layer) matters
+    /// because native export (`export::export_frames`) drives this in a
+    /// loop bounded by `tick >= total_duration`: an unguarded `fps <= 0`
+    /// makes `TIMEBASE / fps` divide-by-zero panic (fps == 0) or go
+    /// negative so the tick never reaches `total_duration` (fps < 0),
+    /// looping forever and filling disk with frames.
     pub fn tick_for_frame(&self, n: i64, fps: i64) -> i64 {
+        assert!(
+            fps > 0 && TIMEBASE % fps == 0,
+            "unsupported fps {fps}: must divide {TIMEBASE}"
+        );
         n * (TIMEBASE / fps)
     }
 

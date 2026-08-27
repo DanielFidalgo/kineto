@@ -141,6 +141,27 @@ fn tick_for_frame_matches_timebase_formula() {
 }
 
 #[test]
+#[should_panic(expected = "unsupported fps 0: must divide 705600000")]
+fn tick_for_frame_rejects_zero_fps() {
+    let engine = Engine::new(crossfade_doc(), AssetStore::new()).unwrap();
+    engine.tick_for_frame(1, 0);
+}
+
+#[test]
+#[should_panic(expected = "unsupported fps -5: must divide 705600000")]
+fn tick_for_frame_rejects_negative_fps() {
+    let engine = Engine::new(crossfade_doc(), AssetStore::new()).unwrap();
+    engine.tick_for_frame(1, -5);
+}
+
+#[test]
+#[should_panic(expected = "unsupported fps 23: must divide 705600000")]
+fn tick_for_frame_rejects_non_divisor_fps() {
+    let engine = Engine::new(crossfade_doc(), AssetStore::new()).unwrap();
+    engine.tick_for_frame(1, 23);
+}
+
+#[test]
 fn width_height_report_doc_size() {
     let engine = Engine::new(crossfade_doc(), AssetStore::new()).unwrap();
     assert_eq!(engine.width(), 32);

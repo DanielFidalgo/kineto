@@ -91,6 +91,73 @@ fn test_zoetrope_cast_garbage_input() {
 }
 
 #[test]
+fn test_zoetrope_cast_fps_zero() {
+    let out_dir = tempfile::tempdir().expect("create temp dir");
+    let out_path = out_dir.path();
+
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixture.cast");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+        .arg(&fixture_path)
+        .arg("-o")
+        .arg(out_path)
+        .arg("--fps")
+        .arg("0")
+        .output()
+        .expect("run zoetrope-cast");
+
+    assert!(
+        !output.status.success(),
+        "CLI should exit 1 for --fps 0, not panic"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("fps"),
+        "stderr should mention fps, got: {}",
+        stderr
+    );
+    // A clean validation error, not a Rust panic backtrace.
+    assert!(
+        !stderr.contains("panicked at"),
+        "fps 0 should be a clean error, not a panic; got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_zoetrope_cast_fps_non_divisor() {
+    let out_dir = tempfile::tempdir().expect("create temp dir");
+    let out_path = out_dir.path();
+
+    let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixture.cast");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_zoetrope-cast"))
+        .arg(&fixture_path)
+        .arg("-o")
+        .arg(out_path)
+        .arg("--fps")
+        .arg("23")
+        .output()
+        .expect("run zoetrope-cast");
+
+    assert!(
+        !output.status.success(),
+        "CLI should exit 1 for a non-divisor fps"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("fps"),
+        "stderr should mention fps, got: {}",
+        stderr
+    );
+}
+
+#[test]
 fn test_zoetrope_cast_unknown_flag() {
     let out_dir = tempfile::tempdir().expect("create temp dir");
     let out_path = out_dir.path();

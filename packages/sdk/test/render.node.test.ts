@@ -100,6 +100,31 @@ class FakeVideoFrame {
   close() {}
 }
 
+describe("render() fps guard", () => {
+  // No `globalThis.VideoEncoder` is stubbed for this describe block — these
+  // assertions only hold if the fps guard runs and throws *before*
+  // render.ts reaches the `typeof VideoEncoder === "undefined"` capability
+  // check, which is exactly the ordering being verified here (a plain Node
+  // environment has no VideoEncoder at all).
+  it("rejects fps 0 with a message mentioning fps and the timebase", async () => {
+    const d = doc({ w: 4, h: 4 });
+    d.scenes = [scene("a", 705_600_000, [rect([0, 0, 4, 4], "#ff0000")])];
+
+    await expect(render(d, { fps: 0 })).rejects.toThrow(
+      "zoetrope: unsupported fps 0: must divide 705600000",
+    );
+  });
+
+  it("rejects a non-divisor fps like 23", async () => {
+    const d = doc({ w: 4, h: 4 });
+    d.scenes = [scene("a", 705_600_000, [rect([0, 0, 4, 4], "#ff0000")])];
+
+    await expect(render(d, { fps: 23 })).rejects.toThrow(
+      "zoetrope: unsupported fps 23: must divide 705600000",
+    );
+  });
+});
+
 describe("render() encoder error propagation", () => {
   const realVideoEncoder = globalThis.VideoEncoder;
   const realVideoFrame = globalThis.VideoFrame;

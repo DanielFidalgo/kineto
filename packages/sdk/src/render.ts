@@ -44,11 +44,20 @@ export interface RenderOptions {
  * README#browser-support) or if none of `CODEC_CANDIDATES` is supported.
  */
 export async function render(d: ZoeDocument, opts: RenderOptions): Promise<Blob> {
+  const { fps, bitrate = 6_000_000, assets, onProgress } = opts;
+
+  // Checked first (before the WebCodecs capability check below) so a bad
+  // `fps` is reported as a plain, synchronous, Node-testable error rather
+  // than only surfacing once tick math has already gone wrong deep inside
+  // the encode loop (`TIMEBASE / fps` — same guard as `frames(n).at(fps)`
+  // in time.ts and `Engine::tick_for_frame`/`doc::frames` on the Rust side).
+  if (!Number.isInteger(fps) || fps <= 0 || TIMEBASE % fps !== 0) {
+    throw new Error(`zoetrope: unsupported fps ${fps}: must divide ${TIMEBASE}`);
+  }
+
   if (typeof VideoEncoder === "undefined") {
     throw new Error("zoetrope: WebCodecs is required in this browser (see README#browser-support)");
   }
-
-  const { fps, bitrate = 6_000_000, assets, onProgress } = opts;
 
   const engine = await loadEngine(build(d), assets ?? new Map());
   // Tracked outside the `try` body (but only ever assigned from inside it)
