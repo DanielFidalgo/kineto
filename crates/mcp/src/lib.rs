@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod render;
+pub mod resources;
 pub mod source;
 pub mod storyboard;
 pub mod tools;
@@ -234,6 +235,41 @@ impl ZoetropeServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for ZoetropeServer {
     fn get_info(&self) -> ServerInfo {
-        server_info(ServerCapabilities::builder().enable_tools().build())
+        server_info(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<rmcp::model::PaginatedRequestParams>,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ListResourcesResult, rmcp::ErrorData> {
+        Ok(rmcp::model::ListResourcesResult::with_all_items(
+            crate::resources::list(),
+        ))
+    }
+
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: rmcp::service::RequestContext<rmcp::RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, rmcp::ErrorData> {
+        let uri = request.uri.clone();
+        let text = crate::resources::read(&uri).ok_or_else(|| {
+            rmcp::ErrorData::resource_not_found(format!("unknown resource: {uri}"), None)
+        })?;
+        Ok(rmcp::model::ReadResourceResult::new(vec![
+            rmcp::model::ResourceContents::TextResourceContents {
+                uri,
+                mime_type: Some("application/json".into()),
+                text,
+                meta: None,
+            },
+        ])
+        .into())
     }
 }
