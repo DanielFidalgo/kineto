@@ -36,7 +36,9 @@ jobs:
 
   # Task 19: render()'s in-browser WebCodecs + mp4-muxer export, exercised
   # end-to-end in a real (headless) Chromium against the wasm engine — see
-  # packages/sdk/test-browser/render.spec.ts.
+  # packages/sdk/test-browser/render.spec.ts. Task 25 adds the flagship
+  # demo (spec success criterion 1) on top of the same wasm build — see
+  # packages/demo-tape/test-browser/export.spec.ts.
   web:
     runs-on: ubuntu-latest
     steps:
@@ -54,3 +56,4 @@ jobs:
       - run: npm -ws run test --if-present
       - run: npx playwright install --with-deps chromium
       - run: npm -w @zoetrope/sdk run test:browser
+      - run: npm -w @zoetrope/demo-tape run test:browser
