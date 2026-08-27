@@ -194,6 +194,15 @@ fn walk_animations(obj: &Map<String, Value>) -> Result<(), DocError> {
     Ok(())
 }
 
+/// Re-run semantic validation on an already-typed `Document`, independent of
+/// `from_json`'s parse -> unknown-field-walk -> decode pipeline. Public so
+/// callers that build a `Document` some other way (the Rust SDK builder in
+/// `doc.rs`, or `Engine::new` re-checking defensively) can still get the
+/// same semantic guarantees `from_json` gives JSON-sourced documents.
+pub fn check(doc: &Document) -> Result<(), DocError> {
+    validate_semantics(doc)
+}
+
 // ---- semantic checks (over the typed `Document`) ----
 
 fn valid_id(s: &str) -> bool {
