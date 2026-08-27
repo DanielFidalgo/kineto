@@ -40,3 +40,4 @@ zoetrope-core = { path = "../core" }
 # own encoding goes through `rmcp::model::PromptMessage::new_image`, which
 # uses rmcp's own `base64` (feature "base64") — see `render.rs`.
 base64 = "0.22"
+sha2 = "0.11.0"
