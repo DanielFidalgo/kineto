@@ -1123,10 +1123,28 @@ fn invalid_document_is_a_tool_error_with_a_readable_message() {
     let mut server = Server::start();
     server.initialize();
 
+    // NOTE: the document must be structurally complete. `Document::from_json`
+    // runs the unknown-field walk, then the typed decode, and only then
+    // `validate_semantics` — which is where the version check lives
+    // (crates/core/src/validate.rs:224). A bare `{"v":99}` fails the typed
+    // decode on the missing required fields and never reaches it, producing a
+    // `DocError::Json` about `timebase` instead.
+    let wrong_version = json!({
+        "v": 99,
+        "timebase": 705600000,
+        "size": { "w": 320, "h": 180 },
+        "scenes": [{
+            "id": "s",
+            "duration": 705600000,
+            "elements": []
+        }]
+    })
+    .to_string();
+
     let resp = call(
         &mut server,
         "render_document",
-        json!({ "document": r#"{"v":99}"#, "validateOnly": true }),
+        json!({ "document": wrong_version, "validateOnly": true }),
     );
 
     let result = &resp["result"];
@@ -1366,6 +1384,25 @@ use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use crate::error::ToolError;
 use crate::tools::RenderDocumentParams;
 
+/// Carried forward from Task 1 unchanged — this rewrite must not drop it.
+/// Built via `ServerInfo::new` + field assignment rather than a struct
+/// literal: several rmcp model types are `#[non_exhaustive]`, so a literal
+/// would not compile from outside the crate.
+fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
+    let mut info = ServerInfo::new(capabilities);
+    info.server_info = Implementation {
+        name: "zoetrope-mcp".into(),
+        version: env!("CARGO_PKG_VERSION").into(),
+        ..Implementation::default()
+    };
+    info.instructions = Some(
+        "Renders zoetrope scene documents to MP4. Deterministic: the same \
+         document always produces the same bytes. Requires ffmpeg on PATH."
+            .into(),
+    );
+    info
+}
+
 #[derive(Clone)]
 pub struct ZoetropeServer {
     tool_router: ToolRouter<Self>,
@@ -1438,7 +1475,6 @@ impl ZoetropeServer {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for ZoetropeServer {
     fn get_info(&self) -> ServerInfo {
-        // `server_info` is the helper introduced in Task 1; keep it.
         server_info(ServerCapabilities::builder().enable_tools().build())
     }
 }
