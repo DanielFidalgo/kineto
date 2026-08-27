@@ -112,6 +112,18 @@ fn reading_an_unknown_uri_is_an_error() {
     let mut server = Server::start();
     server.initialize();
 
+    // Control: a *known* URI must still succeed. Without this, a `read()`
+    // stubbed to return `None` unconditionally would make the unknown-URI
+    // assertion below pass vacuously.
+    let known = server.request(
+        "resources/read",
+        serde_json::json!({ "uri": "zoetrope://schema/document" }),
+    );
+    assert!(
+        known.get("result").is_some(),
+        "expected a result for a known uri, got {known}"
+    );
+
     let resp = server.request(
         "resources/read",
         serde_json::json!({ "uri": "zoetrope://corpus/does-not-exist" }),
