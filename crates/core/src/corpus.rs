@@ -12,7 +12,7 @@
 
 use crate::doc::{ms, Align, Asset, Document, Ease, Element, Key, Prop, Scene, Track, Transition};
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
 use crate::assets::{resolve_reserved_src, AssetStore};
 
 /// One corpus document plus the ticks it should be sampled at.
@@ -248,10 +248,14 @@ fn kitchen_sink() -> CorpusDoc {
 
 /// Decode/load every asset `doc` references, for native rendering: reserved
 /// `zoetrope:*` srcs resolve via `resolve_reserved_src`; everything else is
-/// read from `testdata/assets/<src>`. Native-only — the wasm harness (Task
-/// 16) supplies asset bytes its own way, so this is not part of the
-/// wasm-compiled surface.
-#[cfg(not(target_arch = "wasm32"))]
+/// read from `testdata/assets/<src>`. Native-and-`bundled-fonts`-only — it
+/// calls `resolve_reserved_src`, which only exists with that feature on, and
+/// touches `std::fs`, which wasm32 doesn't have. The wasm harness (Task 16)
+/// supplies asset bytes its own way, so this is not part of the
+/// wasm-compiled surface (`crates/wasm` depends on `zoetrope-core` with
+/// `default-features = false`, i.e. `bundled-fonts` off, even for its own
+/// native unit tests — see `crates/wasm`'s `Cargo.toml`).
+#[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
 pub fn corpus_load_assets(doc: &Document) -> AssetStore {
     let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../testdata/assets");
     let mut assets = AssetStore::new();
