@@ -320,8 +320,68 @@ impl Renderer {
                     };
                     canvas.draw_pixmap(0, 0, layer.as_ref(), &paint, matrix, None);
                 }
-                Element::Group { .. } => {
-                    // implemented in Task 11
+                Element::Group {
+                    origin,
+                    children,
+                    common,
+                } => {
+                    let resolved = resolve_common(common, t);
+
+                    // Group's own box is the static union of its children's
+                    // boxes (Task 8's `base_bbox`, which already bakes in
+                    // this group's `origin`), shifted by the accumulated
+                    // parent offset — same convention as every other arm's
+                    // `bbox` above.
+                    let b = base_bbox(el);
+                    let group_bbox = BBox {
+                        x: b.x + offset.0,
+                        y: b.y + offset.1,
+                        w: b.w,
+                        h: b.h,
+                    };
+                    let matrix = element_matrix(&group_bbox, &resolved);
+
+                    // Isolated full-canvas transparent layer, same pattern
+                    // as the Text arm above (Task 10) and for the same
+                    // reason: this element's own translate/scale/rotation/
+                    // opacity apply once to the whole composited subtree,
+                    // as a single `draw_pixmap` call, not per child.
+                    //
+                    // Critically: group opacity MUST NOT be
+                    // pushed into children (spec §3.3 isolation semantics)
+                    // — recursing with `resolved.opacity` baked into the
+                    // children's own resolution would double-fade any
+                    // overlap between them, which is exactly what
+                    // isolated compositing exists to avoid. So the
+                    // recursive `draw_elements` call below draws children
+                    // onto the transparent layer at their own opacity
+                    // only; `resolved.opacity` is applied exactly once,
+                    // below, via the layer's own composite `PixmapPaint`.
+                    //
+                    // LIMITATION: same pre-clip caveat as the Text arm's
+                    // comment above — children are composited into this
+                    // layer at their *static* (untransformed-by-this-
+                    // group) positions and clipped to the canvas bounds at
+                    // that point, so ink that falls outside the canvas
+                    // before this group's own transform is applied is
+                    // lost even if the transform would bring it back into
+                    // frame.
+                    let mut layer = Pixmap::new(canvas.width(), canvas.height())
+                        .expect("canvas dimensions are always non-zero");
+                    self.draw_elements(
+                        &mut layer.as_mut(),
+                        children,
+                        assets,
+                        t,
+                        (offset.0 + origin[0].0 as f32, offset.1 + origin[1].0 as f32),
+                    );
+
+                    let paint = PixmapPaint {
+                        opacity: resolved.opacity as f32,
+                        blend_mode: BlendMode::SourceOver,
+                        quality: FilterQuality::Bilinear,
+                    };
+                    canvas.draw_pixmap(0, 0, layer.as_ref(), &paint, matrix, None);
                 }
             }
         }

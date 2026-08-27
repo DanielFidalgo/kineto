@@ -357,3 +357,156 @@ fn text_tinted() {
 
     common::assert_golden_hash("raster-text-tinted", pm.width(), pm.height(), pm.data());
 }
+
+/// Group at origin `[10,10]` containing two overlapping 50%-opacity red
+/// rects, group `opacity: 0.5`, on a 64x64 opaque-black canvas. Proves
+/// isolated compositing (spec §3.3): group opacity is applied ONCE to the
+/// whole composited subtree, not pushed into each child.
+///
+/// --- Derivation (same style as `rect_fill_and_opacity` above: tiny-skia's
+/// float pipeline is `u8 -> normalized f32 (/255) -> composite -> *255 ->
+/// round`, with a *real* intermediate u8-rounding step wherever a `Pixmap`
+/// actually stores bytes — the isolation layer is a real `Pixmap`, so that
+/// happens once after both children are drawn into it) ---
+///
+/// Child A: rect local `[0,0,30,30]`, child B: rect local `[10,10,30,30]`,
+/// both fill `#FF0000` opacity 0.5. Group origin `[10,10]` shifts both to
+/// global A=`[10,10,30,30]`, B=`[20,20,30,30]`; their overlap covers global
+/// `(20,20)`-`(40,40)`. Probe `(30,30)` sits >=10px from every edge of both
+/// rects (anti-aliasing only touches ~1px at edges), so it's an exact
+/// interior pixel for both — no AA blending to account for.
+///
+/// Each rect's own alpha byte: `round(255 * 0.5) = round(127.5) = 128`
+/// (`.round()` rounds half away from zero) — straight `(255,0,0,128)`.
+///
+/// Isolated path — both children painted onto a transparent layer, full
+/// strength (their own opacity only; group opacity NOT applied to them):
+///   - A onto transparent `(0,0,0,0)`: source-over of anything over fully
+///     transparent is just the src converted to premultiplied, so the
+///     layer becomes premultiplied `(128,0,0,128)` exactly
+///     (`255 * 128/255 = 128`, no rounding loss).
+///   - B (same straight color/alpha) over that: for a *straight-red*
+///     pixel, the premultiplied red channel always equals its own alpha,
+///     so `out_r = out_a = src_a + dst_a*(1-src_a)
+///     = 128/255 + (128/255)*(127/255) = 28544/65025`
+///     -> `round(255 * 28544/65025) = round(191.735...) = 192`.
+///   - Layer now stores premultiplied `(192,0,0,192)` at the probe pixel.
+///
+/// Then the WHOLE layer is composited *once* with the group's own opacity
+/// (0.5) via `PixmapPaint::opacity` (a uniform scale of the premultiplied
+/// pixel before the final source-over onto the opaque black canvas):
+///   - scaled = `(192,0,0,192) * 0.5 = (96,0,0,96)` in premultiplied
+///     0..255 terms (exact: `192*0.5 = 96`, no rounding).
+///   - Over opaque black: `out_r = 96 + 0*(...) = 96`; `out_a` normalizes
+///     to fully opaque (255) since the destination was opaque (same
+///     reasoning as `rect_fill_and_opacity` above).
+///
+/// => isolated probe pixel = `(96, 0, 0, 255)`.
+///
+/// Contrast with what per-child opacity multiplication (pushing the
+/// group's 0.5 into each child instead of isolating) would give: each
+/// child's effective opacity becomes `0.5*0.5=0.25` (alpha byte
+/// `round(255*0.25)=64`), composited directly (no isolation layer) at the
+/// same global rects. Same derivation shape as above with `128`
+/// replaced by `64` throughout gives `round(255 * (64/255 +
+/// (64/255)*(191/255))) = round(255 * 28544/65025) `... — rather than
+/// re-deriving by hand a second time, this is asserted directly below by
+/// rendering that exact scenario and pinning its value, then asserting it
+/// differs from the isolated one.
+#[test]
+fn group_isolated_opacity() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let group = Element::group(
+        [10.0, 10.0],
+        vec![
+            Element::rect([0.0, 0.0, 30.0, 30.0], "#FF0000").with_opacity(0.5),
+            Element::rect([10.0, 10.0, 30.0, 30.0], "#FF0000").with_opacity(0.5),
+        ],
+    )
+    .with_opacity(0.5);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[group], &mut assets, 0, (0.0, 0.0));
+
+    let px = pm.pixel(30, 30).unwrap();
+    assert_eq!(
+        (px.red(), px.green(), px.blue(), px.alpha()),
+        (96, 0, 0, 255),
+        "isolated compositing: group opacity applied once to the whole subtree (hand-derived above)"
+    );
+
+    // Isolation probe: same overlap pixel, but rendered as if group
+    // opacity had (incorrectly) been pushed into each child instead of
+    // applied once to the isolated layer — child opacity 0.5 * group
+    // opacity 0.5 = 0.25 each, drawn directly (no isolation layer, no
+    // group) at the same global rect positions.
+    let mut naive = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let naive_children = [
+        Element::rect([10.0, 10.0, 30.0, 30.0], "#FF0000").with_opacity(0.25),
+        Element::rect([20.0, 20.0, 30.0, 30.0], "#FF0000").with_opacity(0.25),
+    ];
+    renderer.draw_elements(
+        &mut naive.as_mut(),
+        &naive_children,
+        &mut assets,
+        0,
+        (0.0, 0.0),
+    );
+    let naive_px = naive.pixel(30, 30).unwrap();
+    assert_eq!(
+        (
+            naive_px.red(),
+            naive_px.green(),
+            naive_px.blue(),
+            naive_px.alpha()
+        ),
+        (112, 0, 0, 255),
+        "sanity pin: per-child opacity multiplication would double-fade the overlap"
+    );
+    assert_ne!(
+        (px.red(), px.green(), px.blue(), px.alpha()),
+        (
+            naive_px.red(),
+            naive_px.green(),
+            naive_px.blue(),
+            naive_px.alpha()
+        ),
+        "isolated group compositing must NOT match per-child opacity multiplication"
+    );
+
+    common::assert_golden_hash("raster-group-isolated", pm.width(), pm.height(), pm.data());
+}
+
+/// Nested groups: outer group (origin `[5,5]`, no own transform) wraps an
+/// inner group (origin `[10,10]`, rotated 30deg) wraps a single rect
+/// (local `[0,0,20,20]`, opaque green). Exercises the recursive
+/// `base_bbox` union math for a group-of-a-group (Task 8), and that a
+/// group's own `element_matrix` (here the inner one's rotation) pivots
+/// about the *group*'s own bbox center — the union of its children's
+/// static boxes, shifted by its own origin and the accumulated parent
+/// offset — not any single child's box.
+#[test]
+fn group_nested_rotation() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let inner = Element::group(
+        [10.0, 10.0],
+        vec![Element::rect([0.0, 0.0, 20.0, 20.0], "#00FF00")],
+    )
+    .with_rotation(30.0);
+    let outer = Element::group([5.0, 5.0], vec![inner]);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[outer], &mut assets, 0, (0.0, 0.0));
+
+    let non_bg = pm
+        .data()
+        .chunks_exact(4)
+        .filter(|px| px != &[0u8, 0, 0, 255])
+        .count();
+    assert!(
+        non_bg > 0,
+        "expected the nested, rotated rect to paint something onto the canvas"
+    );
+
+    common::assert_golden_hash("raster-group-nested", pm.width(), pm.height(), pm.data());
+}
