@@ -60,7 +60,7 @@ pub fn total_duration(doc: &Document) -> i64 {
 /// - Every scene with start <= tick < start+duration
 /// - Alpha = 1.0 normally; inside incoming crossfade window [start[i], start[i]+overlap[i]),
 ///   alpha = (tick - start[i]) / overlap[i].
-pub fn layer_at(doc: &Document, tick: i64) -> Vec<Layer> {
+pub fn layers_at(doc: &Document, tick: i64) -> Vec<Layer> {
     let total = total_duration(doc);
     if tick < 0 || tick >= total {
         return vec![];
