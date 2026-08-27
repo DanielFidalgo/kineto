@@ -1,0 +1,6 @@
+{"version": 2, "width": 20, "height": 4}
+[0.0, "o", "$ "]
+[0.5, "o", "zoetrope "]
+[0.5, "o", "render\r\n"]
+[1.2, "o", "\u001b[32mOK\u001b[0m 42 frames\r\n"]
+[2.0, "o", "\u001b[2J\u001b[H$ "]
