@@ -99,6 +99,64 @@ impl ZoetropeServer {
             crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
     }
+
+    #[tool(
+        name = "render_asciicast",
+        description = "Render an asciicast v2 terminal recording (.cast) to an \
+                       MP4. Renders from the event data rather than capturing \
+                       pixels, so output is deterministic and faster than \
+                       realtime. Returns the output path, metadata, and sampled \
+                       frames as images. Requires ffmpeg on PATH."
+    )]
+    pub async fn render_asciicast(
+        &self,
+        Parameters(params): Parameters<crate::tools::RenderAsciicastParams>,
+    ) -> CallToolResult {
+        match Self::render_asciicast_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn render_asciicast_impl(
+        params: crate::tools::RenderAsciicastParams,
+    ) -> Result<CallToolResult, ToolError> {
+        crate::source::check_fps(params.fps)?;
+
+        let data = std::fs::read_to_string(&params.cast_path).map_err(|e| ToolError::Io {
+            context: "reading asciicast",
+            path: params.cast_path.clone(),
+            source: e,
+        })?;
+        let cast = zoetrope_asciicast::parse_cast(&data)
+            .map_err(|e| ToolError::Invalid(format!("invalid asciicast: {e}")))?;
+
+        let theme = match &params.theme {
+            Some(t) => t.apply(zoetrope_asciicast::Theme::default()),
+            None => zoetrope_asciicast::Theme::default(),
+        };
+        let (doc, assets) = zoetrope_asciicast::cast_to_document(&cast, &theme);
+
+        let mut store = zoetrope_core::AssetStore::new();
+        for (id, bytes) in assets {
+            store.add_bytes(&id, bytes.to_vec());
+        }
+        let mut engine = zoetrope_core::Engine::new(doc, store)?;
+
+        if params.validate_only {
+            let outcome = crate::render::describe(&engine, params.fps);
+            return Ok(crate::tools::success(&outcome, Vec::new()));
+        }
+
+        let out = params.out.ok_or_else(|| {
+            ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
+        })?;
+
+        let outcome = crate::render::render_to_mp4(&mut engine, params.fps, &out)?;
+        let previews =
+            crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
+        Ok(crate::tools::success(&outcome, previews))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]

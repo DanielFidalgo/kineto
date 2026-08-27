@@ -178,3 +178,68 @@ fn renders_an_mp4_with_preview_frames() {
     assert_eq!(images.len(), 3);
     assert_eq!(images[0]["mimeType"], "image/png");
 }
+
+/// The smallest valid asciicast v2: a header line then one output event.
+fn tiny_cast() -> String {
+    let header = json!({ "version": 2, "width": 20, "height": 4 });
+    format!("{header}\n[0.0, \"o\", \"hello\"]\n[0.5, \"o\", \" world\"]\n")
+}
+
+#[test]
+fn asciicast_validates_without_ffmpeg() {
+    let mut server = Server::start();
+    server.initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let cast = dir.path().join("demo.cast");
+    std::fs::write(&cast, tiny_cast()).unwrap();
+
+    let resp = call(
+        &mut server,
+        "render_asciicast",
+        json!({ "castPath": cast.to_str().unwrap(), "validateOnly": true }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+    assert!(result["structuredContent"]["frameCount"].as_u64().unwrap() > 0);
+}
+
+#[test]
+fn asciicast_accepts_theme_overrides() {
+    let mut server = Server::start();
+    server.initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let cast = dir.path().join("demo.cast");
+    std::fs::write(&cast, tiny_cast()).unwrap();
+
+    let resp = call(
+        &mut server,
+        "render_asciicast",
+        json!({
+            "castPath": cast.to_str().unwrap(),
+            "validateOnly": true,
+            "theme": { "bg": "#101820", "fg": "#F2F2F2", "sizePx": 24 }
+        }),
+    );
+
+    assert_ne!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+}
+
+#[test]
+fn missing_cast_file_names_the_path() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_asciicast",
+        json!({ "castPath": "/nonexistent/demo.cast", "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("/nonexistent/demo.cast"),
+        "message was: {text}"
+    );
+}

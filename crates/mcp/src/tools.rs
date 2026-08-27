@@ -84,3 +84,63 @@ pub fn success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult
     result.structured_content = serde_json::to_value(outcome).ok();
     result
 }
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ThemeParams {
+    /// Background color, `#RRGGBB`.
+    #[serde(default)]
+    pub bg: Option<String>,
+    /// Foreground (text) color, `#RRGGBB`.
+    #[serde(default)]
+    pub fg: Option<String>,
+    /// Font size in pixels.
+    #[serde(default)]
+    pub size_px: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RenderAsciicastParams {
+    /// Path to an asciicast v2 `.cast` file.
+    pub cast_path: String,
+
+    /// Output `.mp4` path. Required unless `validateOnly` is true.
+    #[serde(default)]
+    pub out: Option<String>,
+
+    /// Frames per second. Must divide 705600000 exactly.
+    #[serde(default = "default_fps")]
+    pub fps: i64,
+
+    /// Terminal colors and font size. Cell metrics are deliberately not
+    /// exposed: they are coupled to the bundled monospace font's advance
+    /// width, and overriding them produces misaligned output.
+    #[serde(default)]
+    pub theme: Option<ThemeParams>,
+
+    /// Parse and convert without rendering anything.
+    #[serde(default)]
+    pub validate_only: bool,
+
+    /// How many evenly spaced frames to return as inline images. 0 disables;
+    /// capped at 12.
+    #[serde(default = "default_preview_frames")]
+    pub preview_frames: usize,
+}
+
+impl ThemeParams {
+    /// Apply the caller's overrides onto the adapter's defaults.
+    pub fn apply(&self, mut theme: zoetrope_asciicast::Theme) -> zoetrope_asciicast::Theme {
+        if let Some(bg) = &self.bg {
+            theme.bg = bg.clone();
+        }
+        if let Some(fg) = &self.fg {
+            theme.fg = fg.clone();
+        }
+        if let Some(size) = self.size_px {
+            theme.size_px = size;
+        }
+        theme
+    }
+}
