@@ -144,3 +144,38 @@ impl ThemeParams {
         theme
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zoetrope_asciicast::Theme;
+
+    #[test]
+    fn apply_overrides_only_the_set_fields() {
+        let params = ThemeParams {
+            bg: Some("#101820".to_string()),
+            fg: None,
+            size_px: None,
+        };
+        let theme = params.apply(Theme::default());
+        let default = Theme::default();
+
+        assert_eq!(theme.bg, "#101820");
+        assert_eq!(theme.fg, default.fg);
+        assert_eq!(theme.size_px, default.size_px);
+        assert_eq!(theme.cell_w, default.cell_w);
+        assert_eq!(theme.cell_h, default.cell_h);
+        assert_eq!(theme.pad, default.pad);
+    }
+
+    #[test]
+    fn apply_with_no_overrides_is_identical_to_default() {
+        let params = ThemeParams {
+            bg: None,
+            fg: None,
+            size_px: None,
+        };
+        let theme = params.apply(Theme::default());
+        assert_eq!(theme, Theme::default());
+    }
+}
