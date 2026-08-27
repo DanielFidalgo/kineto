@@ -50,12 +50,23 @@ pub fn assert_golden_hash(name: &str, w: u32, h: u32, rgba: &[u8]) {
     );
     let hex_hash = sha256_hex(rgba);
     write_debug_png(name, w, h, rgba);
+    assert_hash_entry(name, &hex_hash);
+}
 
+/// The `testdata/golden/hashes.json` file+sorted-keys mechanics behind
+/// `assert_golden_hash`, factored out so callers that already have a hash in
+/// hand (e.g. `tests/golden.rs`, which hashes a whole corpus of renders) can
+/// check/update an entry without re-deriving it or writing a debug PNG
+/// (dimensions aren't part of this helper's signature — callers that want a
+/// debug PNG call `write_debug_png` themselves, since they have `w`/`h`).
+/// Run with UPDATE_GOLDEN=1 to insert/rewrite the entry for `name`.
+#[allow(dead_code)]
+pub fn assert_hash_entry(name: &str, hash: &str) {
     let hashes_path = repo("testdata/golden/hashes.json");
     let mut hashes = read_hashes(&hashes_path);
 
     if std::env::var("UPDATE_GOLDEN").is_ok() {
-        hashes.insert(name.to_string(), hex_hash);
+        hashes.insert(name.to_string(), hash.to_string());
         std::fs::create_dir_all(hashes_path.parent().unwrap()).unwrap();
         // BTreeMap serializes in key order, so the file stays sorted.
         let json = serde_json::to_string_pretty(&hashes).unwrap();
@@ -66,10 +77,11 @@ pub fn assert_golden_hash(name: &str, w: u32, h: u32, rgba: &[u8]) {
     let expected = hashes
         .get(name)
         .unwrap_or_else(|| panic!("missing golden hash for '{name}'; run with UPDATE_GOLDEN=1"));
-    assert_eq!(*expected, hex_hash, "golden hash mismatch: {name}");
+    assert_eq!(*expected, hash, "golden hash mismatch: {name}");
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+#[allow(dead_code)]
+pub fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let digest = Sha256::digest(bytes);
     digest.iter().map(|b| format!("{b:02x}")).collect()
@@ -91,7 +103,8 @@ fn debug_goldens_dir() -> PathBuf {
     }
 }
 
-fn write_debug_png(name: &str, w: u32, h: u32, rgba: &[u8]) {
+#[allow(dead_code)]
+pub fn write_debug_png(name: &str, w: u32, h: u32, rgba: &[u8]) {
     let img = image::RgbaImage::from_raw(w, h, rgba.to_vec())
         .expect("RGBA buffer size mismatch building debug PNG");
     let dir = debug_goldens_dir();

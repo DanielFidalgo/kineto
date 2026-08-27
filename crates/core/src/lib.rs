@@ -2,6 +2,7 @@
 pub mod anim;
 pub mod assets;
 pub mod color;
+pub mod corpus;
 pub mod doc;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod export;
