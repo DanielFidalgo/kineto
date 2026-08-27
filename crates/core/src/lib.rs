@@ -1,4 +1,5 @@
 //! zoetrope core engine
+pub mod anim;
 pub mod color;
 pub mod doc;
 pub mod scalar;
