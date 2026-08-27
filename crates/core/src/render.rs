@@ -128,3 +128,29 @@ impl Engine {
         self.frame.data()
     }
 }
+
+/// Unpremultiply alpha in a premultiplied RGBA8 buffer in-place.
+///
+/// The inverse of premultiplication: for each pixel, divide the RGB channels
+/// back by the alpha channel to recover the original color space values.
+///
+/// Formula: for alpha > 0, `c = min(255, (c*255 + a/2)/a)` where a is the
+/// alpha value. Uses integer arithmetic with `a/2` (rounded down) for
+/// rounding, ensuring deterministic results.
+///
+/// If alpha is 0, the pixel is left unchanged (alpha-0 premultiplied pixels
+/// are already at their neutral representation).
+pub fn unpremultiply(rgba: &mut [u8]) {
+    for chunk in rgba.chunks_exact_mut(4) {
+        let r = chunk[0];
+        let g = chunk[1];
+        let b = chunk[2];
+        let a = chunk[3];
+
+        if a > 0 {
+            chunk[0] = std::cmp::min(255, (r as u32 * 255 + a as u32 / 2) / a as u32) as u8;
+            chunk[1] = std::cmp::min(255, (g as u32 * 255 + a as u32 / 2) / a as u32) as u8;
+            chunk[2] = std::cmp::min(255, (b as u32 * 255 + a as u32 / 2) / a as u32) as u8;
+        }
+    }
+}

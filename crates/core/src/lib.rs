@@ -3,6 +3,8 @@ pub mod anim;
 pub mod assets;
 pub mod color;
 pub mod doc;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod export;
 pub mod raster;
 pub mod render;
 pub mod scalar;
