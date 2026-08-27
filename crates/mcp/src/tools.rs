@@ -37,11 +37,15 @@ pub struct RenderDocumentParams {
     #[serde(default)]
     pub out: Option<String>,
 
-    /// Frames per second. Must divide 705600000 exactly (24, 25, 30, 50, 60...).
-    #[serde(default = "default_fps")]
-    pub fps: i64,
+    /// Frames per second. Must be at most 1000 and divide 705600000 exactly
+    /// (24, 25, 30, 50, 60...). Defaults to the document's own `defaultFps`,
+    /// or 30 if it declares none.
+    #[serde(default)]
+    pub fps: Option<i64>,
 
-    /// Parse and validate the document without rendering anything.
+    /// Parse and validate the document without rendering any frames. Every
+    /// referenced image and font is still read from disk and decoded, so a
+    /// missing or corrupt asset is reported here.
     #[serde(default)]
     pub validate_only: bool,
 
@@ -54,25 +58,24 @@ pub struct RenderDocumentParams {
 /// The shared success shape for every render tool: a one-line summary, the
 /// structured metadata, then the sampled frames.
 pub fn success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult {
-    let summary = if outcome.out.is_empty() {
-        format!(
+    let summary = match &outcome.out {
+        Some(path) => format!(
+            "wrote {} ({}x{}, {} frames at {} fps, {:.3}s)",
+            path,
+            outcome.width,
+            outcome.height,
+            outcome.frame_count,
+            outcome.fps,
+            outcome.duration_seconds
+        ),
+        None => format!(
             "document is valid: {}x{}, {} frames at {} fps ({:.3}s)",
             outcome.width,
             outcome.height,
             outcome.frame_count,
             outcome.fps,
             outcome.duration_seconds
-        )
-    } else {
-        format!(
-            "wrote {} ({}x{}, {} frames at {} fps, {:.3}s)",
-            outcome.out,
-            outcome.width,
-            outcome.height,
-            outcome.frame_count,
-            outcome.fps,
-            outcome.duration_seconds
-        )
+        ),
     };
 
     let mut content = vec![ContentBlock::text(summary)];
@@ -109,7 +112,7 @@ pub struct RenderAsciicastParams {
     #[serde(default)]
     pub out: Option<String>,
 
-    /// Frames per second. Must divide 705600000 exactly.
+    /// Frames per second. Must be at most 1000 and divide 705600000 exactly.
     #[serde(default = "default_fps")]
     pub fps: i64,
 
@@ -119,7 +122,8 @@ pub struct RenderAsciicastParams {
     #[serde(default)]
     pub theme: Option<ThemeParams>,
 
-    /// Parse and convert without rendering anything.
+    /// Parse and convert without rendering any frames. The bundled terminal
+    /// font is still loaded and decoded.
     #[serde(default)]
     pub validate_only: bool,
 
@@ -127,6 +131,20 @@ pub struct RenderAsciicastParams {
     /// capped at 12.
     #[serde(default = "default_preview_frames")]
     pub preview_frames: usize,
+}
+
+impl RenderAsciicastParams {
+    /// The theme `cast_to_document` is actually handed.
+    ///
+    /// A method rather than three lines inside the tool body so a test can
+    /// drive it from deserialized wire arguments: `ThemeParams::apply` tested
+    /// alone proves nothing about whether its result is ever used.
+    pub fn resolved_theme(&self) -> zoetrope_asciicast::Theme {
+        match &self.theme {
+            Some(t) => t.apply(zoetrope_asciicast::Theme::default()),
+            None => zoetrope_asciicast::Theme::default(),
+        }
+    }
 }
 
 impl ThemeParams {
@@ -150,7 +168,8 @@ impl ThemeParams {
 pub struct StoryboardFrameParams {
     /// Path to a PNG or JPEG image.
     pub image: String,
-    /// How long this frame is held, in milliseconds. Must be positive.
+    /// How long this frame is held, in milliseconds. Must be between 1 and
+    /// 86400000 (24 hours).
     pub duration_ms: i64,
     /// Optional caption, drawn in a band across the bottom of the frame.
     #[serde(default)]
@@ -160,14 +179,14 @@ pub struct StoryboardFrameParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RenderStoryboardParams {
-    /// Ordered frames. Must not be empty.
+    /// Ordered frames. Must not be empty, and at most 10000 long.
     pub frames: Vec<StoryboardFrameParams>,
 
     /// Output `.mp4` path. Required unless `validateOnly` is true.
     #[serde(default)]
     pub out: Option<String>,
 
-    /// Frames per second. Must divide 705600000 exactly.
+    /// Frames per second. Must be at most 1000 and divide 705600000 exactly.
     #[serde(default = "default_fps")]
     pub fps: i64,
 
@@ -179,7 +198,9 @@ pub struct RenderStoryboardParams {
     #[serde(default)]
     pub height: Option<u32>,
 
-    /// Build and validate without rendering anything.
+    /// Build and validate without rendering any frames. Every image is still
+    /// read from disk and decoded, so a missing or corrupt one is reported
+    /// here.
     #[serde(default)]
     pub validate_only: bool,
 
@@ -210,6 +231,45 @@ mod tests {
         assert_eq!(theme.cell_w, default.cell_w);
         assert_eq!(theme.cell_h, default.cell_h);
         assert_eq!(theme.pad, default.pad);
+    }
+
+    fn tiny_cast() -> zoetrope_asciicast::Cast {
+        let header = serde_json::json!({ "version": 2, "width": 20, "height": 4 });
+        zoetrope_asciicast::parse_cast(&format!("{header}\n[0.0, \"o\", \"hello\"]\n")).unwrap()
+    }
+
+    /// The theme override must survive the whole path, not merely be applied
+    /// to a `Theme` that is then discarded: `apply` tested in isolation still
+    /// passes if `cast_to_document` is handed `Theme::default()`. This starts
+    /// from the wire arguments and asserts on the built document.
+    #[test]
+    fn an_overridden_theme_reaches_the_built_document() {
+        let cast = tiny_cast();
+
+        let (default_doc, _) = zoetrope_asciicast::cast_to_document(&cast, &Theme::default());
+        assert_eq!(
+            default_doc.bg.0, "#0A0A0A",
+            "control: the adapter's own default background"
+        );
+
+        let params: RenderAsciicastParams = serde_json::from_value(serde_json::json!({
+            "castPath": "/unused.cast",
+            "theme": { "bg": "#101820" }
+        }))
+        .unwrap();
+        let (doc, _) = zoetrope_asciicast::cast_to_document(&cast, &params.resolved_theme());
+
+        assert_eq!(doc.bg.0, "#101820");
+    }
+
+    #[test]
+    fn an_absent_theme_resolves_to_the_adapter_default() {
+        let params: RenderAsciicastParams =
+            serde_json::from_value(serde_json::json!({ "castPath": "/unused.cast" })).unwrap();
+        assert_eq!(params.resolved_theme(), Theme::default());
+
+        let (doc, _) = zoetrope_asciicast::cast_to_document(&tiny_cast(), &params.resolved_theme());
+        assert_eq!(doc.bg.0, "#0A0A0A");
     }
 
     #[test]

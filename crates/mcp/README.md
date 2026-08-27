@@ -16,7 +16,13 @@ resources for the document JSON Schema and the golden example corpus.
 Every render tool shells out to `ffmpeg` to mux the rendered frame sequence
 into an `.mp4`. If `ffmpeg` is not on `PATH`, the server preflights this and
 returns a clear tool error rather than silently writing frames without a
-video — do not skip installing it.
+video — do not skip installing it. (`validateOnly` calls never mux, so they
+work without it.)
+
+Note what "deterministic" covers: the rendered *frames* are byte-identical
+for a given document. The `.mp4` container is not — it records the encoder
+version and thread count, so two ffmpeg runs over the same frames can differ
+byte-for-byte.
 
 - macOS: `brew install ffmpeg`
 - Debian/Ubuntu: `sudo apt-get install -y ffmpeg`
@@ -59,13 +65,20 @@ Parameter names are camelCase over the wire (the Rust structs in
 generated from these types — the field names below are exact, not
 illustrative).
 
+All three tools bound the canvas before building an engine: each edge at
+most 16384 px, and at most 67108864 pixels in total (64 Mpx, comfortably
+above 8K). This applies to `validateOnly` too, which decodes assets and
+allocates pixmaps even though it renders no frames.
+
 ### `render_document`
 
 Renders a canonical zoetrope scene document to an MP4. Provide exactly one
 of `document` (inline JSON string) or `documentPath`. `out` is required
 unless `validateOnly` is true. `previewFrames` (default 5, capped at 12)
 returns evenly spaced frames as inline images so the caller can check the
-result without opening the file.
+result without opening the file. `fps` defaults to the document's own
+`defaultFps`, or 30 if it declares none; it must be at most 1000 and divide
+705600000 exactly.
 
 ```json
 {
@@ -110,7 +123,8 @@ monospace font's advance width).
 
 Renders an ordered list of images into an MP4, each held for a given
 duration with an optional caption band. `width`/`height` default to the
-first image's dimensions if omitted (provide both or neither).
+first image's dimensions if omitted (provide both or neither). At most
+10000 frames, each `durationMs` between 1 and 86400000 (24 hours).
 
 ```json
 {

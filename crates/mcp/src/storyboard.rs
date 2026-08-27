@@ -13,6 +13,20 @@ use crate::error::ToolError;
 /// Exact: 705_600_000 ticks/second / 1000 ms. No rounding at any duration.
 const TICKS_PER_MS: i64 = TIMEBASE / 1000;
 
+/// Longest a single frame may be held, in milliseconds (24 hours).
+///
+/// A frame longer than a day is a typo, not a request. The real job of this
+/// bound is arithmetic: `duration_ms * TICKS_PER_MS` is an `i64` multiply,
+/// and `timeline::total_duration` then *sums* the scenes.
+pub const MAX_FRAME_DURATION_MS: i64 = 86_400_000;
+
+/// Most frames a single storyboard may contain.
+///
+/// Paired with [`MAX_FRAME_DURATION_MS`] this caps the summed timeline at
+/// 86_400_000 x 705_600 x 10_000 ~= 6.1e17 ticks, comfortably inside
+/// `i64::MAX` (~9.2e18).
+pub const MAX_FRAMES: usize = 10_000;
+
 pub const CAPTION_FONT_ID: &str = "caption-font";
 pub const CAPTION_FONT_SRC: &str = "zoetrope:jetbrains-mono";
 
@@ -35,6 +49,12 @@ pub fn build(frames: &[Frame], size: Option<(u32, u32)>) -> Result<Document, Too
     if frames.is_empty() {
         return Err(ToolError::Invalid("`frames` must not be empty".into()));
     }
+    if frames.len() > MAX_FRAMES {
+        return Err(ToolError::Invalid(format!(
+            "`frames` has {} entries: at most {MAX_FRAMES} are permitted",
+            frames.len()
+        )));
+    }
 
     let (w, h) = match size {
         Some(wh) => wh,
@@ -51,17 +71,36 @@ pub fn build(frames: &[Frame], size: Option<(u32, u32)>) -> Result<Document, Too
     for (i, frame) in frames.iter().enumerate() {
         if frame.duration_ms <= 0 {
             return Err(ToolError::Invalid(format!(
-                "frame {i}: durationMs must be positive, got {}",
+                "frame {i}: durationMs must be positive, got {} (the \
+                 permitted range is 1..={MAX_FRAME_DURATION_MS} ms, 24 hours)",
                 frame.duration_ms
             )));
         }
+        if frame.duration_ms > MAX_FRAME_DURATION_MS {
+            return Err(ToolError::Invalid(format!(
+                "frame {i}: durationMs {} exceeds the limit of \
+                 {MAX_FRAME_DURATION_MS} ms (24 hours); a storyboard may also \
+                 have at most {MAX_FRAMES} frames",
+                frame.duration_ms
+            )));
+        }
+        // Bounded above, so this cannot fail — but an unchecked multiply here
+        // panicked in debug (leaving the request unanswered) and wrapped
+        // silently in release, so the fallible form stays.
+        let duration_ticks = frame.duration_ms.checked_mul(TICKS_PER_MS).ok_or_else(|| {
+            ToolError::Invalid(format!(
+                "frame {i}: durationMs {} overflows the tick timebase; the \
+                 limit is {MAX_FRAME_DURATION_MS} ms (24 hours)",
+                frame.duration_ms
+            ))
+        })?;
 
         // Asset ids must match [A-Za-z0-9_-]{1,64} (DocError::BadId), so they
         // are generated rather than derived from user-supplied filenames.
         let asset_id = format!("img-{i}");
         doc.add_asset(&asset_id, Asset::image(&frame.image));
 
-        let mut scene = Scene::new(&format!("frame-{i}"), frame.duration_ms * TICKS_PER_MS)
+        let mut scene = Scene::new(&format!("frame-{i}"), duration_ticks)
             .with_element(Element::image(&asset_id, [0.0, 0.0, w as f64, h as f64]));
 
         if let Some(caption) = &frame.caption {
@@ -216,6 +255,78 @@ mod tests {
             "no caption means image only"
         );
         assert!(!doc.assets.contains_key(CAPTION_FONT_ID));
+    }
+
+    #[test]
+    fn rejects_a_duration_that_would_overflow_the_tick_multiply() {
+        // Reproduces the reported panic: `duration_ms * TICKS_PER_MS` used to
+        // be an unchecked multiply, which panicked in debug (leaving the
+        // request unanswered) and silently wrapped in release.
+        let dir = tempfile::tempdir().unwrap();
+        let frames = vec![Frame {
+            image: write_png(dir.path(), "a.png", 32, 32),
+            duration_ms: 10_000_000_000_000_000,
+            caption: None,
+        }];
+        let err = build(&frames, None).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("86400000"),
+            "the error must name the limit: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_a_duration_above_the_24_hour_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let frames = vec![Frame {
+            image: write_png(dir.path(), "a.png", 32, 32),
+            duration_ms: MAX_FRAME_DURATION_MS + 1,
+            caption: None,
+        }];
+        assert!(build(&frames, None).is_err());
+    }
+
+    #[test]
+    fn accepts_a_duration_exactly_at_the_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let frames = vec![Frame {
+            image: write_png(dir.path(), "a.png", 32, 32),
+            duration_ms: MAX_FRAME_DURATION_MS,
+            caption: None,
+        }];
+        let doc = build(&frames, None).unwrap();
+        assert_eq!(doc.scenes[0].duration, MAX_FRAME_DURATION_MS * 705_600);
+    }
+
+    #[test]
+    fn rejects_more_frames_than_the_limit() {
+        // The per-frame ceiling alone does not bound the *sum*
+        // (`timeline::total_duration` adds them up), so the list length is
+        // bounded too. Built without touching disk: an explicit size means
+        // `build` never reads the first image, and the length check fires
+        // before any asset work.
+        let frames: Vec<Frame> = (0..MAX_FRAMES + 1)
+            .map(|i| Frame {
+                image: format!("frame-{i}.png"),
+                duration_ms: 1,
+                caption: None,
+            })
+            .collect();
+        let err = build(&frames, Some((32, 32))).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("10000"),
+            "the error must name the limit: {msg}"
+        );
+    }
+
+    #[test]
+    fn the_worst_case_permitted_total_duration_fits_in_i64() {
+        // The two bounds exist to keep the summed timeline inside i64. If
+        // either is ever raised, this is the check that must be re-derived.
+        let worst = (MAX_FRAME_DURATION_MS as i128) * (TICKS_PER_MS as i128) * (MAX_FRAMES as i128);
+        assert!(worst < i64::MAX as i128, "worst case {worst} overflows i64");
     }
 
     #[test]

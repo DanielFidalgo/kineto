@@ -32,8 +32,8 @@ pub enum ToolError {
     },
 
     #[error(
-        "unsupported fps {0}: fps must be positive and divide the timebase \
-         705600000 exactly (e.g. 24, 25, 30, 50, 60)"
+        "unsupported fps {0}: fps must be positive, at most 1000, and divide \
+         the timebase 705600000 exactly (e.g. 24, 25, 30, 50, 60)"
     )]
     Fps(i64),
 

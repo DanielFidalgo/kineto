@@ -88,11 +88,53 @@ pub fn resolve_assets(doc: &Document, base_dir: &Path) -> Result<AssetStore, Too
     Ok(store)
 }
 
-/// `Engine::tick_for_frame` asserts this; we check it first so bad caller
-/// input is a readable tool error rather than a panic that kills the server.
+/// Largest accepted export rate.
+///
+/// Dividing the timebase is necessary but not sufficient: `TIMEBASE` divides
+/// itself, so `fps = 705600000` passed the divisibility check and asked the
+/// server for 705 million frames. 1000 divides the timebase exactly
+/// (705600000 / 1000 = 705600) and is far above any real frame rate.
+pub const MAX_FPS: i64 = 1000;
+
+/// Largest accepted canvas edge, in pixels.
+pub const MAX_CANVAS_EDGE: u32 = 16_384;
+
+/// Largest accepted canvas area, in pixels. 64 Mpx — comfortably above 8K
+/// (7680 x 4320 = 33 Mpx).
+pub const MAX_CANVAS_PIXELS: u64 = 67_108_864;
+
+/// `Engine::tick_for_frame` asserts divisibility; we check it first so bad
+/// caller input is a readable tool error rather than a panic that kills the
+/// server. The upper bound is ours: an fps that divides the timebase can
+/// still be absurd, and frame count scales linearly with it.
 pub fn check_fps(fps: i64) -> Result<(), ToolError> {
-    if fps <= 0 || TIMEBASE % fps != 0 {
+    if fps <= 0 || fps > MAX_FPS || TIMEBASE % fps != 0 {
         return Err(ToolError::Fps(fps));
+    }
+    Ok(())
+}
+
+/// Bound the canvas before an `Engine` is built.
+///
+/// `Engine::new` allocates two full-canvas pixmaps and decodes every
+/// referenced asset, and core's `validate_semantics` puts no ceiling on
+/// `size` — so an unbounded canvas is unbounded allocation, on the
+/// `validateOnly` path advertised as rendering nothing.
+pub fn check_canvas_size(w: u32, h: u32) -> Result<(), ToolError> {
+    if w > MAX_CANVAS_EDGE || h > MAX_CANVAS_EDGE {
+        return Err(ToolError::Invalid(format!(
+            "canvas {w}x{h} is too large: each edge must be at most \
+             {MAX_CANVAS_EDGE} px"
+        )));
+    }
+    // u64 so the product cannot overflow: u32::MAX squared is ~1.8e19,
+    // which fits u64 (max ~1.84e19) but not u32 or i64.
+    let pixels = w as u64 * h as u64;
+    if pixels > MAX_CANVAS_PIXELS {
+        return Err(ToolError::Invalid(format!(
+            "canvas {w}x{h} is {pixels} pixels: at most {MAX_CANVAS_PIXELS} \
+             pixels are permitted (64 Mpx, above 8K)"
+        )));
     }
     Ok(())
 }
@@ -196,5 +238,53 @@ mod tests {
         assert!(check_fps(-1).is_err());
         assert!(check_fps(11).is_err());
         assert!(check_fps(27).is_err());
+    }
+
+    #[test]
+    fn rejects_fps_above_the_upper_bound() {
+        // Dividing the timebase is not enough: TIMEBASE itself divides it,
+        // and was accepted — `{"fps": 705600000}` reported 705600000 frames
+        // and would have tried to write that many PNGs.
+        assert!(check_fps(MAX_FPS).is_ok(), "1000 divides the timebase");
+        assert!(check_fps(1200).is_err(), "1200 divides but is out of range");
+        assert!(check_fps(TIMEBASE).is_err());
+    }
+
+    #[test]
+    fn the_fps_error_names_the_upper_bound() {
+        let msg = check_fps(TIMEBASE).unwrap_err().to_string();
+        assert!(msg.contains("1000"), "message was: {msg}");
+    }
+
+    #[test]
+    fn accepts_a_canvas_within_both_limits() {
+        assert!(check_canvas_size(320, 180).is_ok());
+        assert!(check_canvas_size(7680, 4320).is_ok(), "8K must be allowed");
+        assert!(check_canvas_size(MAX_CANVAS_EDGE, 4096).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_canvas_edge_beyond_the_limit() {
+        let msg = check_canvas_size(MAX_CANVAS_EDGE + 1, 8)
+            .unwrap_err()
+            .to_string();
+        assert!(msg.contains("16385"), "must name the actual size: {msg}");
+        assert!(msg.contains("16384"), "must name the limit: {msg}");
+        assert!(check_canvas_size(8, MAX_CANVAS_EDGE + 1).is_err());
+    }
+
+    #[test]
+    fn rejects_a_canvas_area_beyond_the_limit() {
+        // Both edges legal, product not: 16384 x 16384 is 268 Mpx.
+        let msg = check_canvas_size(MAX_CANVAS_EDGE, MAX_CANVAS_EDGE)
+            .unwrap_err()
+            .to_string();
+        assert!(msg.contains("67108864"), "must name the limit: {msg}");
+    }
+
+    #[test]
+    fn the_canvas_area_check_cannot_overflow() {
+        // u32::MAX squared is ~1.8e19, past u64's midpoint but inside it.
+        assert!(check_canvas_size(u32::MAX, u32::MAX).is_err());
     }
 }

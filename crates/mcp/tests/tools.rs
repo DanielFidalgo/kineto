@@ -141,6 +141,259 @@ fn bad_fps_is_a_tool_error_not_a_panic() {
 }
 
 #[test]
+fn absurd_fps_is_rejected_rather_than_counting_frames() {
+    let mut server = Server::start();
+    server.initialize();
+
+    // The timebase divides itself, so this used to be accepted: it reported
+    // 705600000 frames after ~2s of counting, and without `validateOnly`
+    // would have tried to write that many PNGs.
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": tiny_doc(), "fps": 705600000, "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("1000"), "message was: {text}");
+}
+
+#[test]
+fn document_default_fps_is_used_when_fps_is_omitted() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let doc = json!({
+        "v": 1,
+        "timebase": 705600000,
+        "defaultFps": 60,
+        "size": { "w": 320, "h": 180 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [] }]
+    })
+    .to_string();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": doc, "validateOnly": true }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+    assert_eq!(result["structuredContent"]["fps"], 60);
+    assert_eq!(result["structuredContent"]["frameCount"], 60);
+}
+
+#[test]
+fn an_explicit_fps_overrides_the_documents_default() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let doc = json!({
+        "v": 1,
+        "timebase": 705600000,
+        "defaultFps": 60,
+        "size": { "w": 320, "h": 180 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [] }]
+    })
+    .to_string();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": doc, "fps": 25, "validateOnly": true }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+    assert_eq!(result["structuredContent"]["fps"], 25);
+    assert_eq!(result["structuredContent"]["frameCount"], 25);
+}
+
+#[test]
+fn an_unusable_document_default_fps_says_where_the_number_came_from() {
+    let mut server = Server::start();
+    server.initialize();
+
+    // `crates/core` does not validate `defaultFps`, so this parses fine and
+    // only fails once we adopt it. 11 has a prime factor the timebase lacks.
+    let doc = json!({
+        "v": 1,
+        "timebase": 705600000,
+        "defaultFps": 11,
+        "size": { "w": 320, "h": 180 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [] }]
+    })
+    .to_string();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": doc, "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("defaultFps"),
+        "the caller sent no `fps`; the message must name the document's own \
+         field: {text}"
+    );
+}
+
+#[test]
+fn fps_falls_back_to_30_without_a_document_default() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": tiny_doc(), "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["structuredContent"]["fps"], 30);
+}
+
+#[test]
+fn validate_only_omits_the_output_path_entirely() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": tiny_doc(), "validateOnly": true }),
+    );
+
+    let structured = &resp["result"]["structuredContent"];
+    assert!(
+        structured.get("out").is_none(),
+        "spec §6: validate_only returns no `out`, got {structured}"
+    );
+}
+
+#[test]
+fn an_oversized_canvas_is_a_tool_error_not_an_allocation() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let doc = json!({
+        "v": 1,
+        "timebase": 705600000,
+        "size": { "w": 40000, "h": 40000 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [] }]
+    })
+    .to_string();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": doc, "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("40000"), "must name the actual size: {text}");
+    assert!(text.contains("16384"), "must name the limit: {text}");
+}
+
+#[test]
+fn storyboard_rejects_an_oversized_canvas() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_storyboard",
+        json!({
+            "frames": [{ "image": "/nonexistent/a.png", "durationMs": 100 }],
+            "width": 40000,
+            "height": 40000,
+            "validateOnly": true
+        }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("16384"), "message was: {text}");
+}
+
+#[test]
+fn asciicast_rejects_an_oversized_canvas() {
+    let mut server = Server::start();
+    server.initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let cast = dir.path().join("wide.cast");
+    // Cell metrics turn 4000 columns into a ~48000 px canvas.
+    let header = json!({ "version": 2, "width": 4000, "height": 4 });
+    std::fs::write(&cast, format!("{header}\n[0.0, \"o\", \"hi\"]\n")).unwrap();
+
+    let resp = call(
+        &mut server,
+        "render_asciicast",
+        json!({ "castPath": cast.to_str().unwrap(), "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("16384"), "message was: {text}");
+}
+
+#[test]
+fn storyboard_overflowing_duration_answers_instead_of_hanging() {
+    let mut server = Server::start();
+    server.initialize();
+
+    // Reproduces the reported hang: this used to panic inside the handler,
+    // so the request id was never answered at all. An explicit size means no
+    // image is read, so the multiply is reached without touching disk.
+    let resp = call(
+        &mut server,
+        "render_storyboard",
+        json!({
+            "frames": [{ "image": "/nonexistent/a.png", "durationMs": 10000000000000000i64 }],
+            "width": 64,
+            "height": 64,
+            "validateOnly": true
+        }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("86400000"), "message was: {text}");
+
+    // And the server is still serving.
+    let alive = call(
+        &mut server,
+        "render_document",
+        json!({ "document": tiny_doc(), "validateOnly": true }),
+    );
+    assert_ne!(alive["result"]["isError"], json!(true));
+}
+
+#[test]
+fn storyboard_rejects_too_many_frames() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let frames: Vec<_> = (0..10_001)
+        .map(|i| json!({ "image": format!("/nonexistent/{i}.png"), "durationMs": 1 }))
+        .collect();
+
+    let resp = call(
+        &mut server,
+        "render_storyboard",
+        json!({ "frames": frames, "width": 64, "height": 64, "validateOnly": true }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("10000"), "message was: {text}");
+}
+
+#[test]
 fn renders_an_mp4_with_preview_frames() {
     if !zoetrope_core::export::ffmpeg_available() {
         panic!(
@@ -223,6 +476,70 @@ fn asciicast_accepts_theme_overrides() {
     );
 
     assert_ne!(resp["result"]["isError"], json!(true), "{}", resp["result"]);
+}
+
+#[test]
+fn asciicast_theme_override_reaches_the_rendered_pixels() {
+    // The smoke test above only asserts the call did not error, which a tool
+    // that dropped `theme` entirely would also satisfy. This renders and
+    // reads the padding pixel, which is the background and nothing else.
+    if !zoetrope_core::export::ffmpeg_available() {
+        panic!(
+            "ffmpeg is required to run this test; CI installs it (see \
+             .github/workflows). Install it locally to run the full suite."
+        );
+    }
+
+    let mut server = Server::start();
+    server.initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let cast = dir.path().join("demo.cast");
+    std::fs::write(&cast, tiny_cast()).unwrap();
+
+    let bg_of = |server: &mut Server, label: &str, theme: serde_json::Value| -> [u8; 3] {
+        let out = dir.path().join(format!("{label}.mp4"));
+        let mut args = json!({
+            "castPath": cast.to_str().unwrap(),
+            "out": out.to_str().unwrap(),
+            "previewFrames": 1
+        });
+        if !theme.is_null() {
+            args["theme"] = theme;
+        }
+        let resp = call(server, "render_asciicast", args);
+        let result = &resp["result"];
+        assert_ne!(result["isError"], json!(true), "render failed: {result}");
+
+        let b64 = result["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["type"] == "image")
+            .expect("a preview frame")["data"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let png = base64_decode(&b64);
+        let img = image::load_from_memory(&png).unwrap().to_rgba8();
+        // (0, 0) is inside the terminal padding: background, never a glyph.
+        let px = img.get_pixel(0, 0).0;
+        [px[0], px[1], px[2]]
+    };
+
+    let default_bg = bg_of(&mut server, "default", serde_json::Value::Null);
+    assert_eq!(default_bg, [0x0A, 0x0A, 0x0A], "the adapter's default bg");
+
+    let themed_bg = bg_of(&mut server, "themed", json!({ "bg": "#101820" }));
+    assert_eq!(
+        themed_bg,
+        [0x10, 0x18, 0x20],
+        "the `theme.bg` override never reached the renderer"
+    );
+}
+
+fn base64_decode(s: &str) -> Vec<u8> {
+    use base64::prelude::{Engine as _, BASE64_STANDARD};
+    BASE64_STANDARD.decode(s).expect("valid base64")
 }
 
 #[test]

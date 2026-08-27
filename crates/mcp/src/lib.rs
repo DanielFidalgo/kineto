@@ -26,9 +26,13 @@ use crate::tools::RenderDocumentParams;
 fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     let mut info = ServerInfo::new(capabilities);
     info.server_info = Implementation::new("zoetrope-mcp", env!("CARGO_PKG_VERSION"));
+    // The claim is about the *frames*, not the MP4: the container embeds
+    // encoder version and thread count, so two runs of ffmpeg over an
+    // identical frame sequence can differ byte-for-byte.
     info.instructions = Some(
-        "Renders zoetrope scene documents to MP4. Deterministic: the same \
-         document always produces the same bytes. Requires ffmpeg on PATH."
+        "Renders zoetrope scene documents to MP4. Rendering is deterministic: \
+         the same document always produces the same frames. Encoding to MP4 \
+         requires ffmpeg on PATH; `validateOnly` calls do not need it."
             .into(),
     );
     info
@@ -57,9 +61,9 @@ impl ZoetropeServer {
         name = "render_document",
         description = "Render a zoetrope scene document to an MP4. Rendering is \
                        deterministic: the same document always produces the same \
-                       bytes. Returns the output path, metadata, and sampled \
+                       frames. Returns the output path, metadata, and sampled \
                        frames as images so you can check the result. Requires \
-                       ffmpeg on PATH."
+                       ffmpeg on PATH, except for `validateOnly` calls."
     )]
     pub async fn render_document(
         &self,
@@ -72,12 +76,33 @@ impl ZoetropeServer {
     }
 
     fn render_document_impl(params: RenderDocumentParams) -> Result<CallToolResult, ToolError> {
-        crate::source::check_fps(params.fps)?;
-
         let (doc, default_base) = crate::source::load_document(
             params.document.as_deref(),
             params.document_path.as_deref(),
         )?;
+
+        // Spec §4.1: explicit argument, else the document's own `defaultFps`,
+        // else 30. Resolved *after* loading because the document is where the
+        // middle option lives.
+        let (fps, from_document) = match params.fps {
+            Some(fps) => (fps, false),
+            None => match doc.default_fps {
+                Some(fps) => (i64::from(fps), true),
+                None => (crate::tools::default_fps(), false),
+            },
+        };
+        // `crates/core` does not validate `default_fps`, so an unusable one
+        // reaches us here. Say where the number came from: the caller passed
+        // no `fps` and would otherwise be told off for a value they never sent.
+        crate::source::check_fps(fps).map_err(|e| {
+            if from_document {
+                ToolError::Invalid(format!("the document's `defaultFps` is unusable — {e}"))
+            } else {
+                e
+            }
+        })?;
+        crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
+
         let base = params
             .asset_base_dir
             .as_deref()
@@ -88,7 +113,7 @@ impl ZoetropeServer {
         let mut engine = zoetrope_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
-            let outcome = crate::render::describe(&engine, params.fps);
+            let outcome = crate::render::describe(&engine, fps);
             return Ok(crate::tools::success(&outcome, Vec::new()));
         }
 
@@ -96,9 +121,8 @@ impl ZoetropeServer {
             ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
         })?;
 
-        let outcome = crate::render::render_to_mp4(&mut engine, params.fps, &out)?;
-        let previews =
-            crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
+        let outcome = crate::render::render_to_mp4(&mut engine, fps, &out)?;
+        let previews = crate::render::sample_frames(&mut engine, fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
     }
 
@@ -106,9 +130,10 @@ impl ZoetropeServer {
         name = "render_asciicast",
         description = "Render an asciicast v2 terminal recording (.cast) to an \
                        MP4. Renders from the event data rather than capturing \
-                       pixels, so output is deterministic and faster than \
-                       realtime. Returns the output path, metadata, and sampled \
-                       frames as images. Requires ffmpeg on PATH."
+                       pixels, so the same recording always produces the same \
+                       frames, faster than realtime. Returns the output path, \
+                       metadata, and sampled frames as images. Requires ffmpeg \
+                       on PATH, except for `validateOnly` calls."
     )]
     pub async fn render_asciicast(
         &self,
@@ -133,11 +158,8 @@ impl ZoetropeServer {
         let cast = zoetrope_asciicast::parse_cast(&data)
             .map_err(|e| ToolError::Invalid(format!("invalid asciicast: {e}")))?;
 
-        let theme = match &params.theme {
-            Some(t) => t.apply(zoetrope_asciicast::Theme::default()),
-            None => zoetrope_asciicast::Theme::default(),
-        };
-        let (doc, assets) = zoetrope_asciicast::cast_to_document(&cast, &theme);
+        let (doc, assets) = zoetrope_asciicast::cast_to_document(&cast, &params.resolved_theme());
+        crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
 
         let mut store = zoetrope_core::AssetStore::new();
         for (id, bytes) in assets {
@@ -166,7 +188,9 @@ impl ZoetropeServer {
                        for a given duration with an optional caption. Use this \
                        to turn a sequence of screenshots into a watchable clip \
                        — for example, showing the steps of a browser run. \
-                       Requires ffmpeg on PATH."
+                       Rendering is deterministic: the same frames always \
+                       produce the same pixels. Requires ffmpeg on PATH, \
+                       except for `validateOnly` calls."
     )]
     pub async fn render_storyboard(
         &self,
@@ -204,6 +228,7 @@ impl ZoetropeServer {
         };
 
         let doc = crate::storyboard::build(&frames, size)?;
+        crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
 
         // Storyboard image srcs are the caller's own paths — absolute, or
         // relative to the server's working directory. `resolve_assets`

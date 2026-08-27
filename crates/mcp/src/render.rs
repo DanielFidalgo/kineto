@@ -22,7 +22,10 @@ pub const PREVIEW_MAX_COUNT: usize = 12;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderOutcome {
-    pub out: String,
+    /// Absent — not empty — when nothing was written (spec §6:
+    /// `validate_only` returns the metadata block with no `out`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub out: Option<String>,
     pub width: u32,
     pub height: u32,
     pub fps: i64,
@@ -52,18 +55,35 @@ pub fn preview_frame_indices(frame_count: u64, count: usize) -> Vec<u64> {
 
 /// How many frames this engine will emit at `fps`.
 pub fn frame_count(engine: &Engine, fps: i64) -> u64 {
-    let total = engine.total_duration();
-    let mut n = 0u64;
-    while engine.tick_for_frame(n as i64, fps) < total {
-        n += 1;
+    frames_for(engine.total_duration(), fps)
+}
+
+/// Closed form of `export_frames`'s loop.
+///
+/// That loop emits a frame for every `n` where
+/// `tick_for_frame(n, fps) = n * (TIMEBASE / fps) < total_duration`, so the
+/// count is `ceil(total_duration / step)`. Counting it by *iterating* is an
+/// O(frames) spin with no cancellation point: a year-long document spent
+/// seconds doing nothing but incrementing, on the `validateOnly` path that
+/// renders nothing at all.
+///
+/// Computed in `u64`: signed `div_ceil` is not stable, and doing the ceiling
+/// by hand as `(total + step - 1) / step` would overflow near `i64::MAX`.
+pub fn frames_for(total_duration: i64, fps: i64) -> u64 {
+    if total_duration <= 0 || fps <= 0 {
+        return 0;
     }
-    n
+    let step = zoetrope_core::doc::TIMEBASE / fps;
+    if step <= 0 {
+        return 0;
+    }
+    (total_duration as u64).div_ceil(step as u64)
 }
 
 pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
     let ticks = engine.total_duration();
     RenderOutcome {
-        out: String::new(),
+        out: None,
         width: engine.width(),
         height: engine.height(),
         fps,
@@ -158,7 +178,7 @@ pub fn render_to_mp4(engine: &mut Engine, fps: i64, out: &str) -> Result<RenderO
 
     let ticks = engine.total_duration();
     Ok(RenderOutcome {
-        out: out.to_string(),
+        out: Some(out.to_string()),
         width: engine.width(),
         height: engine.height(),
         fps,
@@ -205,18 +225,100 @@ mod tests {
         // This is what makes the spec's byte-identity claim testable. A 320x180
         // document is under PREVIEW_MAX_EDGE, so no resampling happens and the
         // preview PNG must be byte-identical to the exported one.
+        //
+        // Three samples, not one: with a single sample only frame 0 is ever
+        // compared, and an index-mapping bug that only bites away from the
+        // first frame would pass.
         use zoetrope_core::export::export_frames;
 
         let mut engine = small_engine();
         let dir = tempfile::tempdir().unwrap();
-        export_frames(&mut engine, 30, dir.path()).unwrap();
-        let exported = std::fs::read(dir.path().join("frame-00000.png")).unwrap();
+        let exported_count = export_frames(&mut engine, 30, dir.path()).unwrap();
 
         let mut engine = small_engine();
-        let previews = sample_frames(&mut engine, 30, 1).unwrap();
-        let decoded = base64_decode(&previews[0]);
+        let previews = sample_frames(&mut engine, 30, 3).unwrap();
+        assert_eq!(previews.len(), 3);
 
-        assert_eq!(decoded, exported);
+        let indices = preview_frame_indices(exported_count, 3);
+        assert_eq!(
+            indices,
+            vec![0, 14, 29],
+            "first, middle and last of a 30-frame document"
+        );
+
+        for (preview, index) in previews.iter().zip(&indices) {
+            let exported = std::fs::read(dir.path().join(format!("frame-{index:05}.png"))).unwrap();
+            assert_eq!(
+                base64_decode(preview),
+                exported,
+                "preview for frame {index} is not byte-identical to the exported frame"
+            );
+        }
+    }
+
+    #[test]
+    fn frame_count_matches_the_export_loop() {
+        // The closed form replaces `export_frames`'s predicate
+        // (`tick_for_frame(n, fps) < total_duration`). This asserts the two
+        // agree, including at exact multiples and one tick either side.
+        fn by_loop(total: i64, fps: i64) -> u64 {
+            let step = zoetrope_core::doc::TIMEBASE / fps;
+            let mut n = 0u64;
+            while (n as i64) * step < total {
+                n += 1;
+            }
+            n
+        }
+
+        for fps in [1, 24, 25, 30, 50, 60, 1000] {
+            let step = zoetrope_core::doc::TIMEBASE / fps;
+            for total in [
+                0,
+                1,
+                step - 1,
+                step,
+                step + 1,
+                2 * step - 1,
+                2 * step,
+                2 * step + 1,
+                97 * step + 3,
+                zoetrope_core::doc::TIMEBASE,
+            ] {
+                assert_eq!(
+                    frames_for(total, fps),
+                    by_loop(total, fps),
+                    "closed form disagrees with the loop at total={total}, fps={fps}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn frame_count_is_closed_form_not_a_spin() {
+        // A one-second document at 30 fps used to be counted by incrementing
+        // through every frame; at a year-long duration that measured 2.9s of
+        // pure counting. This asserts the answer for the largest legal
+        // duration there is: only a closed form can produce it at all.
+        let total = i64::MAX;
+        let step = zoetrope_core::doc::TIMEBASE / 30;
+        let expected = (total as u64).div_ceil(step as u64);
+        assert_eq!(frames_for(total, 30), expected);
+        assert_eq!(frames_for(total, 30), 392_150_171_635);
+    }
+
+    #[test]
+    fn describe_omits_the_output_path() {
+        // Spec §6: `validate_only` returns the metadata block with no `out`.
+        let engine = small_engine();
+        let outcome = describe(&engine, 30);
+        assert_eq!(outcome.out, None);
+        assert_eq!(outcome.frame_count, 30);
+
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert!(
+            json.get("out").is_none(),
+            "`out` must be absent, not empty: {json}"
+        );
     }
 
     /// A 320x180 one-second document: small, deterministic, no assets.

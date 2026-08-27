@@ -47,8 +47,17 @@ fn corpus_rendered_through_the_server_path_matches_golden_hashes() {
         }
     }
 
-    assert!(
-        checked > 0,
-        "no golden hashes matched any corpus entry — the key format has drifted"
+    // The number is knowable, so assert it exactly: the six corpus entries
+    // contribute 18 `name@tick` keys between them. `> 0` would still pass if
+    // a key-format drift silently skipped 17 of the 18.
+    let expected: usize = zoetrope_core::corpus::corpus()
+        .iter()
+        .map(|e| e.ticks.len())
+        .sum();
+    assert_eq!(expected, 18, "corpus tick count changed");
+    assert_eq!(
+        checked, expected,
+        "not every corpus tick was checked against a golden — the key format \
+         has drifted"
     );
 }
