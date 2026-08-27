@@ -238,6 +238,21 @@ impl Renderer {
                     // element's `translate/scale/rotation` transform (below)
                     // trivial to apply as a single `draw_pixmap` call instead
                     // of transforming every glyph individually.
+                    //
+                    // LIMITATION: glyphs are blitted into this layer at
+                    // their *static* pixel position (`pos` + offset, before
+                    // `element_matrix` is applied) and clipped to the
+                    // canvas bounds at that point — see the bounds checks in
+                    // `blit_mask`/`blit_color_premul`. So ink that falls
+                    // outside the canvas at the untransformed `pos` is lost
+                    // even if `translate`/`scale`/`rotation` would have
+                    // brought it back into frame; only ink that's already
+                    // on-canvas pre-transform survives to be composited.
+                    // This is a real correctness gap, not just a
+                    // convenience trade-off — Task 11 (groups, which
+                    // composite the same way) will carry the same note
+                    // until a canvas-sized-plus-margin (or unbounded) layer
+                    // is worth the cost.
                     let mut layer = Pixmap::new(canvas.width(), canvas.height())
                         .expect("canvas dimensions are always non-zero");
                     let (cr, cg, cb, ca) = color.rgba8();
@@ -281,10 +296,20 @@ impl Renderer {
                         }
                     }
 
+                    // The pivot/transform box is the *alignment* box, not
+                    // the ink box: cosmic-text positions glyphs (via `align`)
+                    // within a box of width `max_w` when it's set, so
+                    // Center/Right-aligned glyphs can sit well right of
+                    // `layout.width` (the max *line* width, i.e. the ink
+                    // extent) — using ink width here would pivot rotation/
+                    // scale off-center from what was actually laid out.
+                    // Falls back to `layout.width` when `max_w` is unset
+                    // (single line, no alignment box to speak of).
+                    let bbox_w = max_w.as_ref().map(|w| w.0 as f32).unwrap_or(layout.width);
                     let text_bbox = BBox {
                         x: pos_x,
                         y: pos_y,
-                        w: layout.width,
+                        w: bbox_w,
                         h: layout.height,
                     };
                     let matrix = element_matrix(&text_bbox, &resolved);

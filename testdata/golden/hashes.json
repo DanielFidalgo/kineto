@@ -4,5 +4,7 @@
   "raster-rect-opacity": "9e82b8c4523f081c1046617e15ccd103a1d2792014e302154435ccd465ae4e24",
   "raster-rect-rotation-45": "e12051faaac1f57bd26e24b95fd33046e723306ba52289d263f14be77ce15fa7",
   "raster-text": "16de8902b732350798c34df9f55eae3efd588ae60e86a4c81c1a3f5cb34a5335",
-  "raster-text-wrapped-rot": "04b958eea5c6f005621ae68dabaebbf190296ecfe334d62f17ebbffdfb3e0024"
+  "raster-text-right-rot": "b1ac71cc18ab4b876d3874c3c3bcc90c2828f58bd68c5c85c433626cd060c3b9",
+  "raster-text-tinted": "d5ba22c3f8744e58d85da9f0e0e3829e13c92f9d16ccb8586cab193ee86cfbec",
+  "raster-text-wrapped-rot": "0cec8476f17d8223b74ecd038553b1f40ad0d5a82933c999e0dc8ca36766c4f4"
 }

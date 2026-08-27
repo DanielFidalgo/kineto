@@ -235,3 +235,125 @@ fn text_wrapped_rotated() {
         pm.data(),
     );
 }
+
+/// Regression pin for the alignment-box pivot fix: cosmic-text positions
+/// glyphs (per `align`) inside a box of width `max_w` when it's set, not
+/// inside a box tightly fit to the ink (`layout.width`). Right-align a
+/// short string ("Hi") inside a `max_w` much wider than its own ink, then
+/// rotate — before the fix, the rotation/scale pivot (`element_matrix`'s
+/// box center) was computed from the ink-only box, so it sat well left of
+/// where the glyphs actually render (right-aligned against `max_w`);
+/// rotating about the wrong center visibly swings the glyphs to a
+/// different place than rotating about the true alignment-box center.
+#[test]
+fn text_right_aligned_wide_max_w_rotated() {
+    let mut pm = blank_pixmap(256, 64, (0, 0, 0, 255));
+    let el = Element::text("Hi", "body", 24.0, "#FFFFFF", [8.0, 8.0])
+        .with_max_w(200.0)
+        .with_align(Align::Right)
+        .with_rotation(15.0);
+    let mut renderer = Renderer::new();
+    let mut assets = inter_store(256, 64);
+
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    common::assert_golden_hash("raster-text-right-rot", pm.width(), pm.height(), pm.data());
+}
+
+/// Colored, *translucent* text: `#FF880080` (straight RGBA
+/// `(255, 136, 0, 128)`) exercises `blit_mask`'s tint-then-premultiply step
+/// in a way opaque white text (color alpha 255) cannot. At alpha 255,
+/// premultiplying is the identity (`div255(c*255) == c`), so a bug that
+/// tinted by the mask *without* premultiplying by the color's own alpha
+/// would produce byte-identical output to the correct code for every other
+/// test in this file — including `text_render`'s golden. It can't hide
+/// here.
+///
+/// Two elements share one *fully transparent* canvas (so the canvas itself
+/// stands in for the isolated per-element "layer" described in
+/// `raster.rs`'s `draw_elements` comment — nothing else is drawn to
+/// contaminate it):
+/// - `probe`: a single large "I" at the element's default opacity (1.0).
+///   Big enough (64px) to have an interior run of pixels at full mask
+///   coverage (swash mask byte 255) away from any antialiased edge. Hand-
+///   probed for exact bytes below.
+/// - `pinned`: `"Zoetrope"` at element opacity 0.5, same tint color —
+///   exercises the opacity-scaled composite path (tiny-skia's own
+///   `PixmapPaint::opacity` / `highp` float raster pipeline) for
+///   golden-hash coverage. Deliberately *not* hand-derived byte-for-byte:
+///   getting tiny-skia's internal float pipeline bit-exact by hand (u8 ->
+///   f32 `/255.0` -> opacity-scale -> `SourceOver` -> `*255.0` -> round)
+///   is re-implementing someone else's floating-point code path from
+///   memory, not verifying ours — that's what the golden hash is for.
+///   `probe`'s opacity-1.0 case is the one that isolates *our* math
+///   cleanly (see derivation below) and is worth hand-verifying.
+#[test]
+fn text_tinted() {
+    // Fully transparent background — see the module comment above.
+    let mut pm = blank_pixmap(256, 220, (0, 0, 0, 0));
+    let probe = Element::text("I", "body", 64.0, "#FF880080", [8.0, 8.0]);
+    let pinned =
+        Element::text("Zoetrope", "body", 24.0, "#FF880080", [8.0, 120.0]).with_opacity(0.5);
+    let mut renderer = Renderer::new();
+    let mut assets = inter_store(256, 220);
+
+    renderer.draw_elements(
+        &mut pm.as_mut(),
+        &[probe, pinned],
+        &mut assets,
+        0,
+        (0.0, 0.0),
+    );
+
+    // --- Exact-probe derivation ---
+    // color "#FF880080" -> straight RGBA (cr=255, cg=136, cb=0, ca=128).
+    // At a full-coverage pixel of `probe`'s "I" (mask byte m=255), inside
+    // `blit_mask` (this crate's own code, `crates/core/src/raster.rs`):
+    //   src_a = div255(m * ca)     = div255(255*128) = 128
+    //   src_r = div255(cr * src_a) = div255(255*128) = 128
+    //   src_g = div255(cg * src_a) = div255(136*128) = 68
+    //   src_b = div255(cb * src_a) = div255(0)        = 0
+    // `over_premul` against a transparent destination (0,0,0,0) is the
+    // identity (every `dst * inv` term is `0 * anything = 0`), so
+    // `blit_mask` writes exactly (128, 68, 0, 128) into the layer at that
+    // pixel.
+    // `probe`'s element opacity is 1.0 (default), so tiny-skia's
+    // `PixmapPaint::opacity` stage (`Pattern::push_stages`'s
+    // `if self.opacity != NormalizedF32::ONE { ... Scale1Float }`) is
+    // skipped entirely for it — confirmed by reading
+    // `tiny-skia-0.12.0/src/shaders/pattern.rs`. With the canvas itself
+    // transparent, `draw_pixmap`'s `SourceOver` composite of that layer
+    // pixel onto (0,0,0,0) is then a lossless copy: `mad(dst, inv(a), src)
+    // == mad(0.0, _, src) == src` in tiny-skia's `highp` pipeline
+    // (`pipeline/highp.rs::source_over_rgba`), and the one remaining
+    // round-trip — `u8 -> (as f32 / 255.0) -> (* 255.0) -> round_int()` in
+    // `load_8888`/`store_8888` — is exact for every integer 0..=255 (this
+    // is *why* `1.0 / 255.0` and not `1.0 / 256.0` is used as the
+    // normalization factor throughout tiny-skia: it's the property that
+    // makes plain copies bit-exact). So the final canvas byte at that
+    // pixel is (128, 68, 0, 128), exactly.
+    //
+    // Scan for the pixel rather than compute its (x,y) from font metrics
+    // (font-hinting-dependent, and not what this test is about): full mask
+    // coverage (src_a=128) is strictly higher than anything `pinned` can
+    // produce (its src_a is `ca=128` scaled down again by `opacity=0.5`
+    // inside tiny-skia's own pipeline, capping it well under 128), so on
+    // this deterministic render the single highest-alpha pixel on the
+    // whole canvas is unambiguously one of `probe`'s full-coverage pixels.
+    let data = pm.data();
+    let (mut best_idx, mut best_alpha) = (0usize, 0u8);
+    for (i, px) in data.chunks_exact(4).enumerate() {
+        if px[3] > best_alpha {
+            best_alpha = px[3];
+            best_idx = i;
+        }
+    }
+    let probe_px = &data[best_idx * 4..best_idx * 4 + 4];
+    assert_eq!(
+        probe_px,
+        [128u8, 68, 0, 128],
+        "full-coverage tinted-glyph pixel should be exactly the hand-derived premultiplied bytes"
+    );
+
+    common::assert_golden_hash("raster-text-tinted", pm.width(), pm.height(), pm.data());
+}
