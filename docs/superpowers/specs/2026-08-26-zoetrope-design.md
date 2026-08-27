@@ -249,8 +249,9 @@ packages/demo-tape TS: tape adapter + the in-browser tape exporter demo
   classes, no JSX, no framework coupling), emitting canonical JSON.
 - **`render(doc, { fps, bitrate, onProgress }) → Blob`**: drives the wasm
   engine frame-by-frame → WebCodecs `VideoEncoder` (hardware) → MP4 muxing
-  via the small proven `mp4-muxer` JS library. (A Rust muxer is backlog;
-  it sits behind this API and can replace mp4-muxer without API change.)
+  via the small proven `mp4-muxer` JS library. (A Rust muxer is the
+  first post-v1 engine milestone — decided at spec review 2026-08-26; it
+  sits behind this API and can replace mp4-muxer without API change.)
   **v1 requires WebCodecs** — unsupported browsers get a clear capability
   error; an ffmpeg.wasm fallback is backlog, not v1.
 - **`mount(canvas, doc) → { play, pause, seek(tick), dispose }`**:
@@ -380,6 +381,11 @@ Revisited only under real pressure, never speculatively.
 WebGPU/vello render tier · audio tracks · video-as-element (WebCodecs
 decode) · plugin custom elements (versioned, portability-breaking flag) ·
 more adapters (test traces, benchmark history, game replays, tracing
-spans) · Rust muxer/encoder for single-binary native MP4 · template
+spans) · Rust muxer (**first post-v1 engine milestone**, per spec review
+2026-08-26: single H.264 track, no B-frames, box-writer style; drops the
+`mp4-muxer` dep and is the container half of single-binary native MP4) ·
+native Rust encoder (the other half; realistically rav1e/AV1 behind a
+native-only feature flag — the browser keeps WebCodecs regardless) ·
+template
 gallery · hosted render API (the native target is the seed of a paid
 service if the library earns adoption).

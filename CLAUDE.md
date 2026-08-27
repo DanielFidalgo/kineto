@@ -13,16 +13,17 @@ name/brand decided at publish time; keep brand strings out of code.
 
 1. **Spec (binding authority, committed 2026-08-26):**
    `docs/superpowers/specs/2026-08-26-zoetrope-design.md` — read it first.
-2. **Status: spec written, self-reviewed, committed (`0434123`).
-   NEXT GATE: the user has NOT yet approved the spec** (brainstorming
-   user-review gate). Two calls were made without explicit user blessing —
-   confirm or change them during review:
-   - bundled fonts: **Inter** (SDK `"default"`), **JetBrains Mono** (demos)
-   - wasm size budget: **< 3 MB gzipped**, tracked in CI logs
-3. **After spec approval:** invoke `superpowers:writing-plans` to produce the
-   implementation plan, then execute it with
-   `superpowers:subagent-driven-development` (per the global guide). Do not
-   start coding before the plan exists.
+2. **Status: spec APPROVED by the user (2026-08-26 review)**, including the
+   two previously-unblessed calls (Inter/JetBrains Mono bundled fonts;
+   < 3 MB gzipped wasm budget). Review also settled: v1 keeps the
+   `mp4-muxer` JS lib behind `render()`; a Rust muxer is the **first
+   post-v1 engine milestone**; no Rust encoder in v1 (rationale recorded
+   in spec §4.3/§12).
+3. **Plan (written, awaiting user review):**
+   `docs/superpowers/plans/2026-08-26-zoetrope-v1.md` — 26 TDD tasks in 6
+   phases. NEXT GATE: user approves the plan, then execute it with
+   `superpowers:subagent-driven-development` (per the global guide). Do
+   not start coding before that approval.
 
 ## Locked decisions (recall — the spec has the detail)
 
