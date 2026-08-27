@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/wasm", "adapters/asciicast"]
+members = ["crates/core", "crates/wasm", "crates/mcp", "adapters/asciicast"]
 
 [workspace.package]
 edition = "2021"
