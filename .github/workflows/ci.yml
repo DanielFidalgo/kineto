@@ -10,3 +10,24 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+
+  # Product-defining gate (spec §1/§6): native and wasm must render the
+  # golden corpus byte-identically. See tests/parity/run.mjs and
+  # crates/core/src/bin/dump-parity.rs.
+  wasm-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cargo install wasm-pack
+      # Honest size build first (no corpus feature, which would inflate
+      # it) — logged so the wasm size budget (spec §8, < 3 MB gzipped) is
+      # visible in CI output.
+      - run: wasm-pack build crates/wasm --target web --release
+      - run: gzip -k -9 crates/wasm/pkg/zoetrope_wasm_bg.wasm && ls -l crates/wasm/pkg/zoetrope_wasm_bg.wasm.gz
+      - run: wasm-pack build crates/wasm --target web --release -- --features corpus
+      - run: cargo run -p zoetrope-core --bin dump-parity --features parity
+      - run: node tests/parity/run.mjs
