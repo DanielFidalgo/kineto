@@ -33,11 +33,11 @@ thiserror = "2.0.20"
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
 zoetrope-asciicast = { path = "../../adapters/asciicast" }
 zoetrope-core = { path = "../core" }
+# rmcp enables the `base64` crate internally (its own "base64" feature) but
+# exposes no public encoding API of its own — `ContentBlock::image` takes an
+# already-encoded `String`. Pinned to 0.23 to match the version rmcp already
+# pulls in, so the tree carries one copy instead of two.
+base64 = "0.23"
 
 [dev-dependencies]
-# rmcp does not re-export the `base64` crate it depends on internally, so
-# this is used only to decode test fixtures back to raw bytes. The server's
-# own encoding goes through `rmcp::model::PromptMessage::new_image`, which
-# uses rmcp's own `base64` (feature "base64") — see `render.rs`.
-base64 = "0.22"
 sha2 = "0.11.0"

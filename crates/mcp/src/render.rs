@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use serde::Serialize;
 use zoetrope_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
 use zoetrope_core::Engine;
@@ -72,21 +73,6 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
     }
 }
 
-/// Base64-encodes `data` via rmcp's own encoder rather than depending on the
-/// `base64` crate directly. `rmcp` does not re-export `base64`, but
-/// `PromptMessage::new_image` (gated on the `base64` feature we already
-/// enable for MCP image content) does the encoding internally; we build one
-/// and pull the encoded string back out. This keeps the server's encoding on
-/// a single path — rmcp's — instead of a second, independent one.
-fn base64_encode(data: &[u8]) -> String {
-    use rmcp::model::{ContentBlock, PromptMessage, Role};
-
-    match PromptMessage::new_image(Role::Assistant, data, "image/png", None, None).content {
-        ContentBlock::Image(image) => image.data,
-        _ => unreachable!("PromptMessage::new_image always builds a ContentBlock::Image"),
-    }
-}
-
 /// Render `count` evenly spaced frames as base64-encoded PNGs.
 pub fn sample_frames(
     engine: &mut Engine,
@@ -122,7 +108,7 @@ pub fn sample_frames(
         img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .map_err(|e| ToolError::Invalid(format!("preview PNG encode failed: {e}")))?;
 
-        out.push(base64_encode(&png));
+        out.push(BASE64_STANDARD.encode(&png));
     }
     Ok(out)
 }
@@ -245,9 +231,6 @@ mod tests {
     }
 
     fn base64_decode(s: &str) -> Vec<u8> {
-        use base64::Engine as _;
-        base64::engine::general_purpose::STANDARD
-            .decode(s)
-            .expect("valid base64")
+        BASE64_STANDARD.decode(s).expect("valid base64")
     }
 }
