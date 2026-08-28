@@ -185,3 +185,30 @@ fn reading_an_unknown_uri_is_an_error() {
         "expected a JSON-RPC error, got {resp}"
     );
 }
+
+#[test]
+fn tools_list_advertises_check_document() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = server.request("tools/list", serde_json::json!({}));
+    let tools = resp["result"]["tools"].as_array().expect("tools array");
+    let tool = tools
+        .iter()
+        .find(|t| t["name"] == "check_document")
+        .unwrap_or_else(|| panic!("check_document missing from {tools:?}"));
+
+    let props = &tool["inputSchema"]["properties"];
+    for key in ["document", "documentPath", "atMs", "atScenes", "fps"] {
+        assert!(props.get(key).is_some(), "missing {key} in {props}");
+    }
+    // No `out`, no `previewFrames`: this tool renders nothing and returns no
+    // images. Advertising either would invite the caller to treat it as a
+    // second preview_document, which is exactly what it exists not to be.
+    for key in ["out", "previewFrames"] {
+        assert!(
+            props.get(key).is_none(),
+            "check_document must not advertise {key}"
+        );
+    }
+}

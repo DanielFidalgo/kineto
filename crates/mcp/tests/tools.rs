@@ -928,3 +928,102 @@ fn validate_only_reports_the_timeline_too() {
     assert_eq!(t["nominalMs"], 3000);
     assert_eq!(t["actualMs"], 2333);
 }
+
+/// A structurally perfect document whose subtitle is invisible: #131b24 text
+/// on a #101820 background. No validator can reject it.
+fn invisible_text_doc() -> String {
+    json!({
+        "v": 1,
+        "timebase": 705600000,
+        "size": { "w": 320, "h": 180 },
+        "bg": "#101820",
+        "assets": { "body": { "type": "font", "src": "kineto:inter" } },
+        "scenes": [{
+            "id": "s",
+            "duration": 705600000,
+            "elements": [{
+                "type": "text", "text": "video as a build artifact",
+                "font": "body", "sizePx": 14, "color": "#131b24", "pos": [20, 40]
+            }]
+        }]
+    })
+    .to_string()
+}
+
+#[test]
+fn check_document_finds_text_that_cannot_be_seen() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "check_document",
+        json!({ "document": invisible_text_doc(), "atMs": [0] }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+
+    let issues = result["structuredContent"]["moments"][0]["issues"]
+        .as_array()
+        .expect("issues array");
+    assert_eq!(issues.len(), 1, "{result}");
+    assert_eq!(issues[0]["kind"], "lowContrast");
+}
+
+#[test]
+fn check_document_returns_no_images() {
+    // The entire point: checking is cheap because it costs no pixels. If this
+    // ever returns an image the tool has become a second preview_document.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "check_document",
+        json!({ "document": invisible_text_doc(), "atMs": [0] }),
+    );
+
+    let images = resp["result"]["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["type"] == "image")
+        .count();
+    assert_eq!(images, 0);
+}
+
+#[test]
+fn check_document_is_quiet_on_a_clean_document() {
+    // Control: a checker that reported something for everything would pass
+    // the assertions above without being useful.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "check_document",
+        json!({ "document": tiny_doc(), "atMs": [0, 500] }),
+    );
+
+    let sc = &resp["result"]["structuredContent"];
+    assert_eq!(sc["issueCount"], 0, "{sc}");
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("no issues"), "summary was: {text}");
+}
+
+#[test]
+fn check_document_accepts_scene_addressing() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "check_document",
+        json!({ "document": crossfaded_doc(), "atScenes": ["s1"] }),
+    );
+
+    let sc = &resp["result"]["structuredContent"];
+    assert_ne!(resp["result"]["isError"], json!(true), "{sc}");
+    assert_eq!(sc["moments"][0]["requestedScene"], "s1");
+}

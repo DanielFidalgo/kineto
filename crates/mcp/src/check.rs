@@ -19,6 +19,34 @@ use serde::Serialize;
 /// Opacity at or below which an element contributes nothing visible.
 const INVISIBLE_OPACITY: f64 = 0.01;
 
+/// Contrast ratio below which text is reported as effectively invisible.
+///
+/// Deliberately well under WCAG AA (4.5:1 body, 3:1 large): the job here is
+/// catching text that cannot be read *at all*, not grading design. Muted
+/// captions are a legitimate choice and must not be flagged.
+const MIN_CONTRAST: f64 = 2.0;
+
+/// WCAG relative luminance.
+fn luminance(c: &kineto_core::Color) -> f64 {
+    let (r, g, b, _) = c.rgba8();
+    let f = |v: u8| {
+        let v = v as f64 / 255.0;
+        if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+
+/// WCAG contrast ratio; 1.0 means identical, 21.0 is black on white.
+fn contrast(a: &kineto_core::Color, b: &kineto_core::Color) -> f64 {
+    let (la, lb) = (luminance(a), luminance(b));
+    let (hi, lo) = if la >= lb { (la, lb) } else { (lb, la) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Issue {
@@ -54,8 +82,8 @@ pub fn analyze(doc: &Document, assets: &mut AssetStore, tick: i64) -> Vec<Issue>
 
 #[allow(clippy::too_many_arguments)]
 fn check_element(
-    _doc: &Document,
-    _assets: &mut AssetStore,
+    doc: &Document,
+    assets: &mut AssetStore,
     el: &Element,
     local: i64,
     cw: f32,
@@ -86,7 +114,50 @@ fn check_element(
         return;
     }
 
-    let base = base_bbox(el);
+    // Text's own geometry needs real layout: `base_bbox` gives it a
+    // zero-size placeholder, which would make every bounds test vacuous.
+    let base = match el {
+        Element::Text {
+            text,
+            font,
+            size_px,
+            pos,
+            max_w,
+            align,
+            ..
+        } => {
+            let family = assets.family(font).to_string();
+            let layout = kineto_core::layout_text(
+                assets.font_system(),
+                &family,
+                text,
+                size_px.0 as f32,
+                max_w.map(|w| w.0 as f32),
+                *align,
+            );
+            kineto_core::BBox {
+                x: pos[0].0 as f32,
+                y: pos[1].0 as f32,
+                w: layout.width,
+                h: layout.height,
+            }
+        }
+        _ => base_bbox(el),
+    };
+
+    if let Element::Text { color, .. } = el {
+        let ratio = contrast(color, &doc.bg);
+        if ratio < MIN_CONTRAST {
+            push(
+                "lowContrast",
+                format!(
+                    "text '{}' against background '{}' is {ratio:.2}:1 — effectively invisible",
+                    color.0, doc.bg.0
+                ),
+            );
+        }
+    }
+
     let degenerate = match el {
         // tiny-skia's `Rect::from_xywh` returns None for either dimension at
         // zero, and the raster arm skips it — nothing is drawn at all.
@@ -94,8 +165,8 @@ fn check_element(
         // A zero-height path is a horizontal line, which strokes perfectly
         // well; only a path collapsed to a single point draws nothing.
         Element::Path { .. } => base.w <= 0.0 && base.h <= 0.0,
-        // Text's base box is a placeholder (raster.rs::base_bbox), and a
-        // group's is the union of its children, checked on their own.
+        // A group's box is the union of its children, each checked on its
+        // own; text is covered by the overflow rule below.
         Element::Text { .. } | Element::Group { .. } => false,
     };
     if degenerate {
@@ -128,17 +199,28 @@ fn check_element(
         (lo.min(c.1), hi.max(c.1))
     });
 
-    if matches!(el, Element::Text { .. }) {
-        // base_bbox gives text a zero-size placeholder, so its bounds here
-        // would be meaningless. Text geometry needs real layout (next cycle).
-        return;
-    }
     if max_x <= 0.0 || min_x >= cw || max_y <= 0.0 || min_y >= ch {
         push(
             "offCanvas",
             format!(
                 "bounds ({min_x:.0},{min_y:.0})-({max_x:.0},{max_y:.0}) are entirely \
                  outside the {cw:.0}x{ch:.0} canvas"
+            ),
+        );
+        return;
+    }
+
+    // Partial overflow is reported for text only. A rect or image running off
+    // the edge is usually a deliberate full-bleed; text running off the edge
+    // is almost always a mistake.
+    if matches!(el, Element::Text { .. })
+        && (min_x < 0.0 || min_y < 0.0 || max_x > cw || max_y > ch)
+    {
+        push(
+            "textOverflow",
+            format!(
+                "laid-out text spans ({min_x:.0},{min_y:.0})-({max_x:.0},{max_y:.0}), \
+                 past the {cw:.0}x{ch:.0} canvas"
             ),
         );
     }
@@ -207,6 +289,58 @@ mod tests {
     fn degenerate_geometry_is_reported() {
         let doc = doc_with(vec![Element::rect([10.0, 10.0, 0.0, 40.0], "#FF9900")]);
         assert_eq!(kinds(&doc, 0), vec!["zeroSize"]);
+    }
+
+    /// A document with Inter loaded under asset id "body".
+    fn text_doc(color: &str, bg: &str, size: f64, pos: [f64; 2], max_w: Option<f64>) -> Document {
+        let mut d = Document::new(200, 100).with_bg(bg);
+        d.add_asset("body", kineto_core::Asset::font("kineto:inter"));
+        let mut el = Element::text("Hamburgefons", "body", size, color, pos);
+        if let Some(w) = max_w {
+            el = el.with_max_w(w);
+        }
+        d.push_scene(Scene::new("s", TIMEBASE).with_element(el));
+        d
+    }
+
+    fn text_kinds(doc: &Document, tick: i64) -> Vec<&'static str> {
+        let mut assets = AssetStore::new();
+        assets.add_bytes(
+            "body",
+            kineto_core::resolve_reserved_src("kineto:inter")
+                .unwrap()
+                .to_vec(),
+        );
+        assets.prepare(doc).unwrap();
+        analyze(doc, &mut assets, tick)
+            .into_iter()
+            .map(|i| i.kind)
+            .collect()
+    }
+
+    #[test]
+    fn legible_text_reports_nothing() {
+        // Control for both text rules below.
+        let doc = text_doc("#F2F5F7", "#0D1419", 16.0, [10.0, 20.0], None);
+        assert_eq!(text_kinds(&doc, 0), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn text_that_cannot_be_seen_against_the_background_is_reported() {
+        // The defect that motivated this whole tool: #131b24 on #101820 is a
+        // structurally perfect document that renders an invisible smudge. No
+        // validator can catch it; arithmetic catches it every time.
+        let doc = text_doc("#131b24", "#101820", 16.0, [10.0, 20.0], None);
+        assert_eq!(text_kinds(&doc, 0), vec!["lowContrast"]);
+    }
+
+    #[test]
+    fn text_running_past_the_canvas_edge_is_reported() {
+        // Also seen for real: a code block laid out past the bottom of the
+        // canvas. Needs true layout — base_bbox gives text a zero-size
+        // placeholder, so geometry alone cannot see it.
+        let doc = text_doc("#F2F5F7", "#0D1419", 40.0, [10.0, 20.0], None);
+        assert_eq!(text_kinds(&doc, 0), vec!["textOverflow"]);
     }
 
     #[test]
