@@ -282,6 +282,49 @@ pub fn check_success(outcome: &CheckOutcome) -> CallToolResult {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionAppendParams {
+    /// Path to the journal (`.jsonl`). Created if it does not exist.
+    pub journal_path: String,
+
+    /// What kind of thing happened: `task`, `step`, `result`, `note` or
+    /// `error`. This chooses the accent colour; it is not a free-form label.
+    pub kind: String,
+
+    /// One line. This is the headline of the beat.
+    pub title: String,
+
+    /// An optional second line with the specifics — numbers, paths, counts.
+    #[serde(default)]
+    pub detail: Option<String>,
+
+    #[serde(default)]
+    pub status: Option<String>,
+
+    /// Milliseconds since the Unix epoch. Defaults to now. Pass it explicitly
+    /// to replay a session, or in tests, where a wall clock would make the
+    /// compiled document differ between runs.
+    #[serde(default)]
+    pub at_ms: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CompileSessionParams {
+    /// Path to the journal written by `session_append`.
+    pub journal_path: String,
+
+    /// Where to write the compiled document JSON. Feed it to
+    /// `check_document`, `preview_document` or `render_document` — this tool
+    /// deliberately renders nothing itself.
+    pub out: String,
+
+    /// Shown on the progress rail of every scene.
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeParams {
     /// Background color, `#RRGGBB`.
     #[serde(default)]
