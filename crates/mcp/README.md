@@ -204,6 +204,12 @@ to be checkable as arithmetic. Block on the first; report the second.
 | `tooFast` | design | more words than can be read in the scene's duration, at 300 wpm |
 | `tooSmall` | design | text under 1.6% of canvas height — unreadable once scaled to a phone |
 | `tooDense` | design | more than 40 words on screen at once |
+| `deckShaped` | design | most scenes contain nothing but text — a slide deck rather than a video |
+
+`deckShaped` is judged over the whole document, so a text-only title card is
+fine and a document of them is not. It is reported once, in
+`structuredContent.documentIssues`, rather than repeated against every moment
+checked.
 
 The design rules are the ones that make output *consistently* watchable
 rather than merely correct. `tooFast` is the commonest mistake in explainer
@@ -279,9 +285,15 @@ The server also exposes read-only MCP resources:
 
 - `kineto://schema/document` — the JSON Schema for the canonical document
   format accepted by `render_document` and `preview_document`.
-- `kineto://corpus/<name>` — worked example documents from the golden
-  corpus, covering every element type, easing, crossfade, wrap, and group
-  nesting.
+- `kineto://example/<name>` — **reference documents to imitate**: `flow`
+  (a relationship drawn as a path rather than described), `metric` (one
+  number, large, with the quantity actually shown), `steps` (one idea per
+  scene with visible progress). Small, self-contained, and tested against the
+  same lint a caller's output is judged by.
+- `kineto://corpus/<name>` — renderer *test* documents covering every element
+  type, easing, crossfade, wrap and group nesting. Valid and byte-stable, but
+  written to exercise features rather than to be copied — an agent imitating
+  `kitchen-sink` produces coloured rectangles. Prefer `kineto://example/`.
 
 Use `resources/list` to enumerate them.
 

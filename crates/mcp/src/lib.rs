@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod error;
+pub mod examples;
 pub mod render;
 pub mod resources;
 pub mod session;
@@ -35,10 +36,21 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     info.instructions = Some(
         "Renders kineto scene documents to MP4. Rendering is deterministic: \
          the same document always produces the same frames. Encoding to MP4 \
-         requires ffmpeg on PATH; `validateOnly` calls do not need it. \
-         While you are still changing a document, use `preview_document` to \
-         look at chosen moments — it writes no file and needs no ffmpeg — \
-         and call `render_document` once it looks right."
+         requires ffmpeg on PATH; `validateOnly` calls do not need it.\n\n\
+         Before authoring, read `kineto://example/flow`, `/metric` and \
+         `/steps`. They are short and exist to be imitated. The \
+         `kineto://corpus/` documents are renderer tests — valid, but written \
+         to exercise easings and group nesting rather than to be copied.\n\n\
+         What separates a video from a slide deck, in this format: one idea \
+         per scene; a relationship drawn as a path between two things rather \
+         than described in a sentence; a quantity shown as a bar or a line \
+         rather than asserted; the number itself on screen, large. A scene of \
+         centred prose is the thing to avoid, and `check_document` will say \
+         so.\n\n\
+         The working order is cheapest-first: `check_document` for \
+         correctness and pacing (no images, a fraction of the cost), \
+         `preview_document` for chosen moments when you need to judge how it \
+         looks, and `render_document` once, at the end."
             .into(),
     );
     info
@@ -69,7 +81,12 @@ impl KinetoServer {
                        deterministic: the same document always produces the same \
                        frames. Returns the output path, metadata, and sampled \
                        frames as images so you can check the result. Requires \
-                       ffmpeg on PATH, except for `validateOnly` calls."
+                       ffmpeg on PATH, except for `validateOnly` calls. \
+                       Render last, not first: run `check_document` and fix \
+                       what it reports before spending a render. If you are \
+                       authoring a document, read `kineto://example/flow` \
+                       first — one idea per scene, relationships drawn as \
+                       paths, quantities shown rather than claimed."
     )]
     pub async fn render_document(
         &self,
@@ -224,8 +241,9 @@ impl KinetoServer {
             &params.at_scenes,
         )?;
 
+        let document_issues = crate::check::analyze_document(&doc);
         let mut checked = Vec::with_capacity(moments.len());
-        let mut issue_count = 0;
+        let mut issue_count = document_issues.len();
         for m in moments {
             let issues = crate::check::analyze(&doc, &mut assets, m.tick);
             issue_count += issues.len();
@@ -244,6 +262,7 @@ impl KinetoServer {
             height: doc.size.h,
             fps,
             issue_count,
+            document_issues,
             timeline,
             moments: checked,
         }))

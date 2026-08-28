@@ -232,6 +232,10 @@ pub struct CheckOutcome {
     pub height: u32,
     pub fps: i64,
     pub issue_count: usize,
+    /// Rules about the whole document, independent of any moment — reported
+    /// once rather than repeated against every tick that was checked.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub document_issues: Vec<crate::check::Issue>,
     pub timeline: crate::timeline::TimelineSummary,
     pub moments: Vec<CheckedMoment>,
 }
@@ -249,6 +253,13 @@ pub fn check_success(outcome: &CheckOutcome) -> CallToolResult {
         ));
     } else {
         let (mut correctness, mut design) = (0usize, 0usize);
+        for i in &outcome.document_issues {
+            if i.category == "correctness" {
+                correctness += 1
+            } else {
+                design += 1
+            }
+        }
         for m in &outcome.moments {
             for i in &m.issues {
                 if i.category == "correctness" {
@@ -262,11 +273,18 @@ pub fn check_success(outcome: &CheckOutcome) -> CallToolResult {
             "{correctness} correctness + {design} design issue(s) across {} moment(s):",
             outcome.moments.len()
         ));
+        for i in &outcome.document_issues {
+            lines.push(format!(
+                "  document: {} [{}/{}]",
+                i.detail, i.category, i.kind
+            ));
+        }
         for m in &outcome.moments {
             for i in &m.issues {
-                let where_ = match i.element {
-                    Some(e) => format!("scene '{}' element {e}", i.scene),
-                    None => format!("scene '{}'", i.scene),
+                let where_ = match (&i.scene, i.element) {
+                    (Some(sc), Some(e)) => format!("scene '{sc}' element {e}"),
+                    (Some(sc), None) => format!("scene '{sc}'"),
+                    _ => "document".to_string(),
                 };
                 lines.push(format!(
                     "  {} ms — {where_}: {} [{}/{}]",

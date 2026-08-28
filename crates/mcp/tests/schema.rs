@@ -80,3 +80,56 @@ fn the_schema_describes_every_element_type_the_corpus_uses() {
          that the corpus renders; schema knows {described:?}"
     );
 }
+
+/// Every reference document must survive the rules its imitators are judged
+/// by. An exemplar that trips our own lint teaches the wrong habit, and this
+/// is the only thing stopping one from drifting into that state.
+#[test]
+fn the_reference_examples_pass_the_lint_they_are_meant_to_teach() {
+    for ex in kineto_mcp::examples::examples() {
+        // Validated through the real loading path, not the builder that made
+        // it — a document that only exists in memory proves nothing.
+        let json = ex.doc.canonical_json();
+        let (doc, _) = kineto_mcp::source::load_document(Some(&json), None)
+            .unwrap_or_else(|e| panic!("example '{}' does not validate: {e}", ex.name));
+
+        let mut assets = kineto_mcp::source::resolve_assets(&doc, std::path::Path::new("."))
+            .unwrap_or_else(|e| panic!("example '{}' assets: {e}", ex.name));
+        assets.prepare(&doc).unwrap();
+
+        let doc_issues = kineto_mcp::check::analyze_document(&doc);
+        assert!(
+            doc_issues.is_empty(),
+            "example '{}' trips a document rule: {doc_issues:?}",
+            ex.name
+        );
+
+        for (i, scene) in doc.scenes.iter().enumerate() {
+            let starts = kineto_core::timeline::scene_starts(&doc);
+            let mid = starts[i] + scene.duration / 2;
+            let issues = kineto_mcp::check::analyze(&doc, &mut assets, mid);
+            assert!(
+                issues.is_empty(),
+                "example '{}' scene '{}' trips: {issues:?}",
+                ex.name,
+                scene.id
+            );
+        }
+    }
+}
+
+#[test]
+fn examples_are_advertised_and_readable() {
+    let uris: Vec<String> = kineto_mcp::resources::list()
+        .iter()
+        .map(|r| r.uri.clone())
+        .collect();
+    for ex in kineto_mcp::examples::examples() {
+        let uri = format!("kineto://example/{}", ex.name);
+        assert!(uris.contains(&uri), "{uri} not listed in {uris:?}");
+        let body =
+            kineto_mcp::resources::read(&uri).unwrap_or_else(|| panic!("{uri} not readable"));
+        kineto_core::Document::from_json(&body)
+            .unwrap_or_else(|e| panic!("{uri} is not a valid document: {e}"));
+    }
+}

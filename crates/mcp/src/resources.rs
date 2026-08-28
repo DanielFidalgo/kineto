@@ -9,6 +9,9 @@ use rmcp::model::Resource;
 pub const SCHEMA_URI: &str = "kineto://schema/document";
 const CORPUS_PREFIX: &str = "kineto://corpus/";
 
+/// URI prefix for the reference documents in `crate::examples`.
+pub const EXAMPLE_PREFIX: &str = "kineto://example/";
+
 pub fn list() -> Vec<Resource> {
     let mut out = vec![Resource::new(SCHEMA_URI, "document-schema")
         .with_title("Kineto document JSON Schema")
@@ -18,13 +21,25 @@ pub fn list() -> Vec<Resource> {
         )
         .with_mime_type("application/json")];
 
+    // Listed before the corpus: these are what a caller should imitate, and
+    // whichever it reads first sets the habit.
+    for ex in crate::examples::examples() {
+        out.push(
+            Resource::new(format!("{EXAMPLE_PREFIX}{}", ex.name), ex.name)
+                .with_title(format!("Reference document: {}", ex.name))
+                .with_description(ex.description)
+                .with_mime_type("application/json"),
+        );
+    }
+
     for entry in kineto_core::corpus::corpus() {
         out.push(
             Resource::new(format!("{CORPUS_PREFIX}{}", entry.name), entry.name)
-                .with_title(format!("Example document: {}", entry.name))
+                .with_title(format!("Renderer test document: {}", entry.name))
                 .with_description(
-                    "A worked example from the golden corpus. Valid, renderable, \
-                     and byte-stable.",
+                    "Exercises the renderer — easings, group nesting, wrapping. \
+                     Valid and byte-stable, but written to cover features rather \
+                     than to be imitated; prefer kineto://example/ for that.",
                 )
                 .with_mime_type("application/json"),
         );
@@ -35,6 +50,12 @@ pub fn list() -> Vec<Resource> {
 pub fn read(uri: &str) -> Option<String> {
     if uri == SCHEMA_URI {
         return Some(DOCUMENT_SCHEMA.to_string());
+    }
+    if let Some(name) = uri.strip_prefix(EXAMPLE_PREFIX) {
+        return crate::examples::examples()
+            .into_iter()
+            .find(|e| e.name == name)
+            .map(|e| e.doc.canonical_json());
     }
     let name = uri.strip_prefix(CORPUS_PREFIX)?;
     kineto_core::corpus::corpus()
@@ -256,6 +277,12 @@ mod tests {
             kineto_core::Document::from_json(&text)
                 .unwrap_or_else(|e| panic!("{uri} is not a valid document: {e}"));
         }
-        assert_eq!(list().len(), kineto_core::corpus::corpus().len() + 1);
+        // Derived rather than a literal: the schema, every reference example
+        // and every corpus entry, so adding either kind cannot silently stop
+        // being advertised.
+        assert_eq!(
+            list().len(),
+            1 + crate::examples::examples().len() + kineto_core::corpus::corpus().len()
+        );
     }
 }
