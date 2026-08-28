@@ -248,16 +248,29 @@ pub fn check_success(outcome: &CheckOutcome) -> CallToolResult {
             outcome.height
         ));
     } else {
+        let (mut correctness, mut design) = (0usize, 0usize);
+        for m in &outcome.moments {
+            for i in &m.issues {
+                if i.category == "correctness" {
+                    correctness += 1
+                } else {
+                    design += 1
+                }
+            }
+        }
         lines.push(format!(
-            "{} issue(s) across {} moment(s):",
-            outcome.issue_count,
+            "{correctness} correctness + {design} design issue(s) across {} moment(s):",
             outcome.moments.len()
         ));
         for m in &outcome.moments {
             for i in &m.issues {
+                let where_ = match i.element {
+                    Some(e) => format!("scene '{}' element {e}", i.scene),
+                    None => format!("scene '{}'", i.scene),
+                };
                 lines.push(format!(
-                    "  {} ms — scene '{}' element {}: {} ({})",
-                    m.actual_ms, i.scene, i.element, i.detail, i.kind
+                    "  {} ms — {where_}: {} [{}/{}]",
+                    m.actual_ms, i.detail, i.category, i.kind
                 ));
             }
         }
