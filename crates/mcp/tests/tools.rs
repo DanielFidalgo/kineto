@@ -1034,3 +1034,117 @@ fn check_document_accepts_scene_addressing() {
     assert_ne!(resp["result"]["isError"], json!(true), "{sc}");
     assert_eq!(sc["moments"][0]["requestedScene"], "s1");
 }
+
+// ---- session accumulator ----
+
+#[test]
+fn a_compiled_session_passes_the_design_lint() {
+    // The load-bearing test. Scene durations are derived from the same
+    // 300 wpm the `tooFast` rule lints against, so a compiled session cannot
+    // flash past — the thing that decides pacing is the thing that would
+    // complain about it. If duration derivation regresses, this fails.
+    let dir = tempfile::tempdir().unwrap();
+    let journal = dir.path().join("j.jsonl");
+    let doc_out = dir.path().join("d.json");
+
+    let mut server = Server::start();
+    server.initialize();
+
+    let beats = [
+        (
+            "task",
+            "Bound decoded image residency",
+            "AssetStore held every frame for its whole lifetime",
+        ),
+        (
+            "step",
+            "Byte budgeted LRU behind a lazy decode",
+            "prepare still validates every image once, then drops it",
+        ),
+        (
+            "result",
+            "Peak memory is now flat",
+            "1185 MB at 300 frames became 53 MB, and 20/20 parity held",
+        ),
+        (
+            "note",
+            "Storyboard cap is honest now",
+            "10000 frames would have needed 40 GB before this",
+        ),
+    ];
+    for (i, (kind, title, detail)) in beats.iter().enumerate() {
+        let resp = call(
+            &mut server,
+            "session_append",
+            json!({
+                "journalPath": journal.to_str().unwrap(),
+                "kind": kind, "title": title, "detail": detail,
+                // Explicit so the compiled document is byte-deterministic.
+                "atMs": 1_000_000 + (i as i64) * 47_000
+            }),
+        );
+        assert_ne!(resp["result"]["isError"], json!(true), "{resp}");
+    }
+
+    let resp = call(
+        &mut server,
+        "compile_session",
+        json!({ "journalPath": journal.to_str().unwrap(),
+                "out": doc_out.to_str().unwrap(), "title": "test run" }),
+    );
+    assert_ne!(resp["result"]["isError"], json!(true), "{resp}");
+
+    let check = call(
+        &mut server,
+        "check_document",
+        json!({ "documentPath": doc_out.to_str().unwrap(),
+                "atScenes": ["b0000", "b0001", "b0002", "b0003"] }),
+    );
+    let sc = &check["result"]["structuredContent"];
+    assert_eq!(
+        sc["issueCount"], 0,
+        "a compiled session must be clean by construction: {}",
+        check["result"]["content"][0]["text"]
+    );
+}
+
+#[test]
+fn compiling_an_empty_journal_is_an_error() {
+    // Rather than a zero-length video that reads as a rendering bug.
+    let dir = tempfile::tempdir().unwrap();
+    let journal = dir.path().join("empty.jsonl");
+    std::fs::write(&journal, "").unwrap();
+
+    let mut server = Server::start();
+    server.initialize();
+    let resp = call(
+        &mut server,
+        "compile_session",
+        json!({ "journalPath": journal.to_str().unwrap(),
+                "out": dir.path().join("d.json").to_str().unwrap() }),
+    );
+    assert_eq!(resp["result"]["isError"], json!(true));
+}
+
+#[test]
+fn a_journal_survives_being_appended_to_across_calls() {
+    let dir = tempfile::tempdir().unwrap();
+    let journal = dir.path().join("j.jsonl");
+    let mut server = Server::start();
+    server.initialize();
+
+    for i in 0..3 {
+        let resp = call(
+            &mut server,
+            "session_append",
+            json!({ "journalPath": journal.to_str().unwrap(), "kind": "step",
+                    "title": format!("beat {i}"), "atMs": i * 1000 }),
+        );
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains(&format!("beat {}", i + 1)), "{text}");
+    }
+    assert_eq!(
+        std::fs::read_to_string(&journal).unwrap().lines().count(),
+        3
+    );
+}

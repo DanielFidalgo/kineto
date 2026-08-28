@@ -4,6 +4,7 @@ pub mod check;
 pub mod error;
 pub mod render;
 pub mod resources;
+pub mod session;
 pub mod source;
 pub mod storyboard;
 pub mod timeline;
@@ -246,6 +247,110 @@ impl KinetoServer {
             timeline,
             moments: checked,
         }))
+    }
+
+    #[tool(
+        name = "session_append",
+        description = "Record one thing that happened into a session journal. \
+                       Call it as you work: a task started, a step finished, a \
+                       result measured. Say what happened, not how it should \
+                       look — the projection chooses that. `compile_session` \
+                       later turns the journal into a watchable document."
+    )]
+    pub async fn session_append(
+        &self,
+        Parameters(params): Parameters<crate::tools::SessionAppendParams>,
+    ) -> CallToolResult {
+        match Self::session_append_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn session_append_impl(
+        params: crate::tools::SessionAppendParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let at_ms = match params.at_ms {
+            Some(t) => t,
+            // Wall-clock enters here and only here. It lands in the journal,
+            // which is a log; `compile` stays a pure function of the journal.
+            None => std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
+        };
+        let beat = crate::session::Beat {
+            at_ms,
+            kind: params.kind,
+            title: params.title,
+            detail: params.detail,
+            status: params.status,
+        };
+        let count = crate::session::append(std::path::Path::new(&params.journal_path), &beat)?;
+        Ok(CallToolResult::success(vec![
+            rmcp::model::ContentBlock::text(format!(
+                "recorded beat {count} in {}",
+                params.journal_path
+            )),
+        ]))
+    }
+
+    #[tool(
+        name = "compile_session",
+        description = "Turn a session journal into a kineto document: one \
+                       scene per beat, each given enough time to be read. \
+                       Writes the document and renders nothing — pass the \
+                       result to `check_document`, `preview_document` or \
+                       `render_document`. Compilation is a pure function of \
+                       the journal, so an old journal re-renders identically."
+    )]
+    pub async fn compile_session(
+        &self,
+        Parameters(params): Parameters<crate::tools::CompileSessionParams>,
+    ) -> CallToolResult {
+        match Self::compile_session_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn compile_session_impl(
+        params: crate::tools::CompileSessionParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let beats = crate::session::read(std::path::Path::new(&params.journal_path))?;
+        let title = params.title.as_deref().unwrap_or("session");
+        let doc = crate::session::compile(&beats, title)?;
+        let json = doc.canonical_json();
+
+        let out = std::path::Path::new(&params.out);
+        if let Some(parent) = out.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| ToolError::Io {
+                    context: "creating output directory",
+                    path: parent.display().to_string(),
+                    source: e,
+                })?;
+            }
+        }
+        std::fs::write(out, &json).map_err(|e| ToolError::Io {
+            context: "writing compiled document",
+            path: params.out.clone(),
+            source: e,
+        })?;
+
+        // Summed from the document itself: re-deriving would be a second
+        // source of truth for the same number.
+        let total: i64 = doc.scenes.iter().map(|s| s.duration).sum::<i64>()
+            / (kineto_core::doc::TIMEBASE / 1000);
+        Ok(CallToolResult::success(vec![
+            rmcp::model::ContentBlock::text(format!(
+                "compiled {} beat(s) into {} — {} scenes, {:.1}s",
+                beats.len(),
+                params.out,
+                doc.scenes.len(),
+                total as f64 / 1000.0
+            )),
+        ]))
     }
 
     #[tool(
