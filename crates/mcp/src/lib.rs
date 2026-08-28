@@ -5,6 +5,7 @@ pub mod render;
 pub mod resources;
 pub mod source;
 pub mod storyboard;
+pub mod timeline;
 pub mod tools;
 
 use std::path::PathBuf;

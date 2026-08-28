@@ -707,7 +707,7 @@ fn preview_document_reports_a_moment_past_the_end_as_the_last_frame() {
     assert_eq!(samples[0]["requestedMs"], 9_000);
     assert_eq!(samples[0]["frameIndex"], 29);
     assert_eq!(
-        samples[0]["actualMs"], 966,
+        samples[0]["actualMs"], 967,
         "the caller must be able to see it did not get 9 seconds"
     );
 }

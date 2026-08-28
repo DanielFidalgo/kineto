@@ -60,6 +60,20 @@ pub fn preview_frame_indices(frame_count: u64, count: usize) -> Vec<u64> {
 /// byte-determinism.
 pub const TICKS_PER_MS: i64 = kineto_core::doc::TIMEBASE / 1000;
 
+/// Ticks to the nearest whole millisecond.
+///
+/// Nearest, not truncated, because these numbers are handed back to a caller
+/// who may feed them in again. Frame 29 at 30 fps sits at 966.67 ms;
+/// truncating reports 966, and 966 ms resolves to frame *28* — the reply
+/// would name a moment that is not the one it showed.
+pub fn round_ms(ticks: i64) -> i64 {
+    if ticks >= 0 {
+        (ticks + TICKS_PER_MS / 2) / TICKS_PER_MS
+    } else {
+        (ticks - TICKS_PER_MS / 2) / TICKS_PER_MS
+    }
+}
+
 /// Resolve a millisecond offset to the index of the frame containing it.
 ///
 /// Returns a frame *index*, not a raw tick, for the reason
@@ -205,7 +219,7 @@ pub fn resolve_preview(
             requested_ms: ms,
             frame_index,
             tick,
-            actual_ms: tick / TICKS_PER_MS,
+            actual_ms: round_ms(tick),
         });
     }
 
@@ -534,7 +548,7 @@ mod tests {
             .iter()
             .map(|s| (s.requested_ms, s.frame_index, s.actual_ms))
             .collect();
-        assert_eq!(got, vec![(0, 0, 0), (50, 1, 33), (5_000, 29, 966)]);
+        assert_eq!(got, vec![(0, 0, 0), (50, 1, 33), (5_000, 29, 967)]);
     }
 
     #[test]
@@ -550,6 +564,24 @@ mod tests {
         assert_eq!(outcome.samples.len(), 3, "every requested moment reported");
         assert_eq!(outcome.samples[1].requested_ms, 10);
         assert_eq!(outcome.samples[1].frame_index, 0);
+    }
+
+    #[test]
+    fn a_reported_moment_resolves_back_to_the_same_frame() {
+        // `actualMs` is only useful if it round-trips: a caller that reads
+        // "you got 966 ms" and asks for 966 ms must land on the frame it was
+        // just looking at. Truncating the tick instead of rounding it reports
+        // a moment that belongs to the *previous* frame — 966 ms is inside
+        // frame 28, not frame 29.
+        let engine = animated_engine();
+        let (first, _) = resolve_preview(&engine, 30, &[999]).unwrap();
+        let reported = first.samples[0].actual_ms;
+
+        let (again, _) = resolve_preview(&engine, 30, &[reported]).unwrap();
+        assert_eq!(
+            again.samples[0].frame_index, first.samples[0].frame_index,
+            "reported {reported} ms resolved to a different frame than it named"
+        );
     }
 
     #[test]
