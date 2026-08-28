@@ -32,7 +32,10 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     info.instructions = Some(
         "Renders kineto scene documents to MP4. Rendering is deterministic: \
          the same document always produces the same frames. Encoding to MP4 \
-         requires ffmpeg on PATH; `validateOnly` calls do not need it."
+         requires ffmpeg on PATH; `validateOnly` calls do not need it. \
+         While you are still changing a document, use `preview_document` to \
+         look at chosen moments — it writes no file and needs no ffmpeg — \
+         and call `render_document` once it looks right."
             .into(),
     );
     info
@@ -81,26 +84,9 @@ impl KinetoServer {
             params.document_path.as_deref(),
         )?;
 
-        // Spec §4.1: explicit argument, else the document's own `defaultFps`,
-        // else 30. Resolved *after* loading because the document is where the
-        // middle option lives.
-        let (fps, from_document) = match params.fps {
-            Some(fps) => (fps, false),
-            None => match doc.default_fps {
-                Some(fps) => (i64::from(fps), true),
-                None => (crate::tools::default_fps(), false),
-            },
-        };
-        // `crates/core` does not validate `default_fps`, so an unusable one
-        // reaches us here. Say where the number came from: the caller passed
-        // no `fps` and would otherwise be told off for a value they never sent.
-        crate::source::check_fps(fps).map_err(|e| {
-            if from_document {
-                ToolError::Invalid(format!("the document's `defaultFps` is unusable — {e}"))
-            } else {
-                e
-            }
-        })?;
+        // Resolved *after* loading because the document is where the middle
+        // option lives.
+        let fps = crate::source::resolve_fps(params.fps, &doc)?;
         crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
 
         let base = params
@@ -124,6 +110,53 @@ impl KinetoServer {
         let outcome = crate::render::render_to_mp4(&mut engine, fps, &out)?;
         let previews = crate::render::sample_frames(&mut engine, fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
+    }
+
+    #[tool(
+        name = "preview_document",
+        description = "Look at chosen moments of a kineto scene document \
+                       without rendering a video. Give the times you care \
+                       about in milliseconds and get those frames back as \
+                       images, each labelled with the frame it resolved to. \
+                       Writes no file and does not need ffmpeg, so this is the \
+                       cheap way to check a document while you are still \
+                       changing it — iterate here, then call `render_document` \
+                       once it looks right."
+    )]
+    pub async fn preview_document(
+        &self,
+        Parameters(params): Parameters<crate::tools::PreviewDocumentParams>,
+    ) -> CallToolResult {
+        match Self::preview_document_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn preview_document_impl(
+        params: crate::tools::PreviewDocumentParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let (doc, default_base) = crate::source::load_document(
+            params.document.as_deref(),
+            params.document_path.as_deref(),
+        )?;
+
+        let fps = crate::source::resolve_fps(params.fps, &doc)?;
+        crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
+
+        let base = params
+            .asset_base_dir
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or(default_base);
+
+        let assets = crate::source::resolve_assets(&doc, &base)?;
+        let mut engine = kineto_core::Engine::new(doc, assets)?;
+
+        // Resolve before rasterizing: a bad `atMs` costs the caller nothing.
+        let (outcome, frames) = crate::render::resolve_preview(&engine, fps, &params.at_ms)?;
+        let previews = crate::render::encode_frames(&mut engine, fps, &frames)?;
+        Ok(crate::tools::preview_success(&outcome, &frames, previews))
     }
 
     #[tool(

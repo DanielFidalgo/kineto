@@ -7,17 +7,17 @@ existing native CLI (`kineto-cast`) and the two authoring SDKs (Rust, TS)
 by an MCP client instead of a shell or a build script.
 
 It speaks JSON-RPC 2.0 over stdio (the MCP `transport-io` transport; there
-is no HTTP transport). It exposes three tools —
-`render_document`, `render_asciicast`, `render_storyboard` — plus read-only
+is no HTTP transport). It exposes four tools — `render_document`,
+`preview_document`, `render_asciicast`, `render_storyboard` — plus read-only
 resources for the document JSON Schema and the golden example corpus.
 
 ## Prerequisite: ffmpeg
 
-Every render tool shells out to `ffmpeg` to mux the rendered frame sequence
+Every *render* tool shells out to `ffmpeg` to mux the rendered frame sequence
 into an `.mp4`. If `ffmpeg` is not on `PATH`, the server preflights this and
 returns a clear tool error rather than silently writing frames without a
 video — do not skip installing it. (`validateOnly` calls never mux, so they
-work without it.)
+work without it, and `preview_document` never muxes at all.)
 
 Note what "deterministic" covers: the rendered *frames* are byte-identical
 for a given document. The `.mp4` container is not — it records the encoder
@@ -65,7 +65,7 @@ Parameter names are camelCase over the wire (the Rust structs in
 generated from these types — the field names below are exact, not
 illustrative).
 
-All three tools bound the canvas before building an engine: each edge at
+All four tools bound the canvas before building an engine: each edge at
 most 16384 px, and at most 67108864 pixels in total (64 Mpx, comfortably
 above 8K). This applies to `validateOnly` too, which decodes assets and
 allocates pixmaps even though it renders no frames.
@@ -97,6 +97,48 @@ place of `document`; use `assetBaseDir` to point image/font `src` values at
 a directory other than the document's own. To validate a document without
 rendering anything (no `out` needed), add `"validateOnly": true` in place of
 `out`.
+
+### `preview_document`
+
+Renders *chosen moments* of a document as inline images without producing a
+video. This is the cheap way to check a document while still changing it:
+it writes no file, needs no ffmpeg, and rasterizes only the frames asked
+for rather than the whole timeline.
+
+`atMs` is required — the moments to look at, in whole milliseconds from the
+start of the document, at most 12 per call. A millisecond is exactly 705600
+ticks, so the conversion is integer-only and cannot round. Each moment is
+snapped to the frame containing it at the effective `fps`, which means every
+image returned is a frame `render_document` would also have written.
+
+The reply reports what each moment actually resolved to, in
+`structuredContent.samples`:
+
+```json
+{ "requestedMs": 500, "frameIndex": 15, "tick": 352800000, "actualMs": 500 }
+```
+
+Moments past the end of the document clamp to the last frame — compare
+`requestedMs` against `actualMs` to detect it. Several moments landing on
+one frame are encoded once but reported individually. Each image is preceded
+by a text label naming its frame and the request it answers.
+
+`document`/`documentPath`/`assetBaseDir`/`fps` behave exactly as in
+`render_document`. There is no `out` and no `validateOnly`: this tool never
+writes anything, and always validates.
+
+```json
+{
+  "name": "preview_document",
+  "arguments": {
+    "documentPath": "/tmp/scene.json",
+    "atMs": [0, 500, 1200]
+  }
+}
+```
+
+Prefer `documentPath` while iterating: edit the file and preview again,
+rather than resending the whole document on every call.
 
 ### `render_asciicast`
 
@@ -145,7 +187,7 @@ first image's dimensions if omitted (provide both or neither). At most
 The server also exposes read-only MCP resources:
 
 - `kineto://schema/document` — the JSON Schema for the canonical document
-  format accepted by `render_document`.
+  format accepted by `render_document` and `preview_document`.
 - `kineto://corpus/<name>` — worked example documents from the golden
   corpus, covering every element type, easing, crossfade, wrap, and group
   nesting.

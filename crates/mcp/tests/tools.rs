@@ -606,3 +606,136 @@ fn storyboard_rejects_an_empty_frame_list() {
 
     assert_eq!(resp["result"]["isError"], json!(true));
 }
+
+#[test]
+fn preview_document_returns_an_image_for_each_moment_asked_for() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [0, 500, 990] }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+
+    let images = result["content"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["type"] == "image")
+        .count();
+    assert_eq!(images, 3, "one image per distinct frame");
+
+    let samples = result["structuredContent"]["samples"]
+        .as_array()
+        .expect("samples array");
+    assert_eq!(samples.len(), 3);
+    assert_eq!(samples[0]["requestedMs"], 0);
+    assert_eq!(samples[0]["frameIndex"], 0);
+    // 500ms at 30fps is frame 15; 990ms is frame 29.
+    assert_eq!(samples[1]["frameIndex"], 15);
+    assert_eq!(samples[2]["frameIndex"], 29);
+}
+
+#[test]
+fn preview_document_labels_each_image_with_the_moment_it_answers() {
+    // Images arrive as an unlabelled sequence, so without this the model has
+    // to guess which frame answers which question — and guessing wrong is
+    // worse than not looking, because it looks like evidence.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [0, 500] }),
+    );
+
+    let content = resp["result"]["content"].as_array().unwrap();
+    let labels: Vec<&str> = content
+        .iter()
+        .filter(|c| c["type"] == "text")
+        .filter_map(|c| c["text"].as_str())
+        .collect();
+
+    assert!(
+        labels
+            .iter()
+            .any(|l| l.contains("frame 15") && l.contains("500 ms")),
+        "no label ties frame 15 to the 500 ms request: {labels:?}"
+    );
+}
+
+#[test]
+fn preview_document_writes_no_file_and_reports_no_output_path() {
+    // The point of the tool: looking is cheap. It must not produce an MP4,
+    // and so must not need ffmpeg at all.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [0] }),
+    );
+
+    let structured = &resp["result"]["structuredContent"];
+    assert_ne!(resp["result"]["isError"], json!(true));
+    assert!(
+        structured.get("out").is_none(),
+        "preview must not claim an output path: {structured}"
+    );
+}
+
+#[test]
+fn preview_document_reports_a_moment_past_the_end_as_the_last_frame() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [9_000] }),
+    );
+
+    let samples = resp["result"]["structuredContent"]["samples"]
+        .as_array()
+        .expect("samples array");
+    assert_eq!(samples[0]["requestedMs"], 9_000);
+    assert_eq!(samples[0]["frameIndex"], 29);
+    assert_eq!(
+        samples[0]["actualMs"], 966,
+        "the caller must be able to see it did not get 9 seconds"
+    );
+}
+
+#[test]
+fn preview_document_rejects_an_empty_moment_list() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [] }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+}
+
+#[test]
+fn preview_document_rejects_a_negative_moment() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": tiny_doc(), "atMs": [-1] }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+}
