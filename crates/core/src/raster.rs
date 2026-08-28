@@ -17,7 +17,7 @@ use cosmic_text::SwashContent;
 use std::collections::HashMap;
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, GradientStop, LineCap, LineJoin, LinearGradient,
-    Paint as SkPaint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Point, RadialGradient,
+    Mask, Paint as SkPaint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Point, RadialGradient,
     Rect as SkRect, Shader, SpreadMode, Stroke, Transform,
 };
 
@@ -201,6 +201,25 @@ fn shader_for(paint: &Paint, bbox: &BBox, opacity: f64) -> Shader<'static> {
                 .unwrap_or(Color::TRANSPARENT),
         )
     })
+}
+
+/// Build a full-canvas mask from a clip window, in the element's parent
+/// space.
+///
+/// Deliberately not passed through `element_matrix`: a clip that travelled
+/// with its content could never reveal anything. The window stays put and the
+/// content animates behind it.
+fn clip_mask(w: u32, h: u32, clip: &crate::doc::Clip, offset: (f32, f32)) -> Option<Mask> {
+    let rect = SkRect::from_xywh(
+        clip.rect[0].0 as f32 + offset.0,
+        clip.rect[1].0 as f32 + offset.1,
+        clip.rect[2].0 as f32,
+        clip.rect[3].0 as f32,
+    )?;
+    let path = rounded_rect(rect, clip.radius.map(|r| r.0 as f32).unwrap_or(0.0))?;
+    let mut mask = Mask::new(w, h)?;
+    mask.fill_path(&path, FillRule::Winding, true, Transform::identity());
+    Some(mask)
 }
 
 /// Kappa: the cubic control-point offset that approximates a quarter circle
@@ -424,7 +443,11 @@ impl Renderer {
                         ..Default::default()
                     };
 
-                    canvas.fill_path(&path, &paint, FillRule::Winding, matrix, None);
+                    let mask = common
+                        .clip
+                        .as_ref()
+                        .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+                    canvas.fill_path(&path, &paint, FillRule::Winding, matrix, mask.as_ref());
                 }
                 Element::Path {
                     points,
@@ -472,9 +495,20 @@ impl Renderer {
                     let stroke_paint =
                         |c: &crate::color::Color| paint_for(&Paint::Solid(c.clone()));
 
+                    let mask = common
+                        .clip
+                        .as_ref()
+                        .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+
                     // Fill first so a stroke reads as an outline on top of it.
                     if let Some(f) = fill {
-                        canvas.fill_path(&path, &paint_for(f), FillRule::Winding, matrix, None);
+                        canvas.fill_path(
+                            &path,
+                            &paint_for(f),
+                            FillRule::Winding,
+                            matrix,
+                            mask.as_ref(),
+                        );
                     }
                     if let Some(s) = stroke {
                         let sk_stroke = Stroke {
@@ -493,12 +527,19 @@ impl Renderer {
                             },
                             ..Default::default()
                         };
-                        canvas.stroke_path(&path, &stroke_paint(s), &sk_stroke, matrix, None);
+                        canvas.stroke_path(
+                            &path,
+                            &stroke_paint(s),
+                            &sk_stroke,
+                            matrix,
+                            mask.as_ref(),
+                        );
                     }
                 }
                 Element::Image {
                     asset,
                     rect,
+                    fit,
                     common,
                 } => {
                     let resolved = resolve_common(common, t);
@@ -510,9 +551,28 @@ impl Renderer {
                     };
 
                     let src = assets.image(asset);
+                    let (sw, sh) = (src.width() as f32, src.height() as f32);
+                    let (sx, sy) = (bbox.w / sw, bbox.h / sh);
+                    // Contain and cover keep the aspect ratio and centre the
+                    // result; cover then needs the box as a clip, or it spills.
+                    let (fx, fy) = match fit {
+                        crate::doc::Fit::Stretch => (sx, sy),
+                        crate::doc::Fit::Contain => {
+                            let s = sx.min(sy);
+                            (s, s)
+                        }
+                        crate::doc::Fit::Cover => {
+                            let s = sx.max(sy);
+                            (s, s)
+                        }
+                    };
+                    let (dx, dy) = (
+                        bbox.x + (bbox.w - sw * fx) / 2.0,
+                        bbox.y + (bbox.h - sh * fy) / 2.0,
+                    );
                     let matrix = element_matrix(&bbox, &resolved)
-                        .pre_translate(bbox.x, bbox.y)
-                        .pre_scale(bbox.w / src.width() as f32, bbox.h / src.height() as f32);
+                        .pre_translate(dx, dy)
+                        .pre_scale(fx, fy);
 
                     let paint = PixmapPaint {
                         opacity: resolved.opacity as f32,
@@ -520,7 +580,28 @@ impl Renderer {
                         quality: FilterQuality::Bilinear,
                     };
 
-                    canvas.draw_pixmap(0, 0, src.as_ref(), &paint, matrix, None);
+                    // Cover crops to the element's own box; an explicit clip
+                    // narrows it further. Built here rather than shared
+                    // because cover's window is the element, not the author's.
+                    let auto = if matches!(fit, crate::doc::Fit::Cover) {
+                        Some(crate::doc::Clip {
+                            rect: [
+                                crate::Scalar((bbox.x - offset.0) as f64),
+                                crate::Scalar((bbox.y - offset.1) as f64),
+                                crate::Scalar(bbox.w as f64),
+                                crate::Scalar(bbox.h as f64),
+                            ],
+                            radius: None,
+                        })
+                    } else {
+                        None
+                    };
+                    let mask = common
+                        .clip
+                        .as_ref()
+                        .or(auto.as_ref())
+                        .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+                    canvas.draw_pixmap(0, 0, src.as_ref(), &paint, matrix, mask.as_ref());
                 }
                 Element::Text {
                     text,

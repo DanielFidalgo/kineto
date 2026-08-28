@@ -11,8 +11,8 @@
 //! asset bytes a different way.
 
 use crate::doc::{
-    ms, Align, Asset, Cap, Document, Ease, Element, Gradient, Join, Key, Prop, Scene, Stop, Track,
-    Transition,
+    ms, Align, Asset, Cap, Clip, Document, Ease, Element, Fit, Gradient, Join, Key, Prop, Scene,
+    Stop, Track, Transition,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
@@ -33,6 +33,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
         paths_strokes(),
         gradients(),
         radius_easings(),
+        clip_fit(),
         image_transform(),
         text_wrap(),
         groups_nested(),
@@ -92,6 +93,49 @@ fn rects_easings() -> CorpusDoc {
         name: "rects-easings",
         doc,
         ticks: vec![0, dur / 2, dur - 1],
+    }
+}
+
+/// Clip windows and the three image fit modes.
+///
+/// grad.png rather than photo.jpg, deliberately: photo.jpg is a solid
+/// colour, and for a solid image `cover` and `stretch` fill the box with
+/// identical pixels — the golden could not tell them apart. A gradient makes
+/// the crop visible. The clipped rect proves a window stays put while its
+/// content slides behind it, which is the only way this format can express a
+/// reveal.
+fn clip_fit() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H);
+    doc.add_asset("grad", Asset::image("grad.png"));
+    let scene = Scene::new("s", dur)
+        .with_element(Element::image("grad", [10.0, 10.0, 90.0, 50.0]))
+        .with_element(Element::image("grad", [110.0, 10.0, 90.0, 50.0]).with_fit(Fit::Contain))
+        .with_element(Element::image("grad", [210.0, 10.0, 90.0, 50.0]).with_fit(Fit::Cover))
+        // A rounded window over an image: a radius the image knows nothing of.
+        .with_element(
+            Element::image("grad", [10.0, 80.0, 80.0, 80.0])
+                .with_fit(Fit::Cover)
+                .with_clip(Clip::new([10.0, 80.0, 80.0, 80.0]).with_radius(24.0)),
+        )
+        // Content sliding behind a fixed window: at dur/2 it is halfway
+        // through, so the window is partly filled.
+        .with_element(
+            Element::rect([110.0, 90.0, 190.0, 60.0], "#FF9900")
+                .with_clip(Clip::new([110.0, 90.0, 190.0, 60.0]))
+                .with_animation(Track::new(
+                    Prop::Translate,
+                    vec![
+                        Key::vec2(0, [-190.0, 0.0]),
+                        Key::vec2(dur, [0.0, 0.0]).with_ease(Ease::OutCubic),
+                    ],
+                )),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "clip-fit",
+        doc,
+        ticks: vec![0, dur / 2],
     }
 }
 

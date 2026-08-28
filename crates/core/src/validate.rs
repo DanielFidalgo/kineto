@@ -92,8 +92,16 @@ const TRACK_KEYS: &[&str] = &["prop", "keys"];
 const KEY_KEYS: &[&str] = &["t", "v", "ease"];
 const PROP_VALUES: &[&str] = &["translate", "scale", "rotation", "opacity"];
 
-const COMMON_KEYS: &[&str] = &["translate", "scale", "rotation", "opacity", "animations"];
-const IMAGE_KEYS: &[&str] = &["type", "asset", "rect"];
+const COMMON_KEYS: &[&str] = &[
+    "translate",
+    "scale",
+    "rotation",
+    "opacity",
+    "animations",
+    "clip",
+];
+const CLIP_KEYS: &[&str] = &["rect", "radius"];
+const IMAGE_KEYS: &[&str] = &["type", "asset", "rect", "fit"];
 const TEXT_KEYS: &[&str] = &[
     "type", "text", "font", "sizePx", "color", "pos", "maxW", "align",
 ];
@@ -223,6 +231,12 @@ fn walk_element(v: &Value) -> Result<(), DocError> {
         None => return Ok(()),
     }
     walk_animations(obj)?;
+    // Every element may carry a clip; serde would ignore a typo inside it,
+    // so the walk descends here for the same reason it does into gradients.
+    if let Some(c) = obj.get("clip").and_then(Value::as_object) {
+        check_keys(c, &[CLIP_KEYS], "clip")?;
+    }
+
     if ty == Some("group") {
         if let Some(children) = obj.get("children").and_then(Value::as_array) {
             for child in children {

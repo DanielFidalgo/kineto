@@ -112,6 +112,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
           "additionalProperties": false,
           "properties": {
             "type": { "const": "image" },
+            "fit": { "enum": ["stretch", "contain", "cover"], "description": "How the image fills its box when aspect ratios differ. Defaults to stretch. cover crops to the box." },
             "src": { "type": "string", "description": "Path to a PNG or JPEG, resolved against assetBaseDir." }
           }
         },
@@ -199,6 +200,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
           "required": ["type", "asset", "rect"],
           "properties": {
             "type": { "const": "image" },
+            "fit": { "enum": ["stretch", "contain", "cover"], "description": "How the image fills its box when aspect ratios differ. Defaults to stretch. cover crops to the box." },
             "asset": { "type": "string" },
             "rect": { "$ref": "#/$defs/rect" }
           },
@@ -264,6 +266,16 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
     },
     "rect": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number" }, "description": "[x, y, w, h]" },
     "vec2": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" }, "description": "[x, y]" },
+    "clip": {
+      "type": "object",
+      "required": ["rect"],
+      "additionalProperties": false,
+      "description": "A static window the element is drawn through, in its parent's space. Not carried by the element's own transform, so content can animate behind a fixed window — that is how a wipe or a progress fill is expressed.",
+      "properties": {
+        "rect": { "$ref": "#/$defs/rect" },
+        "radius": { "type": "number", "minimum": 0 }
+      }
+    },
     "commonProps": {
       "description": "Every element accepts these. Base geometry is static; only these four properties animate.",
       "properties": {
@@ -271,7 +283,8 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         "scale": { "type": "number" },
         "rotation": { "type": "number", "description": "Degrees." },
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
-        "animations": { "type": "array", "items": { "$ref": "#/$defs/track" } }
+        "animations": { "type": "array", "items": { "$ref": "#/$defs/track" } },
+        "clip": { "$ref": "#/$defs/clip" }
       }
     },
     "track": {

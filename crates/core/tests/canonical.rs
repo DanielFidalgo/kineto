@@ -113,6 +113,11 @@ fn example_full_doc() -> Document {
         Scene::new("scene-1", seconds(1.0))
             .with_element(group)
             .with_element(Element::rect([0.0, 0.0, 40.0, 40.0], "#3366FF").with_radius(8.5))
+            .with_element(
+                Element::image("f01", [0.0, 0.0, 80.0, 40.0])
+                    .with_fit(Fit::Cover)
+                    .with_clip(Clip::new([4.0, 4.0, 72.0, 32.0]).with_radius(6.0)),
+            )
             .with_element(Element::rect(
                 [0.0, 0.0, 120.0, 60.0],
                 Gradient::linear(

@@ -104,6 +104,15 @@ function buildExampleFullDoc(): ZoeDocument {
     },
   );
   const chip = rect([0, 0, 40, 40], "#3366FF", 8.5);
+  // Built as a literal rather than spread over `image(...)`: the builder
+  // returns the element union, and the union's other arms have no `fit`.
+  const framed: ZoeElement = {
+    type: "image",
+    asset: "f01",
+    rect: [0, 0, 80, 40],
+    fit: "cover",
+    clip: { rect: [4, 4, 72, 32], radius: 6 },
+  };
   const band = rect([0, 0, 120, 60], {
     type: "linear",
     from: [0, 0],
@@ -129,7 +138,7 @@ function buildExampleFullDoc(): ZoeDocument {
       join: "bevel",
     },
   );
-  d.scenes.push(scene("scene-1", seconds(1.0), [grp, chip, band, arrow]));
+  d.scenes.push(scene("scene-1", seconds(1.0), [grp, chip, framed, band, arrow]));
   return d;
 }
 

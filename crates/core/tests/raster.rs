@@ -976,3 +976,99 @@ fn a_zero_radius_is_the_same_as_no_radius() {
     };
     assert_eq!(render(None), render(Some(0.0)));
 }
+
+// ---- clip windows and image fit ----
+
+/// A clip is a static window: content is visible only inside it.
+#[test]
+fn a_clip_limits_an_element_to_its_window() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect([0.0, 0.0, 64.0, 64.0], "#FF0000")
+        .with_clip(kineto_core::doc::Clip::new([0.0, 0.0, 32.0, 64.0]));
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert!(pm.pixel(10, 32).unwrap().red() > 200, "inside the window");
+    assert_eq!(pm.pixel(50, 32).unwrap().red(), 0, "outside the window");
+
+    common::assert_golden_hash("raster-clip", pm.width(), pm.height(), pm.data());
+}
+
+/// The window does not travel with the content — which is the entire point.
+/// A rect translated fully out of its clip disappears; if the clip moved
+/// along with it, it would still be visible and no reveal would be possible.
+#[test]
+fn a_clip_does_not_move_with_its_element() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let mut el = Element::rect([0.0, 0.0, 20.0, 64.0], "#FF0000")
+        .with_clip(kineto_core::doc::Clip::new([0.0, 0.0, 20.0, 64.0]));
+    if let Element::Rect { common, .. } = &mut el {
+        common.translate = Some([40.0.into(), 0.0.into()]);
+    }
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert_eq!(
+        pm.pixel(50, 32).unwrap().red(),
+        0,
+        "content escaped its window"
+    );
+    assert_eq!(
+        pm.pixel(10, 32).unwrap().red(),
+        0,
+        "window should now be empty"
+    );
+}
+
+/// A rounded clip crops with rounded corners, which is how an image gets a
+/// radius without the image itself knowing about one.
+#[test]
+fn a_clip_can_be_rounded() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect([0.0, 0.0, 64.0, 64.0], "#FF0000")
+        .with_clip(kineto_core::doc::Clip::new([0.0, 0.0, 64.0, 64.0]).with_radius(20.0));
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert_eq!(
+        pm.pixel(0, 0).unwrap().red(),
+        0,
+        "corner should be clipped away"
+    );
+    assert!(pm.pixel(32, 32).unwrap().red() > 200, "centre survives");
+}
+
+/// cover and stretch must not agree. With a solid image they would — the two
+/// fill the same box with the same colour — so this uses a gradient, where
+/// cover crops and stretch distorts.
+#[test]
+fn cover_and_stretch_differ_on_a_non_square_box() {
+    use kineto_core::doc::{Asset, Fit};
+    let render = |fit: Fit| {
+        let mut doc = Document::new(64, 32);
+        doc.add_asset("g", Asset::image("grad.png"));
+        let bytes = std::fs::read(common::repo("testdata/assets/grad.png")).unwrap();
+        let mut assets = AssetStore::new();
+        assets.add_bytes("g", bytes);
+        assets.prepare(&doc).unwrap();
+
+        let mut pm = blank_pixmap(64, 32, (0, 0, 0, 255));
+        let el = Element::image("g", [0.0, 0.0, 64.0, 32.0]).with_fit(fit);
+        let mut renderer = Renderer::new();
+        renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+        pm.data().to_vec()
+    };
+    assert_ne!(
+        render(Fit::Stretch),
+        render(Fit::Cover),
+        "cover did not crop"
+    );
+    assert_ne!(
+        render(Fit::Stretch),
+        render(Fit::Contain),
+        "contain did not letterbox"
+    );
+}
