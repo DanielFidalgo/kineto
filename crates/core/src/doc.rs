@@ -95,6 +95,32 @@ pub enum Element {
         #[serde(flatten)]
         common: Common,
     },
+    /// An open or closed polyline: straight segments only.
+    ///
+    /// No curves in v1, deliberately. Curve flattening carries a tolerance
+    /// parameter and is the most parity-fragile part of a path renderer,
+    /// while straight segments already cover connectors, arrows, axes and
+    /// boxes-and-lines diagrams. Add béziers when a document needs one.
+    ///
+    /// Arrow *heads* are not a field here — a filled closed path expresses
+    /// one, and orienting it is the authoring layer's job.
+    Path {
+        points: Vec<[Scalar; 2]>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        closed: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stroke: Option<Color>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stroke_width: Option<Scalar>,
+        #[serde(default, skip_serializing_if = "Cap::is_default")]
+        cap: Cap,
+        #[serde(default, skip_serializing_if = "Join::is_default")]
+        join: Join,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fill: Option<Color>,
+        #[serde(flatten)]
+        common: Common,
+    },
     Group {
         origin: [Scalar; 2],
         children: Vec<Element>,
@@ -116,6 +142,42 @@ pub enum Align {
 impl Align {
     pub fn is_default(&self) -> bool {
         *self == Align::Left
+    }
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// How a stroke terminates. These are rasterizer parameters, not geometry —
+/// unlike an arrowhead, they cannot be expressed by adding points, so they
+/// belong in the format.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Cap {
+    #[default]
+    Butt,
+    Round,
+    Square,
+}
+impl Cap {
+    pub fn is_default(&self) -> bool {
+        *self == Cap::Butt
+    }
+}
+
+/// How two stroke segments meet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Join {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
+}
+impl Join {
+    pub fn is_default(&self) -> bool {
+        *self == Join::Miter
     }
 }
 
@@ -303,9 +365,58 @@ impl Element {
             Element::Text { common, .. } => common,
             Element::Rect { common, .. } => common,
             Element::Group { common, .. } => common,
+            Element::Path { common, .. } => common,
         }
     }
 
+    pub fn path(points: Vec<[f64; 2]>) -> Self {
+        Element::Path {
+            points: points.into_iter().map(scalars2).collect(),
+            closed: false,
+            stroke: None,
+            stroke_width: None,
+            cap: Cap::default(),
+            join: Join::default(),
+            fill: None,
+            common: Common::default(),
+        }
+    }
+    pub fn with_stroke(mut self, color: impl Into<Color>, width: f64) -> Self {
+        if let Element::Path {
+            stroke,
+            stroke_width,
+            ..
+        } = &mut self
+        {
+            *stroke = Some(color.into());
+            *stroke_width = Some(Scalar(width));
+        }
+        self
+    }
+    pub fn with_path_fill(mut self, color: impl Into<Color>) -> Self {
+        if let Element::Path { fill, .. } = &mut self {
+            *fill = Some(color.into());
+        }
+        self
+    }
+    pub fn with_closed(mut self, v: bool) -> Self {
+        if let Element::Path { closed, .. } = &mut self {
+            *closed = v;
+        }
+        self
+    }
+    pub fn with_cap(mut self, c: Cap) -> Self {
+        if let Element::Path { cap, .. } = &mut self {
+            *cap = c;
+        }
+        self
+    }
+    pub fn with_join(mut self, j: Join) -> Self {
+        if let Element::Path { join, .. } = &mut self {
+            *join = j;
+        }
+        self
+    }
     pub fn with_max_w(mut self, w: f64) -> Self {
         if let Element::Text { max_w, .. } = &mut self {
             *max_w = Some(Scalar(w));

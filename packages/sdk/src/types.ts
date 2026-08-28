@@ -20,6 +20,11 @@ export type ZoeAsset =
   | { type: "font"; src: string };
 
 export type Align = "left" | "center" | "right";
+/** Stroke terminator. Rasterizer parameters, not geometry — see `Cap` in
+ * `doc.rs`. Defaults to `"butt"` when omitted. */
+export type Cap = "butt" | "round" | "square";
+/** How two stroke segments meet. Defaults to `"miter"` when omitted. */
+export type Join = "miter" | "round" | "bevel";
 export type Ease = "linear" | "inCubic" | "outCubic" | "inOutCubic";
 export type Prop = "translate" | "scale" | "rotation" | "opacity";
 
@@ -71,6 +76,24 @@ export type ZoeElement =
       type: "rect";
       rect: [number, number, number, number];
       fill: string;
+    } & Common)
+  | ({
+      /** Open or closed polyline; straight segments only (no beziers in v1).
+       * At least one of `stroke`/`fill` is required, and `points` needs at
+       * least two entries. */
+      type: "path";
+      points: [number, number][];
+      /** Defaults to `false`; draws the segment from the last point back to
+       * the first. */
+      closed?: boolean;
+      stroke?: string;
+      /** Defaults to 1 when omitted, not 0. */
+      strokeWidth?: number;
+      /** Defaults to `"butt"` when omitted (matches `Cap::default()`). */
+      cap?: Cap;
+      /** Defaults to `"miter"` when omitted (matches `Join::default()`). */
+      join?: Join;
+      fill?: string;
     } & Common)
   | ({
       type: "group";

@@ -28,6 +28,7 @@ const ORDER = {
   image: ["type", "asset", "rect"],
   text: ["type", "text", "font", "sizePx", "color", "pos", "maxW", "align"],
   rect: ["type", "rect", "fill"],
+  path: ["type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
   group: ["type", "origin", "children"],
   common: ["translate", "scale", "rotation", "opacity", "animations"],
   track: ["prop", "keys"],
@@ -37,6 +38,8 @@ const ORDER = {
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const DEFAULT_BG = "#000000";
 const DEFAULT_ALIGN = "left";
+const DEFAULT_CAP = "butt";
+const DEFAULT_JOIN = "miter";
 const DEFAULT_EASE = "linear";
 const DEFAULT_FONT_ID = "default";
 const DEFAULT_FONT_ASSET: ZoeAsset = { type: "font", src: "kineto:inter" };
@@ -134,6 +137,18 @@ function serElement(el: ZoeElement): string {
         type: serStr("rect"),
         rect: serArr(el.rect),
         fill: serStr(el.fill),
+        ...serCommonFields(el),
+      });
+    case "path":
+      return emit([...ORDER.path, ...ORDER.common], {
+        type: serStr("path"),
+        points: `[${el.points.map((p) => serArr(p)).join(",")}]`,
+        closed: el.closed ? "true" : undefined,
+        stroke: el.stroke !== undefined ? serStr(el.stroke) : undefined,
+        strokeWidth: el.strokeWidth !== undefined ? serNum(el.strokeWidth) : undefined,
+        cap: el.cap !== undefined && el.cap !== DEFAULT_CAP ? serStr(el.cap) : undefined,
+        join: el.join !== undefined && el.join !== DEFAULT_JOIN ? serStr(el.join) : undefined,
+        fill: el.fill !== undefined ? serStr(el.fill) : undefined,
         ...serCommonFields(el),
       });
     case "group":

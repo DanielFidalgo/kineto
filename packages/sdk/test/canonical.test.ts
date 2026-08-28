@@ -11,6 +11,7 @@ import {
   group,
   image,
   imageAsset,
+  path as pathEl,
   key,
   rect,
   scene,
@@ -102,7 +103,22 @@ function buildExampleFullDoc(): ZoeDocument {
       ],
     },
   );
-  d.scenes.push(scene("scene-1", seconds(1.0), [grp]));
+  const arrow = pathEl(
+    [
+      [0, 0],
+      [40, 25.5],
+      [0, 51],
+    ],
+    {
+      closed: true,
+      stroke: "#FF9900",
+      strokeWidth: 2.5,
+      fill: "#00FF00",
+      cap: "round",
+      join: "bevel",
+    },
+  );
+  d.scenes.push(scene("scene-1", seconds(1.0), [grp, arrow]));
   return d;
 }
 

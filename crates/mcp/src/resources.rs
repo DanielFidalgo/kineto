@@ -167,6 +167,26 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         },
         {
           "type": "object",
+          "required": ["type", "points"],
+          "description": "Open or closed polyline; straight segments only. Requires at least two points and at least one of stroke/fill.",
+          "properties": {
+            "type": { "const": "path" },
+            "points": {
+              "type": "array",
+              "minItems": 2,
+              "items": { "$ref": "#/$defs/vec2" }
+            },
+            "closed": { "type": "boolean", "description": "Draw the segment from the last point back to the first. Defaults to false." },
+            "stroke": { "$ref": "#/$defs/color" },
+            "strokeWidth": { "type": "number", "exclusiveMinimum": 0, "description": "Defaults to 1 when omitted." },
+            "cap": { "enum": ["butt", "round", "square"], "description": "Stroke terminator. Defaults to butt." },
+            "join": { "enum": ["miter", "round", "bevel"], "description": "How segments meet. Defaults to miter." },
+            "fill": { "$ref": "#/$defs/color" }
+          },
+          "$ref": "#/$defs/commonProps"
+        },
+        {
+          "type": "object",
           "required": ["type", "origin", "children"],
           "properties": {
             "type": { "const": "group" },

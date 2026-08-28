@@ -34,6 +34,12 @@ pub enum DocError {
     AssetTypeMismatch { id: String, expected: &'static str },
     #[error("invalid color '{0}'")]
     BadColor(String),
+    #[error("path needs at least 2 points, got {0}")]
+    PathTooFewPoints(usize),
+    #[error("path has neither `stroke` nor `fill`: it would render nothing")]
+    PathNotPainted,
+    #[error("path `strokeWidth` must be positive, got {0}")]
+    PathStrokeWidth(String),
     #[error("keyframe times not strictly increasing in track '{0}'")]
     KeysNotIncreasing(String),
     #[error("key value arity mismatch in track '{0}'")]
@@ -84,6 +90,16 @@ const TEXT_KEYS: &[&str] = &[
     "type", "text", "font", "sizePx", "color", "pos", "maxW", "align",
 ];
 const RECT_KEYS: &[&str] = &["type", "rect", "fill"];
+const PATH_KEYS: &[&str] = &[
+    "type",
+    "points",
+    "closed",
+    "stroke",
+    "strokeWidth",
+    "cap",
+    "join",
+    "fill",
+];
 const GROUP_KEYS: &[&str] = &["type", "origin", "children"];
 
 fn check_keys(obj: &Map<String, Value>, allowed: &[&[&str]], ctx: &str) -> Result<(), DocError> {
@@ -146,6 +162,7 @@ fn walk_element(v: &Value) -> Result<(), DocError> {
         Some("image") => check_keys(obj, &[IMAGE_KEYS, COMMON_KEYS], "element")?,
         Some("text") => check_keys(obj, &[TEXT_KEYS, COMMON_KEYS], "element")?,
         Some("rect") => check_keys(obj, &[RECT_KEYS, COMMON_KEYS], "element")?,
+        Some("path") => check_keys(obj, &[PATH_KEYS, COMMON_KEYS], "element")?,
         Some("group") => check_keys(obj, &[GROUP_KEYS, COMMON_KEYS], "element")?,
         Some(other) => {
             return Err(DocError::UnknownField {
@@ -293,6 +310,35 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
         Element::Rect { fill, common, .. } => {
             if !Color::parse_ok(&fill.0) {
                 return Err(DocError::BadColor(fill.0.clone()));
+            }
+            validate_common(common)?;
+        }
+        Element::Path {
+            points,
+            stroke,
+            stroke_width,
+            fill,
+            common,
+            ..
+        } => {
+            if points.len() < 2 {
+                return Err(DocError::PathTooFewPoints(points.len()));
+            }
+            // Rejected rather than tolerated: an unpainted path parses,
+            // validates and draws nothing, which reads as a renderer bug
+            // rather than the authoring mistake it is.
+            if stroke.is_none() && fill.is_none() {
+                return Err(DocError::PathNotPainted);
+            }
+            for c in [stroke, fill].into_iter().flatten() {
+                if !Color::parse_ok(&c.0) {
+                    return Err(DocError::BadColor(c.0.clone()));
+                }
+            }
+            if let Some(w) = stroke_width {
+                if !(w.0 > 0.0) {
+                    return Err(DocError::PathStrokeWidth(w.0.to_string()));
+                }
             }
             validate_common(common)?;
         }

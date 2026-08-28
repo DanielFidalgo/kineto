@@ -10,7 +10,9 @@
 //! `crates/wasm` re-exports this module behind its own feature and supplies
 //! asset bytes a different way.
 
-use crate::doc::{ms, Align, Asset, Document, Ease, Element, Key, Prop, Scene, Track, Transition};
+use crate::doc::{
+    ms, Align, Asset, Cap, Document, Ease, Element, Join, Key, Prop, Scene, Track, Transition,
+};
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
 use crate::assets::{resolve_reserved_src, AssetStore};
@@ -27,6 +29,7 @@ pub struct CorpusDoc {
 pub fn corpus() -> Vec<CorpusDoc> {
     vec![
         rects_easings(),
+        paths_strokes(),
         image_transform(),
         text_wrap(),
         groups_nested(),
@@ -86,6 +89,57 @@ fn rects_easings() -> CorpusDoc {
         name: "rects-easings",
         doc,
         ticks: vec![0, dur / 2, dur - 1],
+    }
+}
+
+/// Stroked and filled polylines: the shapes whose antialiased coverage is
+/// hardest to reproduce across targets.
+///
+/// Deliberately not a tidy diagram. Every existing corpus entry is
+/// axis-aligned or glyph-based, so this is the only place the parity gate
+/// exercises diagonal AA edges, miter joins, round joins built from
+/// flattened conics, sub-pixel stroke widths, and a filled-and-stroked
+/// closed shape. If native and wasm ever disagree about stroking, these
+/// ticks are what will say so.
+fn paths_strokes() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", dur)
+        // Irrational-ish slope: the plainest non-axis-aligned AA edge.
+        .with_element(Element::path(vec![[12.0, 18.0], [233.0, 97.0]]).with_stroke("#FF9900", 3.0))
+        // Sharp corner with a long miter — the join most likely to expose a
+        // floating-point difference.
+        .with_element(
+            Element::path(vec![[20.0, 150.0], [120.0, 104.0], [22.0, 100.0]])
+                .with_stroke("#4ECDC4", 5.5)
+                .with_cap(Cap::Square),
+        )
+        // Round join and cap: tiny-skia builds these from conics and
+        // flattens them, so this is the highest-risk shape in the set.
+        .with_element(
+            Element::path(vec![[140.0, 160.0], [205.0, 112.0], [240.0, 172.0]])
+                .with_stroke("#C77DFF", 7.25)
+                .with_cap(Cap::Round)
+                .with_join(Join::Round),
+        )
+        // Sub-pixel width: fractional coverage the whole length of the span.
+        .with_element(
+            Element::path(vec![[9.0, 185.0], [247.0, 179.0]]).with_stroke("#F2F5F7", 0.75),
+        )
+        // Filled and stroked closed shape — the arrowhead case — rotated so
+        // the fill's edges are diagonal too.
+        .with_element(
+            Element::path(vec![[60.0, 30.0], [104.0, 52.0], [61.0, 74.0]])
+                .with_closed(true)
+                .with_path_fill("#FF9900")
+                .with_stroke("#F2F5F7", 1.5)
+                .with_rotation(12.0),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "paths-strokes",
+        doc,
+        ticks: vec![0, dur / 2],
     }
 }
 
