@@ -48,6 +48,10 @@ pub enum DocError {
     GradientStopOrder(String),
     #[error("gradient `radius` must be positive, got {0}")]
     GradientRadius(String),
+    #[error("`shadow` is not supported on {0} elements — only rect, path and image have a silhouette to cast one")]
+    ShadowUnsupported(&'static str),
+    #[error("shadow `blur` must be at most {MAX_SHADOW_BLUR}, got {0}")]
+    ShadowBlur(u32),
     #[error("keyframe times not strictly increasing in track '{0}'")]
     KeysNotIncreasing(String),
     #[error("key value arity mismatch in track '{0}'")]
@@ -99,8 +103,15 @@ const COMMON_KEYS: &[&str] = &[
     "opacity",
     "animations",
     "clip",
+    "shadow",
 ];
 const CLIP_KEYS: &[&str] = &["rect", "radius"];
+const SHADOW_KEYS: &[&str] = &["color", "blur", "dx", "dy"];
+
+/// Blur is three separable passes over a full-canvas mask, so cost grows with
+/// the canvas, not the radius — but an unbounded radius still buys nothing
+/// visually past this and makes the seed loop pathological.
+pub const MAX_SHADOW_BLUR: u32 = 128;
 const IMAGE_KEYS: &[&str] = &["type", "asset", "rect", "fit"];
 const TEXT_KEYS: &[&str] = &[
     "type", "text", "font", "sizePx", "color", "pos", "maxW", "align",
@@ -236,6 +247,9 @@ fn walk_element(v: &Value) -> Result<(), DocError> {
     if let Some(c) = obj.get("clip").and_then(Value::as_object) {
         check_keys(c, &[CLIP_KEYS], "clip")?;
     }
+    if let Some(sh) = obj.get("shadow").and_then(Value::as_object) {
+        check_keys(sh, &[SHADOW_KEYS], "shadow")?;
+    }
 
     if ty == Some("group") {
         if let Some(children) = obj.get("children").and_then(Value::as_array) {
@@ -354,6 +368,7 @@ fn validate_elements(elements: &[Element], doc: &Document) -> Result<(), DocErro
 }
 
 fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
+    validate_shadow(el)?;
     match el {
         Element::Image { asset, common, .. } => {
             check_asset(doc, asset, "image")?;
@@ -415,6 +430,30 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             validate_common(common)?;
             validate_elements(children, doc)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_shadow(el: &Element) -> Result<(), DocError> {
+    let Some(sh) = el.common().shadow.as_ref() else {
+        return Ok(());
+    };
+    // Rejected rather than ignored: text and group render through isolated
+    // layers, so casting a shadow would mean blurring the whole layer — a
+    // different and much costlier operation than a silhouette.
+    let kind = match el {
+        Element::Text { .. } => Some("text"),
+        Element::Group { .. } => Some("group"),
+        _ => None,
+    };
+    if let Some(k) = kind {
+        return Err(DocError::ShadowUnsupported(k));
+    }
+    if !Color::parse_ok(&sh.color.0) {
+        return Err(DocError::BadColor(sh.color.0.clone()));
+    }
+    if sh.blur > MAX_SHADOW_BLUR {
+        return Err(DocError::ShadowBlur(sh.blur));
     }
     Ok(())
 }

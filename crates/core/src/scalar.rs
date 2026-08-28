@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// (|v| < 2^53) or whose magnitude falls in roughly [1e-5, 1e15]; outside
 /// that range Rust's Ryu and JS's `String(n)` can diverge, since each
 /// switches to scientific notation at different magnitude thresholds.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Scalar(pub f64);
 
 impl Serialize for Scalar {
@@ -27,5 +27,12 @@ impl<'de> Deserialize<'de> for Scalar {
 impl From<f64> for Scalar {
     fn from(v: f64) -> Self {
         Scalar(v)
+    }
+}
+
+impl Scalar {
+    /// Used by `skip_serializing_if` so a shadow with no offset stays compact.
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0.0
     }
 }

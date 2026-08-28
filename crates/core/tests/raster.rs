@@ -1072,3 +1072,78 @@ fn cover_and_stretch_differ_on_a_non_square_box() {
         "contain did not letterbox"
     );
 }
+
+// ---- shadows ----
+
+/// A shadow puts soft coverage outside the shape and leaves the shape itself
+/// intact on top of it.
+#[test]
+fn a_shadow_softens_outward_from_the_shape() {
+    use kineto_core::doc::Shadow;
+    let mut pm = blank_pixmap(64, 64, (255, 255, 255, 255));
+    let el = Element::rect([20.0, 20.0, 24.0, 24.0], "#FF0000")
+        .with_shadow(Shadow::new("#000000", 6, 0.0, 0.0));
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    // The shape is still drawn on top, unblurred.
+    let inside = pm.pixel(32, 32).unwrap();
+    assert!(
+        inside.red() > 200 && inside.green() < 60,
+        "shape was covered by its own shadow"
+    );
+
+    // Just outside the edge is darkened but not black: that is the falloff.
+    let edge = pm.pixel(16, 32).unwrap().red();
+    let far = pm.pixel(2, 32).unwrap().red();
+    assert!(edge < 250, "no shadow outside the shape");
+    assert!(
+        far > edge,
+        "shadow did not fall off with distance: {far} vs {edge}"
+    );
+
+    common::assert_golden_hash("raster-shadow", pm.width(), pm.height(), pm.data());
+}
+
+/// The offset moves the silhouette without moving the shape.
+#[test]
+fn a_shadow_offset_moves_only_the_silhouette() {
+    use kineto_core::doc::Shadow;
+    let render = |dx: f64| {
+        let mut pm = blank_pixmap(64, 64, (255, 255, 255, 255));
+        let el = Element::rect([20.0, 20.0, 24.0, 24.0], "#FF0000")
+            .with_shadow(Shadow::new("#000000", 4, dx, 0.0));
+        let mut renderer = Renderer::new();
+        let mut assets = AssetStore::new();
+        renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+        pm
+    };
+    let a = render(0.0);
+    let b = render(10.0);
+    // Shape unchanged.
+    assert_eq!(a.pixel(32, 32).unwrap(), b.pixel(32, 32).unwrap());
+    // Right of the shape is darker once the shadow shifts that way.
+    assert!(
+        b.pixel(52, 32).unwrap().red() < a.pixel(52, 32).unwrap().red(),
+        "offset did not move the shadow"
+    );
+}
+
+/// Zero blur is a hard silhouette, not a no-op.
+#[test]
+fn a_zero_blur_shadow_is_a_hard_offset_silhouette() {
+    use kineto_core::doc::Shadow;
+    let mut pm = blank_pixmap(64, 64, (255, 255, 255, 255));
+    let el = Element::rect([10.0, 10.0, 20.0, 20.0], "#FF0000")
+        .with_shadow(Shadow::new("#000000", 0, 20.0, 20.0));
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert!(
+        pm.pixel(40, 40).unwrap().red() < 40,
+        "hard silhouette missing"
+    );
+    assert!(pm.pixel(20, 20).unwrap().red() > 200, "shape missing");
+}

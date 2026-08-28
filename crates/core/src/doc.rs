@@ -306,6 +306,34 @@ impl Clip {
     }
 }
 
+/// A soft silhouette drawn beneath an element.
+///
+/// Supported on `rect`, `path` and `image` — everything with a definite
+/// outline. Rejected on `text` and `group` rather than silently ignored:
+/// those render through isolated layers and would need the whole layer
+/// blurred, which is a different and much costlier operation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Shadow {
+    pub color: Color,
+    /// Blur radius in pixels. 0 is a hard offset silhouette.
+    pub blur: u32,
+    #[serde(default, skip_serializing_if = "Scalar::is_zero")]
+    pub dx: Scalar,
+    #[serde(default, skip_serializing_if = "Scalar::is_zero")]
+    pub dy: Scalar,
+}
+
+impl Shadow {
+    pub fn new(color: impl Into<Color>, blur: u32, dx: f64, dy: f64) -> Self {
+        Shadow {
+            color: color.into(),
+            blur,
+            dx: Scalar(dx),
+            dy: Scalar(dy),
+        }
+    }
+}
+
 /// How an image fills its box when the aspect ratios differ.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -339,6 +367,8 @@ pub struct Common {
     pub animations: Vec<Track>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clip: Option<Clip>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<Shadow>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -492,6 +522,10 @@ impl Element {
     }
     pub fn with_clip(mut self, c: Clip) -> Self {
         self.common_mut().clip = Some(c);
+        self
+    }
+    pub fn with_shadow(mut self, s: Shadow) -> Self {
+        self.common_mut().shadow = Some(s);
         self
     }
     pub fn text(

@@ -34,8 +34,9 @@ const ORDER = {
   radial: ["type", "center", "radius", "stops"],
   stop: ["at", "color"],
   group: ["type", "origin", "children"],
-  common: ["translate", "scale", "rotation", "opacity", "animations", "clip"],
+  common: ["translate", "scale", "rotation", "opacity", "animations", "clip", "shadow"],
   clip: ["rect", "radius"],
+  shadow: ["color", "blur", "dx", "dy"],
   track: ["prop", "keys"],
   key: ["t", "v", "ease"],
 } as const;
@@ -143,6 +144,17 @@ function serCommonFields(c: Common): Record<string, string | undefined> {
         ? emit(ORDER.clip, {
             rect: serArr(c.clip.rect),
             radius: c.clip.radius !== undefined ? serNum(c.clip.radius) : undefined,
+          })
+        : undefined,
+    shadow:
+      c.shadow !== undefined
+        ? emit(ORDER.shadow, {
+            color: serStr(c.shadow.color),
+            blur: serNum(c.shadow.blur),
+            // Zero offsets are omitted, matching Scalar::is_zero on the Rust
+            // side; emitting them would break the byte comparison.
+            dx: c.shadow.dx !== undefined && c.shadow.dx !== 0 ? serNum(c.shadow.dx) : undefined,
+            dy: c.shadow.dy !== undefined && c.shadow.dy !== 0 ? serNum(c.shadow.dy) : undefined,
           })
         : undefined,
   };

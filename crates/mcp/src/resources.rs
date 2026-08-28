@@ -276,6 +276,18 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         "radius": { "type": "number", "minimum": 0 }
       }
     },
+    "shadow": {
+      "type": "object",
+      "required": ["color", "blur"],
+      "additionalProperties": false,
+      "description": "A soft silhouette beneath the element. Supported on rect, path and image only — text and group render through isolated layers and are rejected rather than silently ignored.",
+      "properties": {
+        "color": { "$ref": "#/$defs/color" },
+        "blur": { "type": "integer", "minimum": 0, "maximum": 128, "description": "Blur radius in pixels. 0 is a hard offset silhouette." },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
+      }
+    },
     "commonProps": {
       "description": "Every element accepts these. Base geometry is static; only these four properties animate.",
       "properties": {
@@ -284,7 +296,8 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         "rotation": { "type": "number", "description": "Degrees." },
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
         "animations": { "type": "array", "items": { "$ref": "#/$defs/track" } },
-        "clip": { "$ref": "#/$defs/clip" }
+        "clip": { "$ref": "#/$defs/clip" },
+        "shadow": { "$ref": "#/$defs/shadow" }
       }
     },
     "track": {

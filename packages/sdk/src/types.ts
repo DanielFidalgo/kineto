@@ -51,6 +51,17 @@ export interface Clip {
   rect: [number, number, number, number];
   radius?: number;
 }
+
+/** A soft silhouette drawn beneath an element. Supported on `rect`, `path`
+ * and `image`; rejected on `text` and `group`, which render through isolated
+ * layers and would need the whole layer blurred. */
+export interface Shadow {
+  color: string;
+  /** Blur radius in pixels, at most 128. 0 is a hard offset silhouette. */
+  blur: number;
+  dx?: number;
+  dy?: number;
+}
 /** How two stroke segments meet. Defaults to `"miter"` when omitted. */
 export type Join = "miter" | "round" | "bevel";
 export type Ease =
@@ -94,6 +105,7 @@ export interface Common {
   opacity?: number;
   animations?: Track[];
   clip?: Clip;
+  shadow?: Shadow;
 }
 
 export type ZoeElement =

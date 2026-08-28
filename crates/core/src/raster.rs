@@ -222,6 +222,105 @@ fn clip_mask(w: u32, h: u32, clip: &crate::doc::Clip, offset: (f32, f32)) -> Opt
     Some(mask)
 }
 
+/// Separable box blur over a mask's coverage bytes, three passes.
+///
+/// Three box passes approximate a Gaussian closely enough that the difference
+/// is invisible, and the whole thing is integer arithmetic — running sums in
+/// `u32`, one division per pixel. That matters more than speed here: no
+/// floating point means no new surface for native and wasm to disagree on,
+/// which is why a shadow could be added without re-opening the parity
+/// question the way a float filter would have.
+fn box_blur(data: &mut [u8], w: usize, h: usize, radius: usize) {
+    if radius == 0 || w == 0 || h == 0 {
+        return;
+    }
+    let mut scratch = vec![0u8; data.len()];
+    for _ in 0..3 {
+        blur_pass(data, &mut scratch, w, h, radius, true);
+        blur_pass(&scratch, data, w, h, radius, false);
+    }
+}
+
+fn blur_pass(src: &[u8], dst: &mut [u8], w: usize, h: usize, radius: usize, horizontal: bool) {
+    let (outer, inner) = if horizontal { (h, w) } else { (w, h) };
+    let window = (radius * 2 + 1) as u32;
+    for o in 0..outer {
+        let at = |i: usize| if horizontal { o * w + i } else { i * w + o };
+        // Seed the running sum with the clamped left half of the window.
+        let mut sum: u32 = 0;
+        for k in 0..=radius.min(inner - 1) {
+            sum += src[at(k)] as u32;
+        }
+        sum += src[at(0)] as u32 * radius.min(inner) as u32;
+        for i in 0..inner {
+            dst[at(i)] = (sum / window) as u8;
+            let add = src[at((i + radius + 1).min(inner - 1))] as u32;
+            let sub = src[at(i.saturating_sub(radius))] as u32;
+            sum = sum + add - sub;
+        }
+    }
+}
+
+/// Draw `path`'s silhouette, offset and blurred, beneath the element.
+#[allow(clippy::too_many_arguments)]
+fn draw_shadow(
+    canvas: &mut PixmapMut,
+    path: &tiny_skia::Path,
+    shadow: &crate::doc::Shadow,
+    matrix: Transform,
+    opacity: f64,
+    clip: Option<&Mask>,
+) {
+    let (w, h) = (canvas.width(), canvas.height());
+    let Some(mut mask) = Mask::new(w, h) else {
+        return;
+    };
+    let offset = Transform::from_translate(shadow.dx.0 as f32, shadow.dy.0 as f32);
+    mask.fill_path(path, FillRule::Winding, true, matrix.post_concat(offset));
+    box_blur(
+        mask.data_mut(),
+        w as usize,
+        h as usize,
+        shadow.blur as usize,
+    );
+
+    let (r, g, b, a) = shadow.color.rgba8();
+    let alpha = ((a as f32) * (opacity as f32)).round().clamp(0.0, 255.0) as u8;
+    let paint = SkPaint {
+        shader: Shader::SolidColor(Color::from_rgba8(r, g, b, alpha)),
+        anti_alias: true,
+        ..Default::default()
+    };
+    // The blurred silhouette is the mask; the fill is a full-canvas rect
+    // through it. An author-supplied clip still applies, so a shadow cannot
+    // escape a window its element was confined to.
+    let Some(full) = SkRect::from_xywh(0.0, 0.0, w as f32, h as f32) else {
+        return;
+    };
+    let cover = PathBuilder::from_rect(full);
+    if let Some(user) = clip {
+        let mut combined = mask.clone();
+        for (m, u) in combined.data_mut().iter_mut().zip(user.data()) {
+            *m = ((*m as u32 * *u as u32) / 255) as u8;
+        }
+        canvas.fill_path(
+            &cover,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            Some(&combined),
+        );
+    } else {
+        canvas.fill_path(
+            &cover,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            Some(&mask),
+        );
+    }
+}
+
 /// Kappa: the cubic control-point offset that approximates a quarter circle
 /// to within about 0.02%. The standard constant, not a guess.
 const KAPPA: f32 = 0.552_284_8;
@@ -447,6 +546,9 @@ impl Renderer {
                         .clip
                         .as_ref()
                         .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+                    if let Some(sh) = &common.shadow {
+                        draw_shadow(canvas, &path, sh, matrix, resolved.opacity, mask.as_ref());
+                    }
                     canvas.fill_path(&path, &paint, FillRule::Winding, matrix, mask.as_ref());
                 }
                 Element::Path {
@@ -499,6 +601,10 @@ impl Renderer {
                         .clip
                         .as_ref()
                         .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+
+                    if let Some(sh) = &common.shadow {
+                        draw_shadow(canvas, &path, sh, matrix, resolved.opacity, mask.as_ref());
+                    }
 
                     // Fill first so a stroke reads as an outline on top of it.
                     if let Some(f) = fill {
@@ -601,6 +707,14 @@ impl Renderer {
                         .as_ref()
                         .or(auto.as_ref())
                         .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
+                    if let Some(sh) = &common.shadow {
+                        // An image's silhouette is its own box.
+                        if let Some(r) = SkRect::from_xywh(bbox.x, bbox.y, bbox.w, bbox.h) {
+                            let sil = PathBuilder::from_rect(r);
+                            let m = element_matrix(&bbox, &resolved);
+                            draw_shadow(canvas, &sil, sh, m, resolved.opacity, mask.as_ref());
+                        }
+                    }
                     canvas.draw_pixmap(0, 0, src.as_ref(), &paint, matrix, mask.as_ref());
                 }
                 Element::Text {
