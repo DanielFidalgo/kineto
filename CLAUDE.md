@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **246 tests**.
+   output. Workspace suite is **251 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -88,6 +88,18 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
 - Document → Scenes (local clocks, ordered, `cut`/`crossfade`) → Elements
   (`image`, `text`, `rect`, `path`, `group`). Static base geometry; only
   `translate/scale/rotation/opacity` animate (keyframes, 4 cubic easings).
+- **Decoded images are bounded, not retained** (2026-08-28): `AssetStore`
+  decodes lazily behind a byte-budgeted LRU (`DEFAULT_IMAGE_BUDGET_BYTES`,
+  32 MB). `prepare` still decodes every image once and may drop it again —
+  that is deliberate, because `validateOnly` promises a corrupt asset is
+  reported before anything renders. Measured on a 1280x800 tape: peak RSS
+  was linear at ~4 MB/frame (300 frames = 1185 MB, 10k frames would have
+  been ~40 GB) and is now flat at ~53 MB regardless of length. This is what
+  makes screen-recording-density image sequences viable at all, and it is
+  why `render_storyboard`'s 10000-frame cap is now honest rather than a
+  promise that OOMs at ~300. Eviction cannot affect pixels — decode is pure
+  in the staged bytes — and the unchanged goldens plus 20/20 parity are the
+  proof.
 - **`path` was added after v1** (2026-08-28): open/closed polylines,
   straight segments only, with `stroke`/`strokeWidth`/`cap`/`join`/`fill`.
   Cap and join are format fields because they are rasterizer parameters

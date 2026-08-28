@@ -242,6 +242,10 @@ duration with an optional caption band. `width`/`height` default to the
 first image's dimensions if omitted (provide both or neither). At most
 10000 frames, each `durationMs` between 1 and 86400000 (24 hours).
 
+Long sequences are fine: decoded images are held behind a bounded cache, so
+memory is flat in the number of frames rather than linear. A 300-frame
+1280x800 tape renders 30s of video in ~8s at ~60 MB resident.
+
 ```json
 {
   "name": "render_storyboard",

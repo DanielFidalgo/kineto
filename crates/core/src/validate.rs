@@ -336,7 +336,9 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
                 }
             }
             if let Some(w) = stroke_width {
-                if !(w.0 > 0.0) {
+                // Spelled out rather than `!(w > 0.0)`: NaN must be
+                // rejected too, and the negated comparison hid that.
+                if w.0.is_nan() || w.0 <= 0.0 {
                     return Err(DocError::PathStrokeWidth(w.0.to_string()));
                 }
             }
