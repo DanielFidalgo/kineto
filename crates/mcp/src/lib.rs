@@ -97,10 +97,11 @@ impl KinetoServer {
             .unwrap_or(default_base);
 
         let assets = crate::source::resolve_assets(&doc, &base)?;
+        let timeline = crate::timeline::summary(&doc);
         let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
-            let outcome = crate::render::describe(&engine, fps);
+            let outcome = crate::render::describe(&engine, fps).with_timeline(timeline);
             return Ok(crate::tools::success(&outcome, Vec::new()));
         }
 
@@ -108,7 +109,7 @@ impl KinetoServer {
             ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
         })?;
 
-        let outcome = crate::render::render_to_mp4(&mut engine, fps, &out)?;
+        let outcome = crate::render::render_to_mp4(&mut engine, fps, &out)?.with_timeline(timeline);
         let previews = crate::render::sample_frames(&mut engine, fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
     }
@@ -152,10 +153,18 @@ impl KinetoServer {
             .unwrap_or(default_base);
 
         let assets = crate::source::resolve_assets(&doc, &base)?;
+        // Measured before `Engine::new` takes ownership of the document.
+        let timeline = crate::timeline::summary(&doc);
         let mut engine = kineto_core::Engine::new(doc, assets)?;
 
-        // Resolve before rasterizing: a bad `atMs` costs the caller nothing.
-        let (outcome, frames) = crate::render::resolve_preview(&engine, fps, &params.at_ms)?;
+        // Resolve before rasterizing: a bad moment costs the caller nothing.
+        let (outcome, frames) = crate::render::resolve_preview(
+            &engine,
+            fps,
+            &timeline,
+            &params.at_ms,
+            &params.at_scenes,
+        )?;
         let previews = crate::render::encode_frames(&mut engine, fps, &frames)?;
         Ok(crate::tools::preview_success(&outcome, &frames, previews))
     }
@@ -199,10 +208,11 @@ impl KinetoServer {
         for (id, bytes) in assets {
             store.add_bytes(&id, bytes.to_vec());
         }
+        let timeline = crate::timeline::summary(&doc);
         let mut engine = kineto_core::Engine::new(doc, store)?;
 
         if params.validate_only {
-            let outcome = crate::render::describe(&engine, params.fps);
+            let outcome = crate::render::describe(&engine, params.fps).with_timeline(timeline);
             return Ok(crate::tools::success(&outcome, Vec::new()));
         }
 
@@ -210,7 +220,8 @@ impl KinetoServer {
             ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
         })?;
 
-        let outcome = crate::render::render_to_mp4(&mut engine, params.fps, &out)?;
+        let outcome =
+            crate::render::render_to_mp4(&mut engine, params.fps, &out)?.with_timeline(timeline);
         let previews =
             crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
@@ -273,10 +284,11 @@ impl KinetoServer {
             source: e,
         })?;
         let assets = crate::source::resolve_assets(&doc, &base)?;
+        let timeline = crate::timeline::summary(&doc);
         let mut engine = kineto_core::Engine::new(doc, assets)?;
 
         if params.validate_only {
-            let outcome = crate::render::describe(&engine, params.fps);
+            let outcome = crate::render::describe(&engine, params.fps).with_timeline(timeline);
             return Ok(crate::tools::success(&outcome, Vec::new()));
         }
 
@@ -284,7 +296,8 @@ impl KinetoServer {
             ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
         })?;
 
-        let outcome = crate::render::render_to_mp4(&mut engine, params.fps, &out)?;
+        let outcome =
+            crate::render::render_to_mp4(&mut engine, params.fps, &out)?.with_timeline(timeline);
         let previews =
             crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
