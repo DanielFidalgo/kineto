@@ -26,6 +26,28 @@ const INVISIBLE_OPACITY: f64 = 0.01;
 /// captions are a legitimate choice and must not be flagged.
 const MIN_CONTRAST: f64 = 2.0;
 
+/// Whether an element can ever be visible within its scene.
+///
+/// An opacity track overrides the static value, so the track's keys are the
+/// question when one is present.
+fn never_visible(el: &Element) -> bool {
+    use kineto_core::doc::{KeyValue, Prop};
+
+    let common = el.common();
+    match common.animations.iter().find(|t| t.prop == Prop::Opacity) {
+        Some(track) => track.keys.iter().all(|k| match &k.v {
+            KeyValue::Num(n) => n.0 <= INVISIBLE_OPACITY,
+            // An opacity track keyed with vectors is rejected by validation
+            // long before here; treat it as visible rather than guess.
+            KeyValue::Vec2(_) => false,
+        }),
+        None => common
+            .opacity
+            .map(|o| o.0 <= INVISIBLE_OPACITY)
+            .unwrap_or(false),
+    }
+}
+
 /// WCAG relative luminance.
 fn luminance(c: &kineto_core::Color) -> f64 {
     let (r, g, b, _) = c.rgba8();
@@ -103,14 +125,20 @@ fn check_element(
 
     let resolved = resolve_common(el.common(), local);
     if resolved.opacity <= INVISIBLE_OPACITY {
-        push(
-            "fullyTransparent",
-            format!(
-                "resolved opacity is {:.3} — the element draws nothing here",
-                resolved.opacity
-            ),
-        );
-        // Everything else about an invisible element is moot.
+        // Reported only when the element is invisible for its *whole* scene.
+        // Keying an element transparent at some moments is a technique, not a
+        // defect — a flipbook holds one frame visible and the rest at zero,
+        // and flagging the sampled instant made a 48-frame sequence emit 47
+        // issues per moment, burying every real finding.
+        if never_visible(el) {
+            push(
+                "fullyTransparent",
+                "opacity never rises above zero anywhere in this scene — the \
+                 element can never be seen"
+                    .into(),
+            );
+        }
+        // Either way nothing else about an invisible element is meaningful.
         return;
     }
 
@@ -274,7 +302,10 @@ mod tests {
     }
 
     #[test]
-    fn an_element_faded_to_nothing_is_reported() {
+    fn an_element_fading_out_is_not_reported_at_the_end_of_its_fade() {
+        // Originally asserted the opposite, which was wrong: a fade-out is
+        // how a scene clears itself before a crossfade, and flagging its tail
+        // reports the technique rather than a defect.
         let doc = doc_with(vec![Element::rect([10.0, 10.0, 50.0, 50.0], "#FF9900")
             .with_animation(Track::new(
                 Prop::Opacity,
@@ -282,7 +313,38 @@ mod tests {
             ))]);
 
         assert_eq!(kinds(&doc, 0), Vec::<&str>::new(), "visible at t=0");
-        assert_eq!(kinds(&doc, TIMEBASE - 1), vec!["fullyTransparent"]);
+        assert_eq!(kinds(&doc, TIMEBASE - 1), Vec::<&str>::new(), "mid-fade");
+    }
+
+    #[test]
+    fn an_element_keyed_invisible_only_some_of_the_time_is_not_reported() {
+        // A flipbook holds one frame visible and the rest transparent; that
+        // is the technique, not a defect. Reporting the sampled instant made
+        // a 48-frame sequence emit 47 issues per moment — noise that buries
+        // the real findings. Only an element that is invisible for its whole
+        // scene is worth reporting.
+        let doc = doc_with(vec![Element::rect([10.0, 10.0, 50.0, 50.0], "#FF9900")
+            .with_animation(Track::new(
+                Prop::Opacity,
+                vec![
+                    Key::num(0, 0.0),
+                    Key::num(TIMEBASE / 4, 1.0),
+                    Key::num(TIMEBASE / 2, 0.0),
+                ],
+            ))]);
+
+        // Invisible at t=0 and at the midpoint, but visible in between.
+        assert_eq!(kinds(&doc, 0), Vec::<&str>::new());
+        assert_eq!(kinds(&doc, TIMEBASE / 2), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn an_element_invisible_for_its_whole_scene_is_still_reported() {
+        // The control: the rule must not have been defanged into silence.
+        let doc = doc_with(vec![
+            Element::rect([10.0, 10.0, 50.0, 50.0], "#FF9900").with_opacity(0.0)
+        ]);
+        assert_eq!(kinds(&doc, 0), vec!["fullyTransparent"]);
     }
 
     #[test]
