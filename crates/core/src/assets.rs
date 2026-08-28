@@ -21,11 +21,31 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Decoded/loaded assets, keyed by the doc-level asset id.
+/// Default ceiling on decoded image bytes held at once.
+///
+/// A decoded frame is `w*h*4` — 4.1 MB at 1280x800 — so holding every image
+/// a document references is linear in frame count: a 300-frame tape measured
+/// 1185 MB resident, and a 10,000-frame storyboard would need ~40 GB. The
+/// engine never needs more than the frames on screen at one tick, which is
+/// one, or two mid-crossfade. 32 MB is eight full-canvas frames at 1280x800:
+/// four times the working set, and flat in the length of the document.
+pub const DEFAULT_IMAGE_BUDGET_BYTES: usize = 32 * 1024 * 1024;
+
 pub struct AssetStore {
     /// Raw bytes staged by the host via `add_bytes`, keyed by asset id.
+    /// These are the *compressed* form (a JPEG screenshot is ~150 KB against
+    /// 4.1 MB decoded) and are retained: they are what a cache miss decodes
+    /// from, and in wasm there is no filesystem to re-read.
     staged: HashMap<String, Vec<u8>>,
-    /// Decoded images (premultiplied RGBA), keyed by asset id.
+    /// Decoded images (premultiplied RGBA) currently resident, keyed by asset
+    /// id. Bounded by `budget_bytes`; a miss re-decodes from `staged`.
     images: HashMap<String, tiny_skia::Pixmap>,
+    /// Asset ids in least-recently-used order.
+    recency: Vec<String>,
+    /// Sum of `images`' decoded sizes.
+    resident: usize,
+    /// Ceiling on `resident`, in bytes.
+    budget_bytes: usize,
     /// Resolved font family name for each font asset id.
     fonts: HashMap<String, String>,
     /// Shared font system (empty db + fixed locale); all font assets load
@@ -43,6 +63,9 @@ impl AssetStore {
     pub fn new() -> Self {
         AssetStore {
             staged: HashMap::new(),
+            recency: Vec::new(),
+            resident: 0,
+            budget_bytes: DEFAULT_IMAGE_BUDGET_BYTES,
             images: HashMap::new(),
             fonts: HashMap::new(),
             font_system: cosmic_text::FontSystem::new_with_locale_and_db(
@@ -68,8 +91,14 @@ impl AssetStore {
                 .ok_or_else(|| DocError::UnknownAssetId(id.clone()))?;
             match asset {
                 Asset::Image { .. } => {
+                    // Still decoded here, even though the pixmap may be
+                    // dropped again immediately: `validateOnly` promises that
+                    // a missing or corrupt image is reported before anything
+                    // renders. Deferring decode to first draw would quietly
+                    // break that. Peak stays at the budget plus one image.
                     let pixmap = decode_image(id, bytes)?;
-                    self.images.insert(id.clone(), pixmap);
+                    self.insert_image(id.clone(), pixmap);
+                    self.evict_to_budget(None);
                 }
                 Asset::Font { .. } => {
                     let family = load_font(id, bytes, &mut self.font_system)?;
@@ -80,9 +109,68 @@ impl AssetStore {
         Ok(())
     }
 
-    /// The decoded (premultiplied RGBA) pixmap for an image asset id.
-    /// Panics if `id` was not prepared as an image asset.
-    pub fn image(&self, id: &str) -> &tiny_skia::Pixmap {
+    /// Decoded image bytes currently held. Diagnostic, and what the
+    /// residency test asserts on.
+    pub fn resident_bytes(&self) -> usize {
+        self.resident
+    }
+
+    /// Set the ceiling on decoded image bytes. Affects memory only, never
+    /// output: decode is a pure function of the staged bytes, so a cache miss
+    /// reproduces a hit exactly.
+    pub fn set_image_budget(&mut self, bytes: usize) {
+        self.budget_bytes = bytes;
+        self.evict_to_budget(None);
+    }
+
+    fn insert_image(&mut self, id: String, pixmap: tiny_skia::Pixmap) {
+        if let Some(old) = self.images.remove(&id) {
+            self.resident -= old.data().len();
+        }
+        self.resident += pixmap.data().len();
+        self.recency.retain(|k| k != &id);
+        self.recency.push(id.clone());
+        self.images.insert(id, pixmap);
+    }
+
+    /// Drop least-recently-used images until within budget, never evicting
+    /// `keep` — a single image larger than the whole budget must still be
+    /// usable by the caller that just asked for it.
+    fn evict_to_budget(&mut self, keep: Option<&str>) {
+        while self.resident > self.budget_bytes && self.recency.len() > 1 {
+            let Some(pos) = self.recency.iter().position(|k| Some(k.as_str()) != keep) else {
+                break;
+            };
+            let victim = self.recency.remove(pos);
+            if let Some(p) = self.images.remove(&victim) {
+                self.resident -= p.data().len();
+            }
+        }
+    }
+
+    /// The decoded (premultiplied RGBA) pixmap for an image asset id,
+    /// decoding it if it is not currently resident.
+    ///
+    /// Panics if `id` was not prepared as an image asset — `prepare` has
+    /// already proven every referenced image decodes, so a failure here is a
+    /// bug rather than bad input.
+    pub fn image(&mut self, id: &str) -> &tiny_skia::Pixmap {
+        if !self.images.contains_key(id) {
+            let pixmap = {
+                let bytes = self
+                    .staged
+                    .get(id)
+                    .unwrap_or_else(|| panic!("asset '{id}' is not a prepared image"));
+                decode_image(id, bytes)
+                    .unwrap_or_else(|e| panic!("asset '{id}' failed to re-decode: {e}"))
+            };
+            self.insert_image(id.to_string(), pixmap);
+            self.evict_to_budget(Some(id));
+        } else {
+            // Refresh recency on a hit.
+            self.recency.retain(|k| k != id);
+            self.recency.push(id.to_string());
+        }
         self.images
             .get(id)
             .unwrap_or_else(|| panic!("asset '{id}' is not a prepared image"))

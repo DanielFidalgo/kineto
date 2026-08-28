@@ -118,3 +118,113 @@ fn missing_asset_bytes_fail() {
 fn unknown_reserved_src_is_none() {
     assert!(resolve_reserved_src("kineto:nope").is_none());
 }
+
+// ---- bounded image residency ----
+
+/// A `w x h` PNG, encoded in memory. Decoded it costs `w*h*4` bytes, which is
+/// the number the residency budget is about.
+fn png_bytes(w: u32, h: u32, seed: u8) -> Vec<u8> {
+    let mut img = image::RgbaImage::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            img.put_pixel(x, y, image::Rgba([(x as u8) ^ seed, y as u8, seed, 255]));
+        }
+    }
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+    out.into_inner()
+}
+
+/// 20 images of 256x256 (262,144 bytes decoded each, 5.2 MB in total) against
+/// a 1 MB budget.
+fn many_image_store(budget: usize) -> (Document, AssetStore) {
+    let mut doc = Document::new(64, 64);
+    let mut store = AssetStore::new();
+    store.set_image_budget(budget);
+    for i in 0..20u8 {
+        let id = format!("img{i}");
+        doc.add_asset(&id, Asset::image("generated.png"));
+        store.add_bytes(&id, png_bytes(256, 256, i));
+    }
+    (doc, store)
+}
+
+#[test]
+fn decoded_images_stay_within_the_residency_budget() {
+    // Before this, `prepare` decoded every image and held it forever: 300
+    // frames of a 1280x800 tape measured 1185 MB resident, linear in frame
+    // count. Nothing in the engine needs more than the frames on screen.
+    const BUDGET: usize = 1 << 20;
+    let (doc, mut store) = many_image_store(BUDGET);
+    store.prepare(&doc).unwrap();
+    assert!(
+        store.resident_bytes() <= BUDGET,
+        "prepare left {} bytes resident, over the {BUDGET} budget",
+        store.resident_bytes()
+    );
+
+    // Touching every image in turn must not accumulate either.
+    for i in 0..20u8 {
+        let _ = store.image(&format!("img{i}"));
+        assert!(
+            store.resident_bytes() <= BUDGET,
+            "resident grew to {} while fetching img{i}",
+            store.resident_bytes()
+        );
+    }
+}
+
+#[test]
+fn a_cached_image_is_actually_retained() {
+    // Control for the test above: a store that decoded and immediately threw
+    // everything away would satisfy the budget trivially and be useless.
+    let (doc, mut store) = many_image_store(1 << 20);
+    store.prepare(&doc).unwrap();
+    let _ = store.image("img0");
+    assert!(
+        store.resident_bytes() >= 256 * 256 * 4,
+        "the image just fetched is not resident: {}",
+        store.resident_bytes()
+    );
+}
+
+#[test]
+fn an_evicted_image_decodes_back_to_the_same_pixels() {
+    // Eviction must be invisible in the output. Decode is a pure function of
+    // the staged bytes, so a miss has to reproduce the hit exactly — this is
+    // what lets the goldens and the parity gate stay untouched.
+    let (doc, mut store) = many_image_store(1 << 20);
+    store.prepare(&doc).unwrap();
+
+    let before = store.image("img0").data().to_vec();
+    for i in 1..20u8 {
+        let _ = store.image(&format!("img{i}")); // pushes img0 out
+    }
+    let after = store.image("img0").data().to_vec();
+    assert_eq!(before, after, "re-decoded image differs after eviction");
+}
+
+#[test]
+fn an_image_larger_than_the_budget_is_still_usable() {
+    // A single frame bigger than the whole budget must not be evicted out
+    // from under its own caller.
+    let mut doc = Document::new(64, 64);
+    let mut store = AssetStore::new();
+    store.set_image_budget(1024);
+    doc.add_asset("big", Asset::image("generated.png"));
+    store.add_bytes("big", png_bytes(256, 256, 7));
+    store.prepare(&doc).unwrap();
+    assert_eq!(store.image("big").width(), 256);
+}
+
+#[test]
+fn a_corrupt_image_is_still_rejected_at_prepare() {
+    // The contract `validateOnly` advertises: every referenced image is read
+    // and decoded up front, so a corrupt one is reported before rendering.
+    // Lazy decode would quietly defer this to first draw.
+    let mut doc = Document::new(64, 64);
+    let mut store = AssetStore::new();
+    doc.add_asset("bad", Asset::image("broken.png"));
+    store.add_bytes("bad", b"not an image at all".to_vec());
+    assert!(store.prepare(&doc).is_err());
+}
