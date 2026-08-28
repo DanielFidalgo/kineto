@@ -11,7 +11,8 @@
 //! asset bytes a different way.
 
 use crate::doc::{
-    ms, Align, Asset, Cap, Document, Ease, Element, Join, Key, Prop, Scene, Track, Transition,
+    ms, Align, Asset, Cap, Document, Ease, Element, Gradient, Join, Key, Prop, Scene, Stop, Track,
+    Transition,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
@@ -30,6 +31,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
     vec![
         rects_easings(),
         paths_strokes(),
+        gradients(),
         image_transform(),
         text_wrap(),
         groups_nested(),
@@ -89,6 +91,74 @@ fn rects_easings() -> CorpusDoc {
         name: "rects-easings",
         doc,
         ticks: vec![0, dur / 2, dur - 1],
+    }
+}
+
+/// Linear and radial gradients, including one carried through a rotation.
+///
+/// Gradient stops interpolate in premultiplied space and the shader is
+/// transformed alongside the geometry, so this is the only corpus entry where
+/// a rotation changes *how a fill is sampled* rather than only where it lands.
+fn gradients() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", dur)
+        .with_element(Element::rect(
+            [10.0, 10.0, 140.0, 80.0],
+            Gradient::linear(
+                [0.0, 0.0],
+                [1.0, 0.0],
+                vec![Stop::new(0.0, "#FF9900"), Stop::new(1.0, "#4ECDC4")],
+            ),
+        ))
+        // Three stops on a diagonal axis: exercises the middle-stop path.
+        .with_element(Element::rect(
+            [170.0, 10.0, 140.0, 80.0],
+            Gradient::linear(
+                [0.0, 0.0],
+                [1.0, 1.0],
+                vec![
+                    Stop::new(0.0, "#C77DFF"),
+                    Stop::new(0.35, "#F2F5F7"),
+                    Stop::new(1.0, "#0D1419"),
+                ],
+            ),
+        ))
+        .with_element(Element::rect(
+            [10.0, 110.0, 140.0, 80.0],
+            Gradient::radial(
+                [0.5, 0.5],
+                0.6,
+                vec![Stop::new(0.0, "#FFFFFF"), Stop::new(1.0, "#101820")],
+            ),
+        ))
+        // Rotated: the shader turns with the geometry.
+        .with_element(
+            Element::rect(
+                [170.0, 110.0, 140.0, 80.0],
+                Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 0.0],
+                    vec![Stop::new(0.0, "#FF5C5C"), Stop::new(1.0, "#4ECDC4")],
+                ),
+            )
+            .with_rotation(24.0),
+        )
+        // A gradient on a closed path, not only a rect.
+        .with_element(
+            Element::path(vec![[110.0, 96.0], [210.0, 96.0], [160.0, 104.0]])
+                .with_closed(true)
+                .with_path_fill(Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 0.0],
+                    vec![Stop::new(0.0, "#FF9900"), Stop::new(1.0, "#C77DFF")],
+                )),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "gradients",
+        doc,
+        ticks: vec![0, dur / 2],
     }
 }
 

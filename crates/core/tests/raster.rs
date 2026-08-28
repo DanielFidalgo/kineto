@@ -793,3 +793,109 @@ fn path_rotation_pivots_on_its_point_bounds() {
     );
     assert_eq!(pm.pixel(12, 32).unwrap().red(), 0, "still horizontal");
 }
+
+// ---- gradients ----
+
+/// A left-to-right linear gradient across the whole canvas: the left edge is
+/// the first stop, the right edge the last, and the middle is neither.
+#[test]
+fn a_linear_gradient_runs_across_the_element() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect(
+        [0.0, 0.0, 64.0, 64.0],
+        kineto_core::doc::Gradient::linear(
+            [0.0, 0.0],
+            [1.0, 0.0],
+            vec![
+                kineto_core::doc::Stop::new(0.0, "#FF0000"),
+                kineto_core::doc::Stop::new(1.0, "#0000FF"),
+            ],
+        ),
+    );
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let left = pm.pixel(1, 32).unwrap();
+    let right = pm.pixel(62, 32).unwrap();
+    let mid = pm.pixel(32, 32).unwrap();
+    assert!(
+        left.red() > 200 && left.blue() < 60,
+        "left end is not the first stop"
+    );
+    assert!(
+        right.blue() > 200 && right.red() < 60,
+        "right end is not the last stop"
+    );
+    assert!(
+        mid.red() > 40 && mid.blue() > 40,
+        "the middle should be a blend, got {mid:?}"
+    );
+    // Vertical: the gradient runs along x only, so a column is uniform.
+    assert_eq!(pm.pixel(32, 8).unwrap(), pm.pixel(32, 56).unwrap());
+
+    common::assert_golden_hash("raster-gradient-linear", pm.width(), pm.height(), pm.data());
+}
+
+/// A radial gradient is brightest at its centre and darkest at the rim.
+#[test]
+fn a_radial_gradient_falls_off_from_its_centre() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect(
+        [0.0, 0.0, 64.0, 64.0],
+        kineto_core::doc::Gradient::radial(
+            [0.5, 0.5],
+            0.5,
+            vec![
+                kineto_core::doc::Stop::new(0.0, "#FFFFFF"),
+                kineto_core::doc::Stop::new(1.0, "#000000"),
+            ],
+        ),
+    );
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert!(
+        pm.pixel(32, 32).unwrap().red() > 240,
+        "centre is not the first stop"
+    );
+    assert!(
+        pm.pixel(2, 2).unwrap().red() < 40,
+        "corner is not the last stop"
+    );
+    // Symmetric about the centre in both axes. Rows 10 and 53, not 10 and
+    // 54: samples land at pixel *centres* (y + 0.5), so the pair equidistant
+    // from 32.0 is 10.5 and 53.5.
+    assert_eq!(pm.pixel(32, 10).unwrap(), pm.pixel(32, 53).unwrap());
+    assert_eq!(pm.pixel(10, 32).unwrap(), pm.pixel(53, 32).unwrap());
+
+    common::assert_golden_hash("raster-gradient-radial", pm.width(), pm.height(), pm.data());
+}
+
+/// Opacity folds into every stop, so a half-transparent gradient behaves
+/// exactly as a half-transparent solid does.
+#[test]
+fn a_gradient_honours_opacity() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let mut el = Element::rect(
+        [0.0, 0.0, 64.0, 64.0],
+        kineto_core::doc::Gradient::linear(
+            [0.0, 0.0],
+            [1.0, 0.0],
+            vec![
+                kineto_core::doc::Stop::new(0.0, "#FF0000"),
+                kineto_core::doc::Stop::new(1.0, "#FF0000"),
+            ],
+        ),
+    );
+    if let Element::Rect { common, .. } = &mut el {
+        common.opacity = Some(0.5.into());
+    }
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    // Same derivation as `rect_fill_and_opacity`: 255*0.5 over opaque black.
+    assert_eq!(pm.pixel(32, 32).unwrap().red(), 128);
+}

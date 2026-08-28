@@ -149,6 +149,49 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } }
       }
     },
+    "paint": {
+      "description": "A flat colour, or a gradient. Gradient coordinates are unit space over the element's own bounding box: [0,0] is its top-left and [1,1] its bottom-right, so one gradient reads the same at any size.",
+      "oneOf": [
+        { "$ref": "#/$defs/color" },
+        {
+          "type": "object",
+          "required": ["type", "from", "to", "stops"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "linear" },
+            "from": { "$ref": "#/$defs/vec2" },
+            "to": { "$ref": "#/$defs/vec2" },
+            "stops": { "$ref": "#/$defs/stops" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "center", "radius", "stops"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "radial" },
+            "center": { "$ref": "#/$defs/vec2" },
+            "radius": { "type": "number", "exclusiveMinimum": 0, "description": "Fraction of the box's longer edge." },
+            "stops": { "$ref": "#/$defs/stops" }
+          }
+        }
+      ]
+    },
+    "stops": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "description": "Stop positions must increase from 0 to 1.",
+      "items": {
+        "type": "object",
+        "required": ["at", "color"],
+        "additionalProperties": false,
+        "properties": {
+          "at": { "type": "number", "minimum": 0, "maximum": 1 },
+          "color": { "$ref": "#/$defs/color" }
+        }
+      }
+    },
     "element": {
       "oneOf": [
         {
@@ -182,7 +225,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
           "properties": {
             "type": { "const": "rect" },
             "rect": { "$ref": "#/$defs/rect" },
-            "fill": { "$ref": "#/$defs/color" }
+            "fill": { "$ref": "#/$defs/paint" }
           },
           "$ref": "#/$defs/commonProps"
         },
@@ -202,7 +245,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
             "strokeWidth": { "type": "number", "exclusiveMinimum": 0, "description": "Defaults to 1 when omitted." },
             "cap": { "enum": ["butt", "round", "square"], "description": "Stroke terminator. Defaults to butt." },
             "join": { "enum": ["miter", "round", "bevel"], "description": "How segments meet. Defaults to miter." },
-            "fill": { "$ref": "#/$defs/color" }
+            "fill": { "$ref": "#/$defs/paint" }
           },
           "$ref": "#/$defs/commonProps"
         },

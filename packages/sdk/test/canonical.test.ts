@@ -103,6 +103,16 @@ function buildExampleFullDoc(): ZoeDocument {
       ],
     },
   );
+  const band = rect([0, 0, 120, 60], {
+    type: "linear",
+    from: [0, 0],
+    to: [1, 0.5],
+    stops: [
+      { at: 0, color: "#FF9900" },
+      { at: 0.25, color: "#F2F5F7" },
+      { at: 1, color: "#4ECDC4" },
+    ],
+  });
   const arrow = pathEl(
     [
       [0, 0],
@@ -118,7 +128,7 @@ function buildExampleFullDoc(): ZoeDocument {
       join: "bevel",
     },
   );
-  d.scenes.push(scene("scene-1", seconds(1.0), [grp, arrow]));
+  d.scenes.push(scene("scene-1", seconds(1.0), [grp, band, arrow]));
   return d;
 }
 

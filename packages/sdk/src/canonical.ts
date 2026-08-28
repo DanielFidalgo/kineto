@@ -7,6 +7,7 @@
 // declaration order there (`Common` is `#[serde(flatten)]`ed last on every
 // element variant, so it's appended after each element's own order).
 import type {
+  Paint,
   Common,
   Key,
   KeyValue,
@@ -29,6 +30,9 @@ const ORDER = {
   text: ["type", "text", "font", "sizePx", "color", "pos", "maxW", "align"],
   rect: ["type", "rect", "fill"],
   path: ["type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
+  linear: ["type", "from", "to", "stops"],
+  radial: ["type", "center", "radius", "stops"],
+  stop: ["at", "color"],
   group: ["type", "origin", "children"],
   common: ["translate", "scale", "rotation", "opacity", "animations"],
   track: ["prop", "keys"],
@@ -62,6 +66,30 @@ function serNum(n: number): string {
     throw new RangeError(`cannot serialize non-finite number: ${n}`);
   }
   return String(n);
+}
+
+/** A flat colour serialises as the bare string it always did; only an object
+ * takes the gradient branch. That is what keeps every gradient-free document
+ * byte-identical to before this existed. */
+function serPaint(p: Paint): string {
+  if (typeof p === "string") return serStr(p);
+  const stops = `[${p.stops
+    .map((s) => emit(ORDER.stop, { at: serNum(s.at), color: serStr(s.color) }))
+    .join(",")}]`;
+  if (p.type === "linear") {
+    return emit(ORDER.linear, {
+      type: serStr("linear"),
+      from: serArr(p.from),
+      to: serArr(p.to),
+      stops,
+    });
+  }
+  return emit(ORDER.radial, {
+    type: serStr("radial"),
+    center: serArr(p.center),
+    radius: serNum(p.radius),
+    stops,
+  });
 }
 
 function serArr(vals: readonly number[]): string {
@@ -136,7 +164,7 @@ function serElement(el: ZoeElement): string {
       return emit([...ORDER.rect, ...ORDER.common], {
         type: serStr("rect"),
         rect: serArr(el.rect),
-        fill: serStr(el.fill),
+        fill: serPaint(el.fill),
         ...serCommonFields(el),
       });
     case "path":
@@ -148,7 +176,7 @@ function serElement(el: ZoeElement): string {
         strokeWidth: el.strokeWidth !== undefined ? serNum(el.strokeWidth) : undefined,
         cap: el.cap !== undefined && el.cap !== DEFAULT_CAP ? serStr(el.cap) : undefined,
         join: el.join !== undefined && el.join !== DEFAULT_JOIN ? serStr(el.join) : undefined,
-        fill: el.fill !== undefined ? serStr(el.fill) : undefined,
+        fill: el.fill !== undefined ? serPaint(el.fill) : undefined,
         ...serCommonFields(el),
       });
     case "group":

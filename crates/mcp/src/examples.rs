@@ -17,7 +17,7 @@
 //! same lint the tools apply: an example we tell a model to copy has to pass
 //! the rules we would judge its output by.
 
-use kineto_core::doc::{ms, Cap, Ease, Join, Key, Prop, Track};
+use kineto_core::doc::{ms, Cap, Ease, Gradient, Join, Key, Prop, Stop, Track};
 use kineto_core::{Asset, Document, Element, Scene};
 
 const W: u32 = 1280;
@@ -180,20 +180,31 @@ fn metric() -> Document {
             )
             .with_animation(fade(900, dur)),
         );
-    // Two bars: the quantity is shown, not only stated.
-    let bars = [("before", 1000.0, "#3d5566"), ("after", 45.0, TEAL)];
-    for (i, (label, width, colour)) in bars.iter().enumerate() {
-        let y = 512.0 + i as f64 * 54.0;
-        sc = sc
-            .with_element(
-                Element::text(label, "mono", 15.0, DIM, [90.0, y - 4.0])
-                    .with_animation(fade(1200 + i as i64 * 200, dur)),
-            )
-            .with_element(
-                Element::rect([190.0, y, *width, 18.0], *colour)
-                    .with_animation(fade(1300 + i as i64 * 200, dur)),
-            );
-    }
+    // Two bars: the quantity is shown, not only stated. The second carries a
+    // gradient — a flat fill reads as a chart, a gradient reads as designed,
+    // and it costs one extra field.
+    let before =
+        Element::rect([190.0, 512.0, 1000.0, 18.0], "#26333d").with_animation(fade(1200, dur));
+    let after = Element::rect(
+        [190.0, 566.0, 45.0, 18.0],
+        Gradient::linear(
+            [0.0, 0.0],
+            [1.0, 0.0],
+            vec![Stop::new(0.0, TEAL), Stop::new(1.0, "#7CE0D8")],
+        ),
+    )
+    .with_animation(fade(1400, dur));
+    sc = sc
+        .with_element(
+            Element::text("before", "mono", 15.0, DIM, [90.0, 508.0])
+                .with_animation(fade(1200, dur)),
+        )
+        .with_element(before)
+        .with_element(
+            Element::text("after", "mono", 15.0, DIM, [90.0, 562.0])
+                .with_animation(fade(1400, dur)),
+        )
+        .with_element(after);
     d.push_scene(sc);
     d
 }

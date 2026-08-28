@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **276 tests**.
+   output. Workspace suite is **287 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -100,6 +100,15 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
   promise that OOMs at ~300. Eviction cannot affect pixels — decode is pure
   in the staged bytes — and the unchanged goldens plus 20/20 parity are the
   proof.
+- **Gradients were added after v1** (2026-08-28): `fill` on `rect` and
+  `path` is now `Paint` — an *untagged* union of a colour string and a
+  gradient object, so every gradient-free document serialises byte-identically
+  to before and not one golden moved when it landed. Coordinates are unit
+  space over the element's own bbox, so a gradient is reusable across sizes;
+  tiny-skia transforms the shader alongside the path (`painter.rs`), so a
+  rotation carries the gradient with it for free. 2-8 stops, strictly
+  increasing over 0..1. `stroke` stays a flat colour. Corpus entry
+  `gradients`; parity 22/22 at landing.
 - **`path` was added after v1** (2026-08-28): open/closed polylines,
   straight segments only, with `stroke`/`strokeWidth`/`cap`/`join`/`fill`.
   Cap and join are format fields because they are rasterizer parameters
@@ -140,7 +149,7 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
 ## Testing notes
 
 - `testdata/golden/hashes.json` holds sha256 of **rendered frame buffers**.
-  18 keys are corpus parity (`name@tick`); the rest are raster/render unit
+  22 keys are corpus parity (`name@tick`); the rest are raster/render unit
   goldens. Regenerate with `UPDATE_GOLDEN=1`.
 - The `raster-text` / `raster-text-tinted` specimens render
   **"Hamburgefons"**, deliberately *not* the product name. A pixel golden

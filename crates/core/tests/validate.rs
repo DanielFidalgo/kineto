@@ -327,3 +327,79 @@ fn a_path_may_be_fill_only() {
     }))
     .is_ok());
 }
+
+// ---- gradients ----
+
+fn grad_doc(fill: serde_json::Value) -> Result<Document, DocError> {
+    let v = serde_json::json!({
+        "v": 1, "timebase": 705600000, "size": { "w": 100, "h": 100 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [
+            { "type": "rect", "rect": [0, 0, 100, 100], "fill": fill }
+        ]}]
+    });
+    Document::from_json(&v.to_string())
+}
+
+fn linear(stops: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({ "type": "linear", "from": [0, 0], "to": [1, 1], "stops": stops })
+}
+
+#[test]
+fn a_valid_gradient_is_accepted() {
+    // Control: without it, a validator rejecting all gradients would pass
+    // every rejection test below.
+    assert!(grad_doc(linear(serde_json::json!([
+        { "at": 0, "color": "#FF9900" }, { "at": 1, "color": "#4ECDC4" }
+    ])))
+    .is_ok());
+}
+
+#[test]
+fn a_gradient_needs_at_least_two_stops() {
+    let err = grad_doc(linear(serde_json::json!([{ "at": 0, "color": "#FF9900" }])))
+        .expect_err("expected rejection");
+    assert!(matches!(err, DocError::GradientStops(1)), "got {err:?}");
+}
+
+#[test]
+fn gradient_stops_must_increase() {
+    // Out of order renders something the author did not describe, so it is
+    // rejected rather than sorted behind their back.
+    let err = grad_doc(linear(serde_json::json!([
+        { "at": 0.8, "color": "#FF9900" }, { "at": 0.2, "color": "#4ECDC4" }
+    ])))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::GradientStopOrder(_)), "got {err:?}");
+}
+
+#[test]
+fn gradient_stops_must_lie_between_zero_and_one() {
+    for bad in [-0.1, 1.5] {
+        let err = grad_doc(linear(serde_json::json!([
+            { "at": bad, "color": "#FF9900" }, { "at": 1, "color": "#4ECDC4" }
+        ])))
+        .expect_err("expected rejection");
+        assert!(matches!(err, DocError::GradientStopOrder(_)), "got {err:?}");
+    }
+}
+
+#[test]
+fn a_radial_gradient_needs_a_positive_radius() {
+    for r in [0, -1] {
+        let err = grad_doc(serde_json::json!({
+            "type": "radial", "center": [0.5, 0.5], "radius": r,
+            "stops": [{ "at": 0, "color": "#FFFFFF" }, { "at": 1, "color": "#000000" }]
+        }))
+        .expect_err("expected rejection");
+        assert!(matches!(err, DocError::GradientRadius(_)), "got {err:?}");
+    }
+}
+
+#[test]
+fn a_gradient_stop_colour_is_validated() {
+    let err = grad_doc(linear(serde_json::json!([
+        { "at": 0, "color": "not-a-colour" }, { "at": 1, "color": "#4ECDC4" }
+    ])))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::BadColor(_)), "got {err:?}");
+}

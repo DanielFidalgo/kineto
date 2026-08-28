@@ -23,6 +23,22 @@ export type Align = "left" | "center" | "right";
 /** Stroke terminator. Rasterizer parameters, not geometry — see `Cap` in
  * `doc.rs`. Defaults to `"butt"` when omitted. */
 export type Cap = "butt" | "round" | "square";
+
+/** A gradient stop: `at` runs 0 to 1, strictly increasing across the list. */
+export interface Stop {
+  at: number;
+  color: string;
+}
+
+/** Gradient coordinates are **unit space over the element's own box**:
+ * `[0,0]` is its top-left and `[1,1]` its bottom-right, so one gradient
+ * reads the same on a small card and a large panel. */
+export type Gradient =
+  | { type: "linear"; from: [number, number]; to: [number, number]; stops: Stop[] }
+  | { type: "radial"; center: [number, number]; radius: number; stops: Stop[] };
+
+/** A flat colour (`"#RRGGBB"` / `"#RRGGBBAA"`) or a gradient. */
+export type Paint = string | Gradient;
 /** How two stroke segments meet. Defaults to `"miter"` when omitted. */
 export type Join = "miter" | "round" | "bevel";
 export type Ease = "linear" | "inCubic" | "outCubic" | "inOutCubic";
@@ -75,7 +91,7 @@ export type ZoeElement =
   | ({
       type: "rect";
       rect: [number, number, number, number];
-      fill: string;
+      fill: Paint;
     } & Common)
   | ({
       /** Open or closed polyline; straight segments only (no beziers in v1).
@@ -93,7 +109,7 @@ export type ZoeElement =
       cap?: Cap;
       /** Defaults to `"miter"` when omitted (matches `Join::default()`). */
       join?: Join;
-      fill?: string;
+      fill?: Paint;
     } & Common)
   | ({
       type: "group";

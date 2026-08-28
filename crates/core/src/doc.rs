@@ -91,7 +91,7 @@ pub enum Element {
     },
     Rect {
         rect: [Scalar; 4],
-        fill: Color,
+        fill: Paint,
         #[serde(flatten)]
         common: Common,
     },
@@ -117,7 +117,7 @@ pub enum Element {
         #[serde(default, skip_serializing_if = "Join::is_default")]
         join: Join,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        fill: Option<Color>,
+        fill: Option<Paint>,
         #[serde(flatten)]
         common: Common,
     },
@@ -147,6 +147,99 @@ impl Align {
 
 fn is_false(b: &bool) -> bool {
     !*b
+}
+
+/// What fills a shape: a flat colour, or a gradient.
+///
+/// Untagged so a bare `"#RRGGBB"` still deserialises — and still *serialises*
+/// — exactly as before. Making this a union had to leave every existing
+/// document byte-identical, or the goldens and the cross-SDK comparison would
+/// all move at once for a feature they do not use.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Paint {
+    Solid(Color),
+    Gradient(Gradient),
+}
+
+impl From<Color> for Paint {
+    fn from(c: Color) -> Self {
+        Paint::Solid(c)
+    }
+}
+impl From<&str> for Paint {
+    fn from(s: &str) -> Self {
+        Paint::Solid(Color(s.to_string()))
+    }
+}
+impl From<Gradient> for Paint {
+    fn from(g: Gradient) -> Self {
+        Paint::Gradient(g)
+    }
+}
+
+/// A gradient in **unit coordinates over the element's own bounding box**:
+/// `[0,0]` is its top-left and `[1,1]` its bottom-right.
+///
+/// Relative rather than absolute so one gradient reads the same on a 200px
+/// card and a 1200px panel — which is what makes a gradient reusable across a
+/// template rather than tied to one layout.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Gradient {
+    Linear {
+        from: [Scalar; 2],
+        to: [Scalar; 2],
+        stops: Vec<Stop>,
+    },
+    Radial {
+        center: [Scalar; 2],
+        /// Fraction of the box's longer edge.
+        radius: Scalar,
+        stops: Vec<Stop>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Stop {
+    /// Position along the gradient, 0 to 1.
+    pub at: Scalar,
+    pub color: Color,
+}
+
+impl Stop {
+    pub fn new(at: f64, color: impl Into<Color>) -> Self {
+        Stop {
+            at: Scalar(at),
+            color: color.into(),
+        }
+    }
+}
+
+impl Gradient {
+    pub fn linear(from: [f64; 2], to: [f64; 2], stops: Vec<Stop>) -> Self {
+        Gradient::Linear {
+            from: scalars2(from),
+            to: scalars2(to),
+            stops,
+        }
+    }
+    pub fn radial(center: [f64; 2], radius: f64, stops: Vec<Stop>) -> Self {
+        Gradient::Radial {
+            center: scalars2(center),
+            radius: Scalar(radius),
+            stops,
+        }
+    }
+    pub fn stops(&self) -> &[Stop] {
+        match self {
+            Gradient::Linear { stops, .. } | Gradient::Radial { stops, .. } => stops,
+        }
+    }
 }
 
 /// How a stroke terminates. These are rasterizer parameters, not geometry —
@@ -344,7 +437,7 @@ impl Element {
             common: Common::default(),
         }
     }
-    pub fn rect(rect: [f64; 4], fill: impl Into<Color>) -> Self {
+    pub fn rect(rect: [f64; 4], fill: impl Into<Paint>) -> Self {
         Element::Rect {
             rect: scalars4(rect),
             fill: fill.into(),
@@ -405,7 +498,7 @@ impl Element {
         }
         self
     }
-    pub fn with_path_fill(mut self, color: impl Into<Color>) -> Self {
+    pub fn with_path_fill(mut self, color: impl Into<Paint>) -> Self {
         if let Element::Path { fill, .. } = &mut self {
             *fill = Some(color.into());
         }

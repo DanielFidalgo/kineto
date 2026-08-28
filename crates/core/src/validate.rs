@@ -5,7 +5,9 @@
 //!   3. `serde_json::from_value::<Document>` (typed decode)
 //!   4. semantic checks over the typed `Document`
 use crate::color::Color;
-use crate::doc::{Asset, Common, Document, Element, KeyValue, Prop, Scene, Track, Transition};
+use crate::doc::{
+    Asset, Common, Document, Element, Gradient, KeyValue, Paint, Prop, Scene, Track, Transition,
+};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use thiserror::Error;
@@ -40,6 +42,12 @@ pub enum DocError {
     PathNotPainted,
     #[error("path `strokeWidth` must be positive, got {0}")]
     PathStrokeWidth(String),
+    #[error("a gradient needs between 2 and 8 stops, got {0}")]
+    GradientStops(usize),
+    #[error("gradient stop positions must increase from 0 to 1, got {0}")]
+    GradientStopOrder(String),
+    #[error("gradient `radius` must be positive, got {0}")]
+    GradientRadius(String),
     #[error("keyframe times not strictly increasing in track '{0}'")]
     KeysNotIncreasing(String),
     #[error("key value arity mismatch in track '{0}'")]
@@ -308,9 +316,7 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             validate_common(common)?;
         }
         Element::Rect { fill, common, .. } => {
-            if !Color::parse_ok(&fill.0) {
-                return Err(DocError::BadColor(fill.0.clone()));
-            }
+            validate_paint(fill)?;
             validate_common(common)?;
         }
         Element::Path {
@@ -330,10 +336,13 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             if stroke.is_none() && fill.is_none() {
                 return Err(DocError::PathNotPainted);
             }
-            for c in [stroke, fill].into_iter().flatten() {
+            if let Some(c) = stroke {
                 if !Color::parse_ok(&c.0) {
                     return Err(DocError::BadColor(c.0.clone()));
                 }
+            }
+            if let Some(f) = fill {
+                validate_paint(f)?;
             }
             if let Some(w) = stroke_width {
                 // Spelled out rather than `!(w > 0.0)`: NaN must be
@@ -350,6 +359,43 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             validate_common(common)?;
             validate_elements(children, doc)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_paint(p: &Paint) -> Result<(), DocError> {
+    let gradient = match p {
+        Paint::Solid(c) => {
+            if !Color::parse_ok(&c.0) {
+                return Err(DocError::BadColor(c.0.clone()));
+            }
+            return Ok(());
+        }
+        Paint::Gradient(g) => g,
+    };
+
+    if let Gradient::Radial { radius, .. } = gradient {
+        // Spelled out rather than `!(r > 0.0)`: NaN has to be rejected too.
+        if radius.0.is_nan() || radius.0 <= 0.0 {
+            return Err(DocError::GradientRadius(radius.0.to_string()));
+        }
+    }
+
+    let stops = gradient.stops();
+    if stops.len() < 2 || stops.len() > 8 {
+        return Err(DocError::GradientStops(stops.len()));
+    }
+    let mut prev = f64::NEG_INFINITY;
+    for s in stops {
+        if !Color::parse_ok(&s.color.0) {
+            return Err(DocError::BadColor(s.color.0.clone()));
+        }
+        // Rejected rather than clamped: a stop outside 0..1, or out of order,
+        // renders as something the author did not describe.
+        if s.at.0.is_nan() || !(0.0..=1.0).contains(&s.at.0) || s.at.0 <= prev {
+            return Err(DocError::GradientStopOrder(s.at.0.to_string()));
+        }
+        prev = s.at.0;
     }
     Ok(())
 }
