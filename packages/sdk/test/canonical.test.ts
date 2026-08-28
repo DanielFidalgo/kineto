@@ -103,6 +103,7 @@ function buildExampleFullDoc(): ZoeDocument {
       ],
     },
   );
+  const chip = rect([0, 0, 40, 40], "#3366FF", 8.5);
   const band = rect([0, 0, 120, 60], {
     type: "linear",
     from: [0, 0],
@@ -128,7 +129,7 @@ function buildExampleFullDoc(): ZoeDocument {
       join: "bevel",
     },
   );
-  d.scenes.push(scene("scene-1", seconds(1.0), [grp, band, arrow]));
+  d.scenes.push(scene("scene-1", seconds(1.0), [grp, chip, band, arrow]));
   return d;
 }
 

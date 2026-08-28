@@ -35,3 +35,64 @@ fn translate_track_is_vec2() {
     };
     assert_eq!(resolve_common(&c, 50).translate, (5.0, 10.0));
 }
+
+#[test]
+fn back_easing_overshoots_its_endpoints() {
+    // That is the whole point of it: motion that overshoots and settles reads
+    // as alive. If these ever stay inside 0..1 the curve has been flattened.
+    let below = (1..50)
+        .map(|i| ease(Ease::InBack, i as f64 / 100.0))
+        .fold(f64::MAX, f64::min);
+    let above = (50..100)
+        .map(|i| ease(Ease::OutBack, i as f64 / 100.0))
+        .fold(f64::MIN, f64::max);
+    assert!(below < 0.0, "InBack never dips below zero: {below}");
+    assert!(above > 1.0, "OutBack never rises above one: {above}");
+}
+
+#[test]
+fn every_easing_starts_at_zero_and_ends_at_one() {
+    // Expo is the one at risk: 2^-10 is 0.00098, which leaves a visible seam
+    // at a keyframe boundary unless the endpoints are special-cased.
+    for e in [
+        Ease::Linear,
+        Ease::InCubic,
+        Ease::OutCubic,
+        Ease::InOutCubic,
+        Ease::InBack,
+        Ease::OutBack,
+        Ease::InOutBack,
+        Ease::InExpo,
+        Ease::OutExpo,
+        Ease::InOutExpo,
+    ] {
+        assert_eq!(ease(e, 0.0), 0.0, "{e:?} does not start at 0");
+        assert_eq!(ease(e, 1.0), 1.0, "{e:?} does not end at 1");
+    }
+}
+
+#[test]
+fn an_overshooting_opacity_track_is_clamped() {
+    // Opacity is the one property that cannot overshoot: it is an alpha, and
+    // tiny-skia is handed it directly as a PixmapPaint opacity. Geometry may
+    // overshoot freely; this may not.
+    use kineto_core::doc::{Common, Key, Prop, Track, TIMEBASE};
+    let common = Common {
+        animations: vec![Track::new(
+            Prop::Opacity,
+            vec![
+                Key::num(0, 0.0),
+                Key::num(TIMEBASE, 1.0).with_ease(Ease::OutBack),
+            ],
+        )],
+        ..Common::default()
+    };
+    for i in 0..=100 {
+        let t = TIMEBASE * i / 100;
+        let o = resolve_common(&common, t).opacity;
+        assert!(
+            (0.0..=1.0).contains(&o),
+            "opacity {o} out of range at t={t}"
+        );
+    }
+}

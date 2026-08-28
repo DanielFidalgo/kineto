@@ -4,7 +4,24 @@ use crate::doc::{Common, Ease, Key, KeyValue, Prop};
 use crate::scalar::Scalar;
 
 /// Apply easing function to normalized progress [0, 1].
+/// Overshoot constant from the standard easing set: `back` overshoots by
+/// about 10% of the range.
+const BACK_C1: f64 = 1.70158;
+const BACK_C2: f64 = BACK_C1 * 1.525;
+const BACK_C3: f64 = BACK_C1 + 1.0;
+
 pub fn ease(e: Ease, x: f64) -> f64 {
+    // Every easing is 0 at 0 and 1 at 1 by definition, but not every closed
+    // form says so in floating point: InBack(1.0) evaluates to
+    // 0.9999999999999998, so an animation using it never quite arrives. The
+    // guard also covers expo, whose 2^-10 tail is 0.00098 away from its
+    // endpoints — visible as a seam at a keyframe boundary.
+    if x <= 0.0 {
+        return 0.0;
+    }
+    if x >= 1.0 {
+        return 1.0;
+    }
     match e {
         Ease::Linear => x,
         Ease::InCubic => x * x * x,
@@ -14,6 +31,31 @@ pub fn ease(e: Ease, x: f64) -> f64 {
                 4.0 * x * x * x
             } else {
                 1.0 - (-2.0 * x + 2.0).powi(3) / 2.0
+            }
+        }
+        Ease::InBack => BACK_C3 * x * x * x - BACK_C1 * x * x,
+        Ease::OutBack => {
+            let t = x - 1.0;
+            1.0 + BACK_C3 * t * t * t + BACK_C1 * t * t
+        }
+        Ease::InOutBack => {
+            if x < 0.5 {
+                let t = 2.0 * x;
+                (t * t * ((BACK_C2 + 1.0) * t - BACK_C2)) / 2.0
+            } else {
+                let t = 2.0 * x - 2.0;
+                (t * t * ((BACK_C2 + 1.0) * t + BACK_C2) + 2.0) / 2.0
+            }
+        }
+        // Endpoints are special-cased so the curve reaches exactly 0 and 1;
+        // 2^-10 is 0.00098, which would leave a visible seam at a boundary.
+        Ease::InExpo => (2.0f64).powf(10.0 * x - 10.0),
+        Ease::OutExpo => 1.0 - (2.0f64).powf(-10.0 * x),
+        Ease::InOutExpo => {
+            if x < 0.5 {
+                (2.0f64).powf(20.0 * x - 10.0) / 2.0
+            } else {
+                (2.0 - (2.0f64).powf(-20.0 * x + 10.0)) / 2.0
             }
         }
     }
@@ -127,7 +169,10 @@ pub fn resolve_common(c: &Common, t: i64) -> Resolved {
             }
             Prop::Opacity => {
                 if let KeyValue::Num(v) = sampled {
-                    result.opacity = v.0;
+                    // Clamped, unlike the geometry properties: opacity is an
+                    // alpha handed straight to tiny-skia, and the `back`
+                    // easings deliberately overshoot 0..1.
+                    result.opacity = v.0.clamp(0.0, 1.0);
                 }
             }
         }

@@ -203,6 +203,38 @@ fn shader_for(paint: &Paint, bbox: &BBox, opacity: f64) -> Shader<'static> {
     })
 }
 
+/// Kappa: the cubic control-point offset that approximates a quarter circle
+/// to within about 0.02%. The standard constant, not a guess.
+const KAPPA: f32 = 0.552_284_8;
+
+/// A rectangle path, with rounded corners when `r > 0`.
+///
+/// The radius is clamped to half the shorter edge, so an over-large value
+/// degrades to a stadium rather than folding the path inside out.
+fn rounded_rect(rect: SkRect, r: f32) -> Option<tiny_skia::Path> {
+    // Spelled out rather than `!(r > 0.0)`: NaN must fall through to a plain
+    // rectangle too, and the negated comparison hid that.
+    if r.is_nan() || r <= 0.0 {
+        return Some(PathBuilder::from_rect(rect));
+    }
+    let (l, t, right, b) = (rect.left(), rect.top(), rect.right(), rect.bottom());
+    let r = r.min(rect.width() / 2.0).min(rect.height() / 2.0);
+    let c = r * KAPPA;
+
+    let mut pb = PathBuilder::new();
+    pb.move_to(l + r, t);
+    pb.line_to(right - r, t);
+    pb.cubic_to(right - r + c, t, right, t + r - c, right, t + r);
+    pb.line_to(right, b - r);
+    pb.cubic_to(right, b - r + c, right - r + c, b, right - r, b);
+    pb.line_to(l + r, b);
+    pb.cubic_to(l + r - c, b, l, b - r + c, l, b - r);
+    pb.line_to(l, t + r);
+    pb.cubic_to(l, t + r - c, l + r - c, t, l + r, t);
+    pb.close();
+    pb.finish()
+}
+
 fn union_bbox(a: BBox, b: BBox) -> BBox {
     let x0 = a.x.min(b.x);
     let y0 = a.y.min(b.y);
@@ -363,7 +395,12 @@ impl Renderer {
     ) {
         for el in elements {
             match el {
-                Element::Rect { rect, fill, common } => {
+                Element::Rect {
+                    rect,
+                    fill,
+                    radius,
+                    common,
+                } => {
                     let resolved = resolve_common(common, t);
                     let bbox = BBox {
                         x: rect[0].0 as f32 + offset.0,
@@ -376,7 +413,10 @@ impl Renderer {
                     let Some(sk_rect) = SkRect::from_xywh(bbox.x, bbox.y, bbox.w, bbox.h) else {
                         continue; // degenerate (zero/negative size) rect: nothing to draw
                     };
-                    let path = PathBuilder::from_rect(sk_rect);
+                    let r = radius.map(|r| r.0 as f32).unwrap_or(0.0);
+                    let Some(path) = rounded_rect(sk_rect, r) else {
+                        continue;
+                    };
 
                     let paint = SkPaint {
                         shader: shader_for(fill, &bbox, resolved.opacity),

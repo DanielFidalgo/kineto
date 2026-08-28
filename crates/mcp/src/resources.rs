@@ -225,7 +225,8 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
           "properties": {
             "type": { "const": "rect" },
             "rect": { "$ref": "#/$defs/rect" },
-            "fill": { "$ref": "#/$defs/paint" }
+            "fill": { "$ref": "#/$defs/paint" },
+            "radius": { "type": "number", "minimum": 0, "description": "Corner radius in pixels, clamped to half the shorter edge." }
           },
           "$ref": "#/$defs/commonProps"
         },
@@ -293,7 +294,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
                 "description": "A number, except for 'translate', which takes [x, y].",
                 "oneOf": [{ "type": "number" }, { "$ref": "#/$defs/vec2" }]
               },
-              "ease": { "enum": ["linear", "inCubic", "outCubic", "inOutCubic"] }
+              "ease": { "enum": ["linear", "inCubic", "outCubic", "inOutCubic", "inBack", "outBack", "inOutBack", "inExpo", "outExpo", "inOutExpo"] }
             }
           }
         }

@@ -92,6 +92,10 @@ pub enum Element {
     Rect {
         rect: [Scalar; 4],
         fill: Paint,
+        /// Corner radius in pixels, clamped at draw time to half the shorter
+        /// edge. Absent means square corners, and serialises to nothing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        radius: Option<Scalar>,
         #[serde(flatten)]
         common: Common,
     },
@@ -326,6 +330,17 @@ pub enum Ease {
     InCubic,
     OutCubic,
     InOutCubic,
+    /// Overshoots past the target and settles back. What makes motion read as
+    /// alive rather than mechanical — and the reason `resolve_common` clamps
+    /// opacity, since these deliberately leave 0..1.
+    InBack,
+    OutBack,
+    InOutBack,
+    /// Very slow then very fast, or the reverse. For entrances that should
+    /// feel sudden.
+    InExpo,
+    OutExpo,
+    InOutExpo,
 }
 impl Ease {
     pub fn is_default(&self) -> bool {
@@ -441,8 +456,15 @@ impl Element {
         Element::Rect {
             rect: scalars4(rect),
             fill: fill.into(),
+            radius: None,
             common: Common::default(),
         }
+    }
+    pub fn with_radius(mut self, r: f64) -> Self {
+        if let Element::Rect { radius, .. } = &mut self {
+            *radius = Some(Scalar(r));
+        }
+        self
     }
     pub fn group(origin: [f64; 2], children: Vec<Element>) -> Self {
         Element::Group {

@@ -81,8 +81,14 @@ export function path(
   return { type: "path", points, ...opts };
 }
 
-export function rect(r: [number, number, number, number], fill: Paint): ZoeElement {
-  return { type: "rect", rect: r, fill };
+export function rect(
+  r: [number, number, number, number],
+  fill: Paint,
+  radius?: number,
+): ZoeElement {
+  return radius === undefined
+    ? { type: "rect", rect: r, fill }
+    : { type: "rect", rect: r, fill, radius };
 }
 
 export function text(

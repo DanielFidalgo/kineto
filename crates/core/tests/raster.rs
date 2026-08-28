@@ -46,6 +46,7 @@ fn rect_fill_and_opacity() {
     let el = Element::Rect {
         rect: [8.0.into(), 8.0.into(), 48.0.into(), 48.0.into()],
         fill: "#FF0000".into(),
+        radius: None,
         common: Common {
             opacity: Some(0.5.into()),
             ..Common::default()
@@ -76,6 +77,7 @@ fn rect_rotation_45deg() {
     let el = Element::Rect {
         rect: [8.0.into(), 8.0.into(), 48.0.into(), 48.0.into()],
         fill: "#FF0000".into(),
+        radius: None,
         common: Common {
             rotation: Some(45.0.into()),
             ..Common::default()
@@ -898,4 +900,79 @@ fn a_gradient_honours_opacity() {
 
     // Same derivation as `rect_fill_and_opacity`: 255*0.5 over opaque black.
     assert_eq!(pm.pixel(32, 32).unwrap().red(), 128);
+}
+
+/// A radius rounds the corners off: the extreme corner pixel falls outside
+/// the shape while the middle of each edge stays inside.
+#[test]
+fn a_rect_radius_rounds_its_corners() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect([0.0, 0.0, 64.0, 64.0], "#FF0000").with_radius(20.0);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    assert_eq!(
+        pm.pixel(0, 0).unwrap().red(),
+        0,
+        "corner was not rounded off"
+    );
+    assert_eq!(
+        pm.pixel(63, 63).unwrap().red(),
+        0,
+        "corner was not rounded off"
+    );
+    assert!(
+        pm.pixel(32, 1).unwrap().red() > 200,
+        "top edge should be filled"
+    );
+    assert!(
+        pm.pixel(1, 32).unwrap().red() > 200,
+        "left edge should be filled"
+    );
+    assert!(
+        pm.pixel(32, 32).unwrap().red() > 200,
+        "centre should be filled"
+    );
+
+    common::assert_golden_hash("raster-rect-radius", pm.width(), pm.height(), pm.data());
+}
+
+/// An absurd radius degrades to a stadium rather than folding the path.
+#[test]
+fn an_over_large_radius_is_clamped_to_half_the_shorter_edge() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::rect([0.0, 16.0, 64.0, 32.0], "#FF0000").with_radius(9999.0);
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    // Half of 32 is 16: the ends are semicircles, the middle is solid.
+    assert!(
+        pm.pixel(32, 32).unwrap().red() > 200,
+        "centre should be filled"
+    );
+    assert_eq!(
+        pm.pixel(0, 17).unwrap().red(),
+        0,
+        "a clamped corner is still round"
+    );
+}
+
+/// Zero and absent radius must produce the identical path, so adding the
+/// field cannot have moved a single existing golden.
+#[test]
+fn a_zero_radius_is_the_same_as_no_radius() {
+    let render = |r: Option<f64>| {
+        let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+        let mut el = Element::rect([4.0, 4.0, 56.0, 56.0], "#FF0000");
+        if let Some(r) = r {
+            el = el.with_radius(r);
+        }
+        let mut renderer = Renderer::new();
+        let mut assets = AssetStore::new();
+        renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+        pm.data().to_vec()
+    };
+    assert_eq!(render(None), render(Some(0.0)));
 }

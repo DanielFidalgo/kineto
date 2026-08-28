@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **287 tests**.
+   output. Workspace suite is **295 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -109,6 +109,15 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
   rotation carries the gradient with it for free. 2-8 stops, strictly
   increasing over 0..1. `stroke` stays a flat colour. Corpus entry
   `gradients`; parity 22/22 at landing.
+- **Corner radius and six easings were added after v1** (2026-08-28):
+  `rect.radius` (optional, clamped at draw time to half the shorter edge, so
+  an absurd value degrades to a stadium rather than folding the path), and
+  `inBack`/`outBack`/`inOutBack`/`inExpo`/`outExpo`/`inOutExpo`. `ease` now
+  guards its endpoints: every curve returns exactly 0 at 0 and 1 at 1, because
+  `InBack(1.0)` evaluates to 0.9999999999999998 in floating point and an
+  animation that never quite arrives is a real defect. **`back` overshoots
+  0..1 by design**, so `resolve_common` clamps opacity — geometry may
+  overshoot, an alpha handed to tiny-skia may not.
 - **`path` was added after v1** (2026-08-28): open/closed polylines,
   straight segments only, with `stroke`/`strokeWidth`/`cap`/`join`/`fill`.
   Cap and join are format fields because they are rasterizer parameters
@@ -149,7 +158,7 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
 ## Testing notes
 
 - `testdata/golden/hashes.json` holds sha256 of **rendered frame buffers**.
-  22 keys are corpus parity (`name@tick`); the rest are raster/render unit
+  24 keys are corpus parity (`name@tick`); the rest are raster/render unit
   goldens. Regenerate with `UPDATE_GOLDEN=1`.
 - The `raster-text` / `raster-text-tinted` specimens render
   **"Hamburgefons"**, deliberately *not* the product name. A pixel golden
