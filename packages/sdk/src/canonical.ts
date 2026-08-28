@@ -26,7 +26,7 @@ const ORDER = {
   asset: ["type", "src"],
   scene: ["id", "transition", "duration", "elements"],
   transition: ["type", "duration"],
-  image: ["type", "asset", "rect"],
+  image: ["type", "asset", "rect", "fit"],
   text: ["type", "text", "font", "sizePx", "color", "pos", "maxW", "align"],
   rect: ["type", "rect", "fill", "radius"],
   path: ["type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
@@ -34,7 +34,8 @@ const ORDER = {
   radial: ["type", "center", "radius", "stops"],
   stop: ["at", "color"],
   group: ["type", "origin", "children"],
-  common: ["translate", "scale", "rotation", "opacity", "animations"],
+  common: ["translate", "scale", "rotation", "opacity", "animations", "clip"],
+  clip: ["rect", "radius"],
   track: ["prop", "keys"],
   key: ["t", "v", "ease"],
 } as const;
@@ -44,6 +45,7 @@ const DEFAULT_BG = "#000000";
 const DEFAULT_ALIGN = "left";
 const DEFAULT_CAP = "butt";
 const DEFAULT_JOIN = "miter";
+const DEFAULT_FIT = "stretch";
 const DEFAULT_EASE = "linear";
 const DEFAULT_FONT_ID = "default";
 const DEFAULT_FONT_ASSET: ZoeAsset = { type: "font", src: "kineto:inter" };
@@ -136,6 +138,13 @@ function serCommonFields(c: Common): Record<string, string | undefined> {
       c.animations !== undefined && c.animations.length > 0
         ? `[${c.animations.map(serTrack).join(",")}]`
         : undefined,
+    clip:
+      c.clip !== undefined
+        ? emit(ORDER.clip, {
+            rect: serArr(c.clip.rect),
+            radius: c.clip.radius !== undefined ? serNum(c.clip.radius) : undefined,
+          })
+        : undefined,
   };
 }
 
@@ -146,6 +155,7 @@ function serElement(el: ZoeElement): string {
         type: serStr("image"),
         asset: serStr(el.asset),
         rect: serArr(el.rect),
+        fit: el.fit !== undefined && el.fit !== DEFAULT_FIT ? serStr(el.fit) : undefined,
         ...serCommonFields(el),
       });
     case "text":

@@ -39,6 +39,18 @@ export type Gradient =
 
 /** A flat colour (`"#RRGGBB"` / `"#RRGGBBAA"`) or a gradient. */
 export type Paint = string | Gradient;
+
+/** How an image fills its box when the aspect ratios differ. Defaults to
+ * `"stretch"`, which is what v1 always did. */
+export type Fit = "stretch" | "contain" | "cover";
+
+/** A static window an element is drawn through, in the element's **parent**
+ * space. Deliberately not carried by the element's own transform: a clip
+ * that moved with its content could never reveal anything. */
+export interface Clip {
+  rect: [number, number, number, number];
+  radius?: number;
+}
 /** How two stroke segments meet. Defaults to `"miter"` when omitted. */
 export type Join = "miter" | "round" | "bevel";
 export type Ease =
@@ -81,6 +93,7 @@ export interface Common {
   rotation?: number;
   opacity?: number;
   animations?: Track[];
+  clip?: Clip;
 }
 
 export type ZoeElement =
@@ -88,6 +101,8 @@ export type ZoeElement =
       type: "image";
       asset: string;
       rect: [number, number, number, number];
+      /** Defaults to `"stretch"` when omitted (matches `Fit::default()`). */
+      fit?: Fit;
     } & Common)
   | ({
       type: "text";

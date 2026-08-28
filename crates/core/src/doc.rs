@@ -73,6 +73,8 @@ pub enum Element {
     Image {
         asset: String,
         rect: [Scalar; 4],
+        #[serde(default, skip_serializing_if = "Fit::is_default")]
+        fit: Fit,
         #[serde(flatten)]
         common: Common,
     },
@@ -278,6 +280,51 @@ impl Join {
     }
 }
 
+/// A static window an element is drawn through.
+///
+/// In the element's **parent** coordinate space, and deliberately *not*
+/// carried by the element's own transform: a clip that moved with its
+/// content would never reveal anything. Content animates behind a fixed
+/// window — which is what a wipe, a crop, or a progress fill actually is.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Clip {
+    pub rect: [Scalar; 4],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius: Option<Scalar>,
+}
+
+impl Clip {
+    pub fn new(rect: [f64; 4]) -> Self {
+        Clip {
+            rect: scalars4(rect),
+            radius: None,
+        }
+    }
+    pub fn with_radius(mut self, r: f64) -> Self {
+        self.radius = Some(Scalar(r));
+        self
+    }
+}
+
+/// How an image fills its box when the aspect ratios differ.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Fit {
+    /// Distort to fill exactly. The v1 behaviour, and the default so no
+    /// existing document changes.
+    #[default]
+    Stretch,
+    /// Scale until it fits inside, centred. Nothing is cropped.
+    Contain,
+    /// Scale until it covers, centred, cropped to the box.
+    Cover,
+}
+impl Fit {
+    pub fn is_default(&self) -> bool {
+        *self == Fit::Stretch
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Common {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -290,6 +337,8 @@ pub struct Common {
     pub opacity: Option<Scalar>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub animations: Vec<Track>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip: Option<Clip>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -431,8 +480,19 @@ impl Element {
         Element::Image {
             asset: asset.to_string(),
             rect: scalars4(rect),
+            fit: Fit::default(),
             common: Common::default(),
         }
+    }
+    pub fn with_fit(mut self, f: Fit) -> Self {
+        if let Element::Image { fit, .. } = &mut self {
+            *fit = f;
+        }
+        self
+    }
+    pub fn with_clip(mut self, c: Clip) -> Self {
+        self.common_mut().clip = Some(c);
+        self
     }
     pub fn text(
         text: &str,

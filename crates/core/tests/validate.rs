@@ -425,3 +425,16 @@ fn an_unknown_key_inside_a_gradient_stop_is_rejected() {
     .expect_err("expected rejection");
     assert!(matches!(err, DocError::UnknownField { .. }), "got {err:?}");
 }
+
+#[test]
+fn an_unknown_key_inside_a_clip_is_rejected() {
+    let v = serde_json::json!({
+        "v": 1, "timebase": 705600000, "size": { "w": 100, "h": 100 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [
+            { "type": "rect", "rect": [0, 0, 10, 10], "fill": "#FFFFFF",
+              "clip": { "rect": [0, 0, 5, 5], "rounding": 2 } }
+        ]}]
+    });
+    let err = Document::from_json(&v.to_string()).expect_err("expected rejection");
+    assert!(matches!(err, DocError::UnknownField { .. }), "got {err:?}");
+}
