@@ -53,6 +53,53 @@ pub fn preview_frame_indices(frame_count: u64, count: usize) -> Vec<u64> {
         .collect()
 }
 
+/// Flicks per millisecond. `705600000 / 1000` is exact, which is why the
+/// preview surface addresses time in whole milliseconds: the conversion to
+/// ticks needs no floating point and cannot round. Seconds-as-float would
+/// have put rounding on the input path of a renderer whose entire premise is
+/// byte-determinism.
+pub const TICKS_PER_MS: i64 = kineto_core::doc::TIMEBASE / 1000;
+
+/// Resolve a millisecond offset to the index of the frame containing it.
+///
+/// Returns a frame *index*, not a raw tick, for the reason
+/// `preview_frame_indices` does: only the exact ticks `export_frames` lands on
+/// are byte-comparable to exported PNGs. Rendering an arbitrary tick between
+/// two frames would produce pixels no export ever writes, quietly voiding the
+/// one property that makes a preview evidence of anything.
+///
+/// Offsets past the end clamp to the last frame — the caller sees what they
+/// actually got in the reported metadata.
+pub fn frame_for_ms(ms: i64, fps: i64, frame_count: u64) -> Result<u64, ToolError> {
+    if ms < 0 {
+        return Err(ToolError::Invalid(format!(
+            "`atMs` offsets must not be negative, got {ms}"
+        )));
+    }
+    if frame_count == 0 {
+        return Err(ToolError::Invalid(
+            "this document has no frames to preview: its total duration is zero".into(),
+        ));
+    }
+    let step = if fps > 0 {
+        kineto_core::doc::TIMEBASE / fps
+    } else {
+        0
+    };
+    if step <= 0 {
+        return Err(ToolError::Fps(fps));
+    }
+    // Checked: `ms * 705_600` overflows i64 above ~1.3e13 ms. Wrapping would
+    // produce a negative tick and silently resolve to frame 0 — a confident
+    // wrong answer, which is worse than a refusal.
+    let tick = ms.checked_mul(TICKS_PER_MS).ok_or_else(|| {
+        ToolError::Invalid(format!(
+            "`atMs` offset {ms} is too large to be a time within any document"
+        ))
+    })?;
+    Ok(((tick / step) as u64).min(frame_count - 1))
+}
+
 /// How many frames this engine will emit at `fps`.
 pub fn frame_count(engine: &Engine, fps: i64) -> u64 {
     frames_for(engine.total_duration(), fps)
@@ -100,8 +147,21 @@ pub fn sample_frames(
     count: usize,
 ) -> Result<Vec<String>, ToolError> {
     let total = frame_count(engine, fps);
+    encode_frames(engine, fps, &preview_frame_indices(total, count))
+}
+
+/// Render the named frame indices as base64-encoded PNGs, in the order given.
+///
+/// Takes indices rather than ticks so both callers — even sampling and an
+/// explicit `atMs` request — go through the same rasterize/downscale/encode
+/// path, and so every image returned is a frame `export_frames` would write.
+pub fn encode_frames(
+    engine: &mut Engine,
+    fps: i64,
+    frames: &[u64],
+) -> Result<Vec<String>, ToolError> {
     let mut out = Vec::new();
-    for index in preview_frame_indices(total, count) {
+    for &index in frames {
         let tick = engine.tick_for_frame(index as i64, fps);
         let mut rgba = engine.render(tick).to_vec();
         kineto_core::render::unpremultiply(&mut rgba);
@@ -229,13 +289,18 @@ mod tests {
         // Three samples, not one: with a single sample only frame 0 is ever
         // compared, and an index-mapping bug that only bites away from the
         // first frame would pass.
+        //
+        // The fixture animates for the same reason. Against a static document
+        // every frame is identical, so comparing preview 14 to exported frame
+        // 14 succeeds even if the code fetched frame 3 — the assertion could
+        // not fail on the bug it exists to catch.
         use kineto_core::export::export_frames;
 
-        let mut engine = small_engine();
+        let mut engine = animated_engine();
         let dir = tempfile::tempdir().unwrap();
         let exported_count = export_frames(&mut engine, 30, dir.path()).unwrap();
 
-        let mut engine = small_engine();
+        let mut engine = animated_engine();
         let previews = sample_frames(&mut engine, 30, 3).unwrap();
         assert_eq!(previews.len(), 3);
 
@@ -321,6 +386,96 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_millisecond_is_a_whole_number_of_ticks() {
+        // The reason the tool surface takes milliseconds rather than seconds:
+        // 705600000 / 1000 is exact, so the conversion needs no float and
+        // cannot round. If this ever stops holding, `frame_for_ms` must change
+        // rather than silently lose precision.
+        assert_eq!(TICKS_PER_MS, 705_600);
+        assert_eq!(TICKS_PER_MS * 1000, kineto_core::doc::TIMEBASE);
+    }
+
+    #[test]
+    fn a_millisecond_offset_resolves_to_the_frame_containing_it() {
+        // 30 fps: one frame every 23_520_000 ticks (33.333ms). 50ms lands
+        // inside frame 1, not on a boundary — a truncating-to-zero or
+        // rounding-up bug would both show here.
+        assert_eq!(frame_for_ms(0, 30, 30).unwrap(), 0);
+        assert_eq!(frame_for_ms(50, 30, 30).unwrap(), 1);
+        assert_eq!(frame_for_ms(100, 30, 30).unwrap(), 3);
+    }
+
+    #[test]
+    fn a_millisecond_offset_past_the_end_clamps_to_the_last_frame() {
+        // A one-second document at 30 fps has frames 0..=29. Asking for 5s is
+        // answered with the last frame; the caller learns what they actually
+        // got from the reported metadata rather than from an error.
+        assert_eq!(frame_for_ms(5_000, 30, 30).unwrap(), 29);
+    }
+
+    #[test]
+    fn a_negative_millisecond_offset_is_an_error() {
+        assert!(frame_for_ms(-1, 30, 30).is_err());
+    }
+
+    #[test]
+    fn an_absurd_millisecond_offset_is_an_error_not_an_overflow() {
+        // ms * 705_600 overflows i64 above ~1.3e13 ms. Unchecked, this wraps
+        // to a negative tick and resolves to frame 0 — a wrong answer rather
+        // than a refusal.
+        assert!(frame_for_ms(i64::MAX, 30, 30).is_err());
+    }
+
+    #[test]
+    fn resolving_a_frame_in_an_empty_document_is_an_error() {
+        // Nothing to look at: a zero-duration document has no frames, and
+        // clamping to `frame_count - 1` would underflow.
+        assert!(frame_for_ms(0, 30, 0).is_err());
+    }
+
+    #[test]
+    fn explicitly_requested_frames_are_byte_identical_to_exported_frames() {
+        // The control for the whole preview premise: a caller names a moment
+        // and receives exactly the frame the exporter would write for it.
+        //
+        // Frames 7 and 23 are deliberately not indices `preview_frame_indices`
+        // would ever choose, so this fails if explicit selection silently
+        // falls back to even spacing.
+        use kineto_core::export::export_frames;
+
+        let mut engine = animated_engine();
+        let dir = tempfile::tempdir().unwrap();
+        export_frames(&mut engine, 30, dir.path()).unwrap();
+
+        let mut engine = animated_engine();
+        let encoded = encode_frames(&mut engine, 30, &[7, 23]).unwrap();
+        assert_eq!(encoded.len(), 2);
+
+        for (png, index) in encoded.iter().zip([7u64, 23]) {
+            let exported = std::fs::read(dir.path().join(format!("frame-{index:05}.png"))).unwrap();
+            assert_eq!(
+                base64_decode(png),
+                exported,
+                "encoded frame {index} is not the frame the exporter wrote"
+            );
+        }
+    }
+
+    #[test]
+    fn the_animated_fixture_actually_differs_between_frames() {
+        // Guards every byte-identity test above: against a static document
+        // all frames are identical, so a wrong-index bug would compare equal
+        // and pass. This asserts the fixture can actually catch one.
+        let mut engine = animated_engine();
+        let frames = encode_frames(&mut engine, 30, &[0, 7, 23, 29]).unwrap();
+        for (i, a) in frames.iter().enumerate() {
+            for b in &frames[i + 1..] {
+                assert_ne!(a, b, "fixture frames must differ or the goldens are blind");
+            }
+        }
+    }
+
     /// A 320x180 one-second document: small, deterministic, no assets.
     fn small_engine() -> kineto_core::Engine {
         use kineto_core::{Document, Element, Scene};
@@ -328,6 +483,29 @@ mod tests {
         doc.push_scene(
             Scene::new("s", kineto_core::doc::TIMEBASE)
                 .with_element(Element::rect([0.0, 0.0, 320.0, 180.0], "#3366FF")),
+        );
+        kineto_core::Engine::new(doc, kineto_core::AssetStore::new()).unwrap()
+    }
+
+    /// `small_engine` with a square sliding across it, so no two frames share
+    /// pixels. Byte-identity assertions against a static document cannot fail
+    /// on a wrong frame index; against this one they can.
+    fn animated_engine() -> kineto_core::Engine {
+        use kineto_core::doc::{Key, Prop, Track};
+        use kineto_core::{Document, Element, Scene};
+        let mut doc = Document::new(320, 180);
+        doc.push_scene(
+            Scene::new("s", kineto_core::doc::TIMEBASE)
+                .with_element(Element::rect([0.0, 0.0, 320.0, 180.0], "#3366FF"))
+                .with_element(
+                    Element::rect([0.0, 60.0, 40.0, 60.0], "#FF9900").with_animation(Track::new(
+                        Prop::Translate,
+                        vec![
+                            Key::vec2(0, [0.0, 0.0]),
+                            Key::vec2(kineto_core::doc::TIMEBASE, [280.0, 0.0]),
+                        ],
+                    )),
+                ),
         );
         kineto_core::Engine::new(doc, kineto_core::AssetStore::new()).unwrap()
     }
