@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod error;
+pub mod examples;
 pub mod render;
 pub mod resources;
 pub mod session;
@@ -224,8 +225,9 @@ impl KinetoServer {
             &params.at_scenes,
         )?;
 
+        let document_issues = crate::check::analyze_document(&doc);
         let mut checked = Vec::with_capacity(moments.len());
-        let mut issue_count = 0;
+        let mut issue_count = document_issues.len();
         for m in moments {
             let issues = crate::check::analyze(&doc, &mut assets, m.tick);
             issue_count += issues.len();
@@ -244,6 +246,7 @@ impl KinetoServer {
             height: doc.size.h,
             fps,
             issue_count,
+            document_issues,
             timeline,
             moments: checked,
         }))

@@ -72,7 +72,9 @@ fn contrast(a: &kineto_core::Color, b: &kineto_core::Color) -> f64 {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Issue {
-    pub scene: String,
+    /// Absent for rules that are a property of the whole document.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene: Option<String>,
     /// Index of the element within its scene, so the caller can find it.
     /// Absent for rules that are a property of the whole scene.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,6 +105,11 @@ const SCENE_BEAT_MS: f64 = 500.0;
 /// 10px at 720p and 15px at 1080p are the same problem.
 const MIN_TEXT_FRACTION: f64 = 0.016;
 
+/// Fraction of text-only scenes above which a document is a slide deck.
+const DECK_TEXT_ONLY_FRACTION: f64 = 0.7;
+/// Below this many scenes there is no pattern to judge.
+const DECK_MIN_SCENES: usize = 4;
+
 /// Most words that can be taken in from a single screen at once.
 ///
 /// 40 rather than something tighter because a *scanned list* is not a
@@ -110,6 +117,39 @@ const MIN_TEXT_FRACTION: f64 = 0.016;
 /// rule that flags legitimate layouts is worse than no rule. This is meant to
 /// catch a wall of text, which `tooFast` will usually flag as well.
 const MAX_WORDS_ON_SCREEN: usize = 40;
+
+/// Rules about the document as a whole, independent of any tick.
+///
+/// Reported once by the caller rather than per moment, which is why they are
+/// not part of `analyze`.
+pub fn analyze_document(doc: &Document) -> Vec<Issue> {
+    let mut out = Vec::new();
+    let n = doc.scenes.len();
+    if n < DECK_MIN_SCENES {
+        return out;
+    }
+    let text_only = doc
+        .scenes
+        .iter()
+        .filter(|s| {
+            !s.elements.is_empty() && s.elements.iter().all(|e| matches!(e, Element::Text { .. }))
+        })
+        .count();
+    if text_only as f64 / n as f64 > DECK_TEXT_ONLY_FRACTION {
+        out.push(Issue {
+            scene: None,
+            element: None,
+            kind: "deckShaped",
+            category: "design",
+            detail: format!(
+                "{text_only} of {n} scenes contain nothing but text — this is a \
+                 slide deck, not a video. Show the structure: a path between \
+                 two things, a bar for a quantity, an image of the thing itself"
+            ),
+        });
+    }
+    out
+}
 
 /// Report everything mechanically wrong with what `doc` draws at `tick`.
 ///
@@ -153,7 +193,7 @@ fn check_scene(scene: &kineto_core::Scene, _ch: f32, out: &mut Vec<Issue>) {
     let needed = words as f64 / SCAN_WPM * 60_000.0 + SCENE_BEAT_MS;
     if duration_ms < needed {
         out.push(Issue {
-            scene: scene.id.clone(),
+            scene: Some(scene.id.clone()),
             element: None,
             kind: "tooFast",
             category: "design",
@@ -166,7 +206,7 @@ fn check_scene(scene: &kineto_core::Scene, _ch: f32, out: &mut Vec<Issue>) {
     }
     if words > MAX_WORDS_ON_SCREEN {
         out.push(Issue {
-            scene: scene.id.clone(),
+            scene: Some(scene.id.clone()),
             element: None,
             kind: "tooDense",
             category: "design",
@@ -192,7 +232,7 @@ fn check_element(
 ) {
     let mut push = |kind: &'static str, category: &'static str, detail: String| {
         out.push(Issue {
-            scene: scene.to_string(),
+            scene: Some(scene.to_string()),
             element: Some(index),
             kind,
             category,
@@ -504,6 +544,68 @@ mod tests {
         assert_eq!(text_kinds(&doc, 0), vec!["textOverflow"]);
     }
 
+    // ---- document-level rules ----
+
+    fn deck(n: usize, with_structure: usize) -> Document {
+        let mut d = Document::new(1280, 720).with_bg("#0D1419");
+        d.add_asset("body", kineto_core::Asset::font("kineto:inter"));
+        for i in 0..n {
+            let mut sc = Scene::new(&format!("s{i}"), TIMEBASE).with_element(Element::text(
+                "a line of narration here",
+                "body",
+                40.0,
+                "#F2F5F7",
+                [80.0, 300.0],
+            ));
+            if i < with_structure {
+                sc = sc.with_element(
+                    Element::path(vec![[80.0, 400.0], [400.0, 400.0]]).with_stroke("#FF9900", 4.0),
+                );
+            }
+            d.push_scene(sc);
+        }
+        d
+    }
+
+    fn doc_kinds(doc: &Document) -> Vec<&'static str> {
+        analyze_document(doc).into_iter().map(|i| i.kind).collect()
+    }
+
+    #[test]
+    fn a_document_of_nothing_but_text_is_reported_as_a_deck() {
+        // The failure mode an agent falls into by default: handed a schema,
+        // it emits the lowest-energy thing that validates, which is centred
+        // prose on slides. Correct, lint-clean, and lifeless.
+        assert_eq!(doc_kinds(&deck(8, 0)), vec!["deckShaped"]);
+    }
+
+    #[test]
+    fn a_document_with_visual_structure_is_not_reported() {
+        // Control: the rule must be able to stay silent, or it is just noise.
+        assert_eq!(doc_kinds(&deck(8, 8)), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn a_title_card_does_not_make_a_document_a_deck() {
+        // Judged over the document, not per scene: a text-only title or close
+        // is normal, and flagging it would train callers to ignore the rule.
+        assert_eq!(doc_kinds(&deck(8, 6)), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn a_very_short_document_is_never_called_a_deck() {
+        // Two text scenes is a card, not a deck. Too small a sample to judge.
+        assert_eq!(doc_kinds(&deck(2, 0)), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn a_document_level_issue_names_neither_scene_nor_element() {
+        let issues = analyze_document(&deck(8, 0));
+        assert_eq!(issues[0].scene, None);
+        assert_eq!(issues[0].element, None);
+        assert_eq!(issues[0].category, "design");
+    }
+
     // ---- design rules ----
 
     fn text_scene(words: &str, size: f64, duration_ms: i64) -> Document {
@@ -625,7 +727,7 @@ mod tests {
         let mut assets = AssetStore::new();
         let issues = analyze(&doc, &mut assets, 0);
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].scene, "s");
+        assert_eq!(issues[0].scene.as_deref(), Some("s"));
         assert_eq!(issues[0].element, Some(1));
     }
 }
