@@ -34,6 +34,12 @@ pub enum DocError {
     AssetTypeMismatch { id: String, expected: &'static str },
     #[error("invalid color '{0}'")]
     BadColor(String),
+    #[error("path needs at least 2 points, got {0}")]
+    PathTooFewPoints(usize),
+    #[error("path has neither `stroke` nor `fill`: it would render nothing")]
+    PathNotPainted,
+    #[error("path `strokeWidth` must be positive, got {0}")]
+    PathStrokeWidth(String),
     #[error("keyframe times not strictly increasing in track '{0}'")]
     KeysNotIncreasing(String),
     #[error("key value arity mismatch in track '{0}'")]
@@ -300,7 +306,33 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             }
             validate_common(common)?;
         }
-        Element::Path { common, .. } => {
+        Element::Path {
+            points,
+            stroke,
+            stroke_width,
+            fill,
+            common,
+            ..
+        } => {
+            if points.len() < 2 {
+                return Err(DocError::PathTooFewPoints(points.len()));
+            }
+            // Rejected rather than tolerated: an unpainted path parses,
+            // validates and draws nothing, which reads as a renderer bug
+            // rather than the authoring mistake it is.
+            if stroke.is_none() && fill.is_none() {
+                return Err(DocError::PathNotPainted);
+            }
+            for c in [stroke, fill].into_iter().flatten() {
+                if !Color::parse_ok(&c.0) {
+                    return Err(DocError::BadColor(c.0.clone()));
+                }
+            }
+            if let Some(w) = stroke_width {
+                if !(w.0 > 0.0) {
+                    return Err(DocError::PathStrokeWidth(w.0.to_string()));
+                }
+            }
             validate_common(common)?;
         }
         Element::Group {

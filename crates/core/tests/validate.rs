@@ -242,3 +242,91 @@ fn key_opacity_out_of_range() {
     v["scenes"][0]["elements"][2]["animations"][0]["keys"][1]["v"] = serde_json::json!(1.5);
     assert_eq!(err(&v), DocError::OpacityRange("1.5".into()));
 }
+
+// ---- path element ----
+
+fn path_doc(path: serde_json::Value) -> Result<Document, DocError> {
+    let v = serde_json::json!({
+        "v": 1, "timebase": 705600000, "size": { "w": 100, "h": 100 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [path] }]
+    });
+    Document::from_json(&v.to_string())
+}
+
+#[test]
+fn a_valid_path_is_accepted() {
+    // Control for every rejection below: without this, a validator that
+    // refused all paths would pass the whole group.
+    assert!(path_doc(serde_json::json!({
+        "type": "path",
+        "points": [[0, 0], [50, 50]],
+        "stroke": "#FF9900",
+        "strokeWidth": 2
+    }))
+    .is_ok());
+}
+
+#[test]
+fn a_path_needs_at_least_two_points() {
+    // One point has no segment to stroke and no area to fill; it would
+    // render nothing at all.
+    for pts in [serde_json::json!([]), serde_json::json!([[10, 10]])] {
+        let err = path_doc(serde_json::json!({
+            "type": "path", "points": pts, "stroke": "#FFFFFF", "strokeWidth": 1
+        }))
+        .expect_err("expected rejection");
+        assert!(
+            matches!(err, DocError::PathTooFewPoints(_)),
+            "got {err:?}"
+        );
+    }
+}
+
+#[test]
+fn a_path_with_neither_stroke_nor_fill_is_rejected() {
+    // It would parse, validate, render nothing, and look like a renderer
+    // bug rather than an authoring mistake.
+    let err = path_doc(serde_json::json!({
+        "type": "path", "points": [[0, 0], [10, 10]]
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathNotPainted), "got {err:?}");
+}
+
+#[test]
+fn a_path_stroke_width_must_be_positive() {
+    for w in [0, -3] {
+        let err = path_doc(serde_json::json!({
+            "type": "path", "points": [[0, 0], [10, 10]],
+            "stroke": "#FFFFFF", "strokeWidth": w
+        }))
+        .expect_err("expected rejection");
+        assert!(matches!(err, DocError::PathStrokeWidth(_)), "got {err:?}");
+    }
+}
+
+#[test]
+fn a_path_with_a_bad_colour_is_rejected() {
+    for key in ["stroke", "fill"] {
+        let mut el = serde_json::json!({
+            "type": "path", "points": [[0, 0], [10, 10]],
+            "stroke": "#FFFFFF", "strokeWidth": 1
+        });
+        el[key] = serde_json::json!("not-a-colour");
+        let err = path_doc(el).expect_err("expected rejection");
+        assert!(matches!(err, DocError::BadColor(_)), "{key}: got {err:?}");
+    }
+}
+
+#[test]
+fn a_path_may_be_fill_only() {
+    // A closed filled shape with no stroke is the arrowhead case, and must
+    // not be caught by the not-painted rule.
+    assert!(path_doc(serde_json::json!({
+        "type": "path",
+        "points": [[0, 0], [10, 5], [0, 10]],
+        "closed": true,
+        "fill": "#FF9900"
+    }))
+    .is_ok());
+}
