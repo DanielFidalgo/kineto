@@ -7,9 +7,10 @@ existing native CLI (`kineto-cast`) and the two authoring SDKs (Rust, TS)
 by an MCP client instead of a shell or a build script.
 
 It speaks JSON-RPC 2.0 over stdio (the MCP `transport-io` transport; there
-is no HTTP transport). It exposes four tools — `render_document`,
-`preview_document`, `render_asciicast`, `render_storyboard` — plus read-only
-resources for the document JSON Schema and the golden example corpus.
+is no HTTP transport). It exposes five tools — `render_document`,
+`preview_document`, `check_document`, `render_asciicast`,
+`render_storyboard` — plus read-only resources for the document JSON Schema
+and the golden example corpus.
 
 ## Prerequisite: ffmpeg
 
@@ -65,7 +66,7 @@ Parameter names are camelCase over the wire (the Rust structs in
 generated from these types — the field names below are exact, not
 illustrative).
 
-All four tools bound the canvas before building an engine: each edge at
+All render tools bound the canvas before building an engine: each edge at
 most 16384 px, and at most 67108864 pixels in total (64 Mpx, comfortably
 above 8K). This applies to `validateOnly` too, which decodes assets and
 allocates pixmaps even though it renders no frames.
@@ -174,6 +175,44 @@ why they are reported rather than left to the caller.
 
 Prefer `documentPath` while iterating: edit the file and preview again,
 rather than resending the whole document on every call.
+
+### `check_document`
+
+Reports what is *wrong* with a document at chosen moments, and returns no
+images. Nothing is rasterized, no file is written, and ffmpeg is not needed.
+
+It takes the same `atMs` / `atScenes` moment addressing as
+`preview_document`. The division of labour is deliberate: **use
+`check_document` for correctness, `preview_document` for judgment.** Most
+iterations are correctness, and a check costs roughly a tenth of a preview
+image while giving a definite answer rather than something to squint at.
+
+Rules, all decidable from geometry, resolved animation and colour arithmetic:
+
+| kind | what it catches |
+|---|---|
+| `lowContrast` | text below 2:1 against the document background — effectively invisible, and unreachable by any validator |
+| `offCanvas` | an element whose transformed bounds are entirely outside the canvas at that tick |
+| `textOverflow` | laid-out text running past the canvas edge |
+| `fullyTransparent` | resolved opacity at or below 0.01 |
+| `zeroSize` | geometry collapsed to nothing |
+
+Each issue names the scene id and the element's index within it, so it can be
+found in a document with twenty scenes.
+
+```json
+{
+  "name": "check_document",
+  "arguments": { "documentPath": "/tmp/scene.json", "atScenes": ["intro", "outro"] }
+}
+```
+
+A clean document answers `no issues across 2 moment(s)...` in a few tokens.
+
+Known limits: a linter only catches what it enumerates, so it says nothing
+about whether a composition is good or the pacing works — that is what
+`preview_document` is for. Contrast is measured against the document
+background, not against elements layered beneath the text.
 
 ### `render_asciicast`
 

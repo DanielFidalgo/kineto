@@ -359,6 +359,18 @@ impl Element {
         }
     }
 
+    /// Read-only mirror of `common_mut`, for consumers that inspect an
+    /// element's animated properties without owning it.
+    pub fn common(&self) -> &Common {
+        match self {
+            Element::Image { common, .. } => common,
+            Element::Text { common, .. } => common,
+            Element::Rect { common, .. } => common,
+            Element::Path { common, .. } => common,
+            Element::Group { common, .. } => common,
+        }
+    }
+
     fn common_mut(&mut self) -> &mut Common {
         match self {
             Element::Image { common, .. } => common,

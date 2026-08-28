@@ -215,6 +215,80 @@ pub struct PreviewOutcome {
     pub samples: Vec<PreviewSample>,
 }
 
+/// One requested moment resolved onto the frame grid: the frame index, its
+/// tick, and which of `atMs`/`atScenes` asked for it.
+pub struct Moment {
+    pub frame_index: u64,
+    pub tick: i64,
+    pub requested_ms: Option<i64>,
+    pub requested_scene: Option<String>,
+}
+
+/// Resolve `atMs` + `atScenes` onto the frame grid.
+///
+/// Shared by `preview_document` and `check_document` so the two tools cannot
+/// disagree about which frame a given moment names.
+pub fn resolve_moments(
+    total_ticks: i64,
+    fps: i64,
+    timeline: &crate::timeline::TimelineSummary,
+    at_ms: &[i64],
+    at_scenes: &[String],
+) -> Result<Vec<Moment>, ToolError> {
+    if at_ms.is_empty() && at_scenes.is_empty() {
+        return Err(ToolError::Invalid(
+            "provide at least one of `atMs` (moments in milliseconds) or \
+             `atScenes` (scene ids, each previewed at its midpoint)"
+                .into(),
+        ));
+    }
+    let asked = at_ms.len() + at_scenes.len();
+    if asked > PREVIEW_MAX_COUNT {
+        return Err(ToolError::Invalid(format!(
+            "{asked} moments were named but at most {PREVIEW_MAX_COUNT} may be \
+             handled per call; ask for fewer rather than being given a \
+             silently truncated answer"
+        )));
+    }
+
+    let total = frames_for(total_ticks, fps);
+    if total == 0 {
+        return Err(ToolError::Invalid(
+            "this document has no frames: its total duration is zero".into(),
+        ));
+    }
+    let step = kineto_core::doc::TIMEBASE / fps;
+    let mut out = Vec::with_capacity(asked);
+
+    for &ms in at_ms {
+        let frame_index = frame_for_ms(ms, fps, total)?;
+        out.push(Moment {
+            frame_index,
+            tick: frame_index as i64 * step,
+            requested_ms: Some(ms),
+            requested_scene: None,
+        });
+    }
+    for id in at_scenes {
+        let span = timeline.find(id).ok_or_else(|| {
+            ToolError::Invalid(format!(
+                "no scene with id '{id}' — this document's scenes are: {}",
+                timeline.ids().join(", ")
+            ))
+        })?;
+        // Resolved from the midpoint *tick*, not via milliseconds: routing a
+        // tick through ms and back would round twice and can land a frame off.
+        let frame_index = frame_for_tick(span.midpoint_tick(), step, total);
+        out.push(Moment {
+            frame_index,
+            tick: frame_index as i64 * step,
+            requested_ms: None,
+            requested_scene: Some(id.clone()),
+        });
+    }
+    Ok(out)
+}
+
 /// Resolve requested millisecond offsets into the metadata to report and the
 /// distinct frame indices to encode.
 ///
@@ -228,77 +302,27 @@ pub fn resolve_preview(
     at_ms: &[i64],
     at_scenes: &[String],
 ) -> Result<(PreviewOutcome, Vec<u64>), ToolError> {
-    if at_ms.is_empty() && at_scenes.is_empty() {
-        return Err(ToolError::Invalid(
-            "provide at least one of `atMs` (moments in milliseconds) or \
-             `atScenes` (scene ids, each previewed at its midpoint)"
-                .into(),
-        ));
-    }
-    let asked = at_ms.len() + at_scenes.len();
-    if asked > PREVIEW_MAX_COUNT {
-        return Err(ToolError::Invalid(format!(
-            "{asked} moments were named but at most {PREVIEW_MAX_COUNT} may be \
-             previewed per call; ask for fewer rather than being given a \
-             silently truncated answer"
-        )));
-    }
+    let moments = resolve_moments(engine.total_duration(), fps, timeline, at_ms, at_scenes)?;
 
     let total = frame_count(engine, fps);
-    let step = kineto_core::doc::TIMEBASE / fps;
-    let mut samples: Vec<PreviewSample> = Vec::with_capacity(asked);
+    let mut samples: Vec<PreviewSample> = Vec::with_capacity(moments.len());
     let mut frames: Vec<u64> = Vec::new();
 
-    // Every sample is built here so scene attribution cannot differ between
-    // the two ways of naming a moment.
-    let mut record = |samples: &mut Vec<PreviewSample>,
-                      frames: &mut Vec<u64>,
-                      frame_index: u64,
-                      requested_ms: Option<i64>,
-                      requested_scene: Option<String>| {
-        let tick = engine.tick_for_frame(frame_index as i64, fps);
-        if !frames.contains(&frame_index) {
-            frames.push(frame_index);
+    for m in moments {
+        let tick = engine.tick_for_frame(m.frame_index as i64, fps);
+        if !frames.contains(&m.frame_index) {
+            frames.push(m.frame_index);
         }
         let dominant = timeline.scene_at(tick);
         samples.push(PreviewSample {
-            requested_ms,
-            requested_scene,
-            frame_index,
+            requested_ms: m.requested_ms,
+            requested_scene: m.requested_scene,
+            frame_index: m.frame_index,
             tick,
             actual_ms: round_ms(tick),
             scene_id: dominant.map(|s| s.id.clone()),
             scene_local_ms: dominant.map(|s| round_ms(tick - s.start_tick)),
         });
-    };
-
-    for &ms in at_ms {
-        let frame_index = frame_for_ms(ms, fps, total)?;
-        record(&mut samples, &mut frames, frame_index, Some(ms), None);
-    }
-
-    for id in at_scenes {
-        let span = timeline.find(id).ok_or_else(|| {
-            ToolError::Invalid(format!(
-                "no scene with id '{id}' — this document's scenes are: {}",
-                timeline.ids().join(", ")
-            ))
-        })?;
-        if total == 0 {
-            return Err(ToolError::Invalid(
-                "this document has no frames to preview: its total duration is zero".into(),
-            ));
-        }
-        // Resolved from the midpoint *tick*, not via milliseconds: routing a
-        // tick through ms and back would round twice and can land a frame off.
-        let frame_index = frame_for_tick(span.midpoint_tick(), step, total);
-        record(
-            &mut samples,
-            &mut frames,
-            frame_index,
-            None,
-            Some(id.clone()),
-        );
     }
 
     let ticks = engine.total_duration();

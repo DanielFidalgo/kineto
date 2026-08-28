@@ -1,5 +1,6 @@
 //! MCP server exposing the native kineto engine over stdio.
 
+pub mod check;
 pub mod error;
 pub mod render;
 pub mod resources;
@@ -167,6 +168,84 @@ impl KinetoServer {
         )?;
         let previews = crate::render::encode_frames(&mut engine, fps, &frames)?;
         Ok(crate::tools::preview_success(&outcome, &frames, previews))
+    }
+
+    #[tool(
+        name = "check_document",
+        description = "Check a kineto scene document for defects at chosen \
+                       moments, without rendering anything. Reports only what \
+                       is wrong — text invisible against its background, \
+                       elements animated off the canvas, text overrunning the \
+                       edge, fully transparent or degenerate geometry — and \
+                       returns no images, so it costs a fraction of a preview. \
+                       Use it to verify a document is correct; use \
+                       `preview_document` when you need to judge how it looks."
+    )]
+    pub async fn check_document(
+        &self,
+        Parameters(params): Parameters<crate::tools::CheckDocumentParams>,
+    ) -> CallToolResult {
+        match Self::check_document_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn check_document_impl(
+        params: crate::tools::CheckDocumentParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let (doc, default_base) = crate::source::load_document(
+            params.document.as_deref(),
+            params.document_path.as_deref(),
+        )?;
+        let fps = crate::source::resolve_fps(params.fps, &doc)?;
+        crate::source::check_canvas_size(doc.size.w, doc.size.h)?;
+
+        let base = params
+            .asset_base_dir
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or(default_base);
+
+        // No Engine is built: nothing here rasterizes, so there is no reason
+        // to allocate two full-canvas pixmaps. Assets are still prepared,
+        // because text layout needs the fonts.
+        let mut assets = crate::source::resolve_assets(&doc, &base)?;
+        assets.prepare(&doc)?;
+
+        let timeline = crate::timeline::summary(&doc);
+        let total = kineto_core::timeline::total_duration(&doc);
+        let moments = crate::render::resolve_moments(
+            total,
+            fps,
+            &timeline,
+            &params.at_ms,
+            &params.at_scenes,
+        )?;
+
+        let mut checked = Vec::with_capacity(moments.len());
+        let mut issue_count = 0;
+        for m in moments {
+            let issues = crate::check::analyze(&doc, &mut assets, m.tick);
+            issue_count += issues.len();
+            checked.push(crate::tools::CheckedMoment {
+                requested_ms: m.requested_ms,
+                requested_scene: m.requested_scene,
+                tick: m.tick,
+                actual_ms: crate::render::round_ms(m.tick),
+                scene_id: timeline.scene_at(m.tick).map(|s| s.id.clone()),
+                issues,
+            });
+        }
+
+        Ok(crate::tools::check_success(&crate::tools::CheckOutcome {
+            width: doc.size.w,
+            height: doc.size.h,
+            fps,
+            issue_count,
+            timeline,
+            moments: checked,
+        }))
     }
 
     #[tool(

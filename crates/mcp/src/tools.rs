@@ -181,6 +181,94 @@ pub fn preview_success(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckDocumentParams {
+    /// Canonical kineto document JSON. Provide exactly one of `document` or
+    /// `documentPath`.
+    #[serde(default)]
+    pub document: Option<String>,
+
+    /// Path to a `.json` document. Provide exactly one of `document` or
+    /// `documentPath`.
+    #[serde(default)]
+    pub document_path: Option<String>,
+
+    /// Directory that image and font `src` values resolve against.
+    #[serde(default)]
+    pub asset_base_dir: Option<String>,
+
+    /// Moments to check, in whole milliseconds from the start of the document.
+    /// Provide at least one of `atMs` or `atScenes`; at most 12 in total.
+    #[serde(default)]
+    pub at_ms: Vec<i64>,
+
+    /// Scene ids to check, each at that scene's midpoint.
+    #[serde(default)]
+    pub at_scenes: Vec<String>,
+
+    /// Frames per second, which sets the frame grid moments snap to.
+    #[serde(default)]
+    pub fps: Option<i64>,
+}
+
+/// One checked moment and whatever was wrong with it.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedMoment {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_ms: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_scene: Option<String>,
+    pub tick: i64,
+    pub actual_ms: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_id: Option<String>,
+    pub issues: Vec<crate::check::Issue>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckOutcome {
+    pub width: u32,
+    pub height: u32,
+    pub fps: i64,
+    pub issue_count: usize,
+    pub timeline: crate::timeline::TimelineSummary,
+    pub moments: Vec<CheckedMoment>,
+}
+
+/// Text-only result. No images, deliberately: the tool exists because most
+/// checks should not cost a picture.
+pub fn check_success(outcome: &CheckOutcome) -> CallToolResult {
+    let mut lines = Vec::new();
+    if outcome.issue_count == 0 {
+        lines.push(format!(
+            "no issues across {} moment(s) of a {}x{} document",
+            outcome.moments.len(),
+            outcome.width,
+            outcome.height
+        ));
+    } else {
+        lines.push(format!(
+            "{} issue(s) across {} moment(s):",
+            outcome.issue_count,
+            outcome.moments.len()
+        ));
+        for m in &outcome.moments {
+            for i in &m.issues {
+                lines.push(format!(
+                    "  {} ms — scene '{}' element {}: {} ({})",
+                    m.actual_ms, i.scene, i.element, i.detail, i.kind
+                ));
+            }
+        }
+    }
+    let mut result = CallToolResult::success(vec![ContentBlock::text(lines.join("\n"))]);
+    result.structured_content = serde_json::to_value(outcome).ok();
+    result
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeParams {
     /// Background color, `#RRGGBB`.
     #[serde(default)]
