@@ -783,7 +783,13 @@ fn path_rotation_pivots_on_its_point_bounds() {
     renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
 
     // Now vertical about (32,32): painted along the column, clear along the row.
-    assert!(pm.pixel(32, 12).unwrap().red() > 0, "not vertical after rotation");
-    assert!(pm.pixel(32, 52).unwrap().red() > 0, "not vertical after rotation");
+    assert!(
+        pm.pixel(32, 12).unwrap().red() > 0,
+        "not vertical after rotation"
+    );
+    assert!(
+        pm.pixel(32, 52).unwrap().red() > 0,
+        "not vertical after rotation"
+    );
     assert_eq!(pm.pixel(12, 32).unwrap().red(), 0, "still horizontal");
 }
