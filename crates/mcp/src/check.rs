@@ -74,10 +74,42 @@ fn contrast(a: &kineto_core::Color, b: &kineto_core::Color) -> f64 {
 pub struct Issue {
     pub scene: String,
     /// Index of the element within its scene, so the caller can find it.
-    pub element: usize,
+    /// Absent for rules that are a property of the whole scene.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub element: Option<usize>,
     pub kind: &'static str,
+    /// `"correctness"` — the document does not draw what it says it does, and
+    /// no amount of taste makes that acceptable. `"design"` — it draws
+    /// correctly but breaks a rule of thumb that is checkable as arithmetic.
+    /// Separated so a caller can block on one and merely report the other.
+    pub category: &'static str,
     pub detail: String,
 }
+
+/// Words per minute assumed for on-screen text.
+///
+/// Faster than prose reading (~250) because captions and labels are scanned,
+/// not read. Deliberately generous: the rule exists to catch text that flashes
+/// past, not to grade pacing.
+const SCAN_WPM: f64 = 300.0;
+
+/// Extra time a viewer needs to notice a scene changed at all.
+const SCENE_BEAT_MS: f64 = 500.0;
+
+/// Smallest text height, as a fraction of canvas height, that survives being
+/// watched on a phone. 1.6% is ~17px at 1080p and ~11.5px at 720p.
+///
+/// Relative rather than absolute because the video is scaled to the viewport:
+/// 10px at 720p and 15px at 1080p are the same problem.
+const MIN_TEXT_FRACTION: f64 = 0.016;
+
+/// Most words that can be taken in from a single screen at once.
+///
+/// 40 rather than something tighter because a *scanned list* is not a
+/// paragraph: the long-standing "6x6" slide rule is already ~36 words, and a
+/// rule that flags legitimate layouts is worse than no rule. This is meant to
+/// catch a wall of text, which `tooFast` will usually flag as well.
+const MAX_WORDS_ON_SCREEN: usize = 40;
 
 /// Report everything mechanically wrong with what `doc` draws at `tick`.
 ///
@@ -98,8 +130,52 @@ pub fn analyze(doc: &Document, assets: &mut AssetStore, tick: i64) -> Vec<Issue>
         for (ei, el) in scene.elements.iter().enumerate() {
             check_element(doc, assets, el, local, cw, ch, &scene.id, ei, &mut issues);
         }
+        check_scene(scene, ch, &mut issues);
     }
     issues
+}
+
+/// Rules about a scene as a whole rather than any one element.
+fn check_scene(scene: &kineto_core::Scene, _ch: f32, out: &mut Vec<Issue>) {
+    let words: usize = scene
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            Element::Text { text, .. } => Some(text.split_whitespace().count()),
+            _ => None,
+        })
+        .sum();
+    if words == 0 {
+        return;
+    }
+
+    let duration_ms = scene.duration as f64 / (kineto_core::doc::TIMEBASE as f64 / 1000.0);
+    let needed = words as f64 / SCAN_WPM * 60_000.0 + SCENE_BEAT_MS;
+    if duration_ms < needed {
+        out.push(Issue {
+            scene: scene.id.clone(),
+            element: None,
+            kind: "tooFast",
+            category: "design",
+            detail: format!(
+                "{words} words in {duration_ms:.0} ms — about {:.0} wpm; \
+                 needs roughly {needed:.0} ms to be readable",
+                words as f64 / (duration_ms / 60_000.0)
+            ),
+        });
+    }
+    if words > MAX_WORDS_ON_SCREEN {
+        out.push(Issue {
+            scene: scene.id.clone(),
+            element: None,
+            kind: "tooDense",
+            category: "design",
+            detail: format!(
+                "{words} words on screen at once; more than {MAX_WORDS_ON_SCREEN} \
+                 is more than a viewer can take in"
+            ),
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -114,11 +190,12 @@ fn check_element(
     index: usize,
     out: &mut Vec<Issue>,
 ) {
-    let mut push = |kind: &'static str, detail: String| {
+    let mut push = |kind: &'static str, category: &'static str, detail: String| {
         out.push(Issue {
             scene: scene.to_string(),
-            element: index,
+            element: Some(index),
             kind,
+            category,
             detail,
         })
     };
@@ -133,6 +210,7 @@ fn check_element(
         if never_visible(el) {
             push(
                 "fullyTransparent",
+                "correctness",
                 "opacity never rises above zero anywhere in this scene — the \
                  element can never be seen"
                     .into(),
@@ -173,11 +251,29 @@ fn check_element(
         _ => base_bbox(el),
     };
 
+    if let Element::Text { size_px, .. } = el {
+        let fraction = size_px.0 / ch as f64;
+        if fraction < MIN_TEXT_FRACTION {
+            push(
+                "tooSmall",
+                "design",
+                format!(
+                    "{}px is {:.2}% of canvas height; under {:.1}% is unreadable \
+                     once the video is scaled to a phone",
+                    size_px.0,
+                    fraction * 100.0,
+                    MIN_TEXT_FRACTION * 100.0
+                ),
+            );
+        }
+    }
+
     if let Element::Text { color, .. } = el {
         let ratio = contrast(color, &doc.bg);
         if ratio < MIN_CONTRAST {
             push(
                 "lowContrast",
+                "correctness",
                 format!(
                     "text '{}' against background '{}' is {ratio:.2}:1 — effectively invisible",
                     color.0, doc.bg.0
@@ -200,6 +296,7 @@ fn check_element(
     if degenerate {
         push(
             "zeroSize",
+            "correctness",
             "geometry collapses to nothing — the element cannot be drawn".into(),
         );
         return;
@@ -230,6 +327,7 @@ fn check_element(
     if max_x <= 0.0 || min_x >= cw || max_y <= 0.0 || min_y >= ch {
         push(
             "offCanvas",
+            "correctness",
             format!(
                 "bounds ({min_x:.0},{min_y:.0})-({max_x:.0},{max_y:.0}) are entirely \
                  outside the {cw:.0}x{ch:.0} canvas"
@@ -246,6 +344,7 @@ fn check_element(
     {
         push(
             "textOverflow",
+            "correctness",
             format!(
                 "laid-out text spans ({min_x:.0},{min_y:.0})-({max_x:.0},{max_y:.0}), \
                  past the {cw:.0}x{ch:.0} canvas"
@@ -405,6 +504,116 @@ mod tests {
         assert_eq!(text_kinds(&doc, 0), vec!["textOverflow"]);
     }
 
+    // ---- design rules ----
+
+    fn text_scene(words: &str, size: f64, duration_ms: i64) -> Document {
+        let mut d = Document::new(1280, 720).with_bg("#0D1419");
+        d.add_asset("body", kineto_core::Asset::font("kineto:inter"));
+        d.push_scene(
+            Scene::new("s", duration_ms * (TIMEBASE / 1000)).with_element(
+                Element::text(words, "body", size, "#F2F5F7", [80.0, 300.0]).with_max_w(1000.0),
+            ),
+        );
+        d
+    }
+
+    #[test]
+    fn comfortable_text_reports_nothing() {
+        // Control for all three design rules: 8 words, 28px, 5 seconds.
+        let doc = text_scene("eight short words is a comfortable amount here", 28.0, 5000);
+        assert_eq!(text_kinds(&doc, 0), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn text_too_small_to_read_is_reported() {
+        // Judged as a fraction of canvas height, not absolute pixels: the
+        // video is watched scaled, mostly on a phone, so 10px at 720p and
+        // 15px at 1080p are the same problem.
+        let doc = text_scene("a few words", 9.0, 5000);
+        assert_eq!(text_kinds(&doc, 0), vec!["tooSmall"]);
+    }
+
+    #[test]
+    fn a_scene_too_short_to_read_is_reported() {
+        // The commonest amateur mistake in explainer video, and pure
+        // arithmetic: 40 words cannot be read in 900ms.
+        let words = "one two three four five six seven eight nine ten \
+                     eleven twelve thirteen fourteen fifteen sixteen seventeen \
+                     eighteen nineteen twenty twentyone twentytwo twentythree \
+                     twentyfour twentyfive twentysix twentyseven twentyeight \
+                     twentynine thirty thirtyone thirtytwo thirtythree \
+                     thirtyfour thirtyfive thirtysix thirtyseven thirtyeight \
+                     thirtynine forty";
+        let doc = text_scene(words, 28.0, 900);
+        let kinds = text_kinds(&doc, 0);
+        assert!(kinds.contains(&"tooFast"), "got {kinds:?}");
+    }
+
+    #[test]
+    fn too_much_text_at_once_is_reported() {
+        // Enough time to read it, but too much on screen to take in.
+        let words = "one two three four five six seven eight nine ten eleven \
+                     twelve thirteen fourteen fifteen sixteen seventeen eighteen \
+                     nineteen twenty a b c d e f g h i j k l m n o p q r s t u v \
+                     w x y z";
+        let doc = text_scene(words, 28.0, 30_000);
+        let kinds = text_kinds(&doc, 0);
+        assert!(kinds.contains(&"tooDense"), "got {kinds:?}");
+        assert!(!kinds.contains(&"tooFast"), "30s is ample time: {kinds:?}");
+    }
+
+    #[test]
+    fn issues_carry_a_category_so_callers_can_separate_taste_from_defects() {
+        // A correctness failure blocks; a design failure advises. A caller
+        // that cannot tell them apart has to treat both the same.
+        let doc = text_scene("a few words", 9.0, 5000);
+        let mut assets = AssetStore::new();
+        assets.add_bytes(
+            "body",
+            kineto_core::resolve_reserved_src("kineto:inter")
+                .unwrap()
+                .to_vec(),
+        );
+        assets.prepare(&doc).unwrap();
+        let issues = analyze(&doc, &mut assets, 0);
+        assert_eq!(issues[0].category, "design");
+
+        let bad = text_doc("#131b24", "#101820", 30.0, [10.0, 20.0], None);
+        let mut a2 = AssetStore::new();
+        a2.add_bytes(
+            "body",
+            kineto_core::resolve_reserved_src("kineto:inter")
+                .unwrap()
+                .to_vec(),
+        );
+        a2.prepare(&bad).unwrap();
+        assert_eq!(analyze(&bad, &mut a2, 0)[0].category, "correctness");
+    }
+
+    #[test]
+    fn a_scene_level_issue_has_no_element_index() {
+        // tooFast is a property of the scene, not of any one element.
+        let doc = text_scene(
+            "one two three four five six seven eight nine ten",
+            28.0,
+            300,
+        );
+        let mut assets = AssetStore::new();
+        assets.add_bytes(
+            "body",
+            kineto_core::resolve_reserved_src("kineto:inter")
+                .unwrap()
+                .to_vec(),
+        );
+        assets.prepare(&doc).unwrap();
+        let issues = analyze(&doc, &mut assets, 0);
+        let fast = issues
+            .iter()
+            .find(|i| i.kind == "tooFast")
+            .expect("tooFast");
+        assert_eq!(fast.element, None);
+    }
+
     #[test]
     fn an_issue_names_the_scene_and_element_index() {
         // "something is wrong" is not actionable; the caller has to be able
@@ -417,6 +626,6 @@ mod tests {
         let issues = analyze(&doc, &mut assets, 0);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].scene, "s");
-        assert_eq!(issues[0].element, 1);
+        assert_eq!(issues[0].element, Some(1));
     }
 }

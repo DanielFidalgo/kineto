@@ -964,11 +964,18 @@ fn check_document_finds_text_that_cannot_be_seen() {
     let result = &resp["result"];
     assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
 
+    // Asserts on the correctness finding specifically rather than on a total:
+    // design rules also have opinions about this fixture (a 1s scene is brisk
+    // for five words), and they are not what this test is about.
     let issues = result["structuredContent"]["moments"][0]["issues"]
         .as_array()
         .expect("issues array");
-    assert_eq!(issues.len(), 1, "{result}");
-    assert_eq!(issues[0]["kind"], "lowContrast");
+    let correctness: Vec<&serde_json::Value> = issues
+        .iter()
+        .filter(|i| i["category"] == "correctness")
+        .collect();
+    assert_eq!(correctness.len(), 1, "{result}");
+    assert_eq!(correctness[0]["kind"], "lowContrast");
 }
 
 #[test]

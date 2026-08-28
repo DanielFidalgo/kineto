@@ -189,13 +189,26 @@ image while giving a definite answer rather than something to squint at.
 
 Rules, all decidable from geometry, resolved animation and colour arithmetic:
 
-| kind | what it catches |
-|---|---|
-| `lowContrast` | text below 2:1 against the document background — effectively invisible, and unreachable by any validator |
-| `offCanvas` | an element whose transformed bounds are entirely outside the canvas at that tick |
-| `textOverflow` | laid-out text running past the canvas edge |
-| `fullyTransparent` | resolved opacity at or below 0.01 |
-| `zeroSize` | geometry collapsed to nothing |
+Every issue carries a `category`. **`correctness`** means the document does
+not draw what it claims to, and no amount of taste makes that acceptable.
+**`design`** means it draws correctly but breaks a rule of thumb that happens
+to be checkable as arithmetic. Block on the first; report the second.
+
+| kind | category | what it catches |
+|---|---|---|
+| `lowContrast` | correctness | text below 2:1 against the background — invisible, and unreachable by any validator |
+| `offCanvas` | correctness | transformed bounds entirely outside the canvas at that tick |
+| `textOverflow` | correctness | laid-out text running past the canvas edge |
+| `fullyTransparent` | correctness | opacity never rises above zero anywhere in the scene |
+| `zeroSize` | correctness | geometry collapsed to nothing |
+| `tooFast` | design | more words than can be read in the scene's duration, at 300 wpm |
+| `tooSmall` | design | text under 1.6% of canvas height — unreadable once scaled to a phone |
+| `tooDense` | design | more than 40 words on screen at once |
+
+The design rules are the ones that make output *consistently* watchable
+rather than merely correct. `tooFast` is the commonest mistake in explainer
+video and is pure arithmetic: word count against scene duration. Scene-level
+issues carry no `element` index.
 
 Each issue names the scene id and the element's index within it, so it can be
 found in a document with twenty scenes.

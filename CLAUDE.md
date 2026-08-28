@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **253 tests**.
+   output. Workspace suite is **259 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
