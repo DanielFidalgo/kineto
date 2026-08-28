@@ -18,6 +18,26 @@ fn initialize_returns_server_info() {
 }
 
 #[test]
+fn the_server_points_callers_at_the_reference_examples() {
+    // The instructions are the only guidance a model reliably reads before
+    // authoring, and the examples are useless if nothing names them. Guards
+    // the pointer against rotting if either side is renamed.
+    let mut server = Server::start();
+    let resp = server.initialize();
+    let instructions = resp["result"]["instructions"]
+        .as_str()
+        .expect("server instructions");
+    assert!(
+        instructions.contains("kineto://example/"),
+        "instructions do not point at the examples: {instructions}"
+    );
+    assert!(
+        instructions.contains("check_document"),
+        "instructions do not describe the cheapest-first order: {instructions}"
+    );
+}
+
+#[test]
 fn tools_list_advertises_render_document() {
     let mut server = Server::start();
     server.initialize();
