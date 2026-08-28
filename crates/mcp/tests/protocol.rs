@@ -50,6 +50,44 @@ fn tools_list_advertises_render_document() {
 }
 
 #[test]
+fn tools_list_advertises_preview_document() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = server.request("tools/list", serde_json::json!({}));
+    let tools = resp["result"]["tools"].as_array().expect("tools array");
+
+    let tool = tools
+        .iter()
+        .find(|t| t["name"] == "preview_document")
+        .unwrap_or_else(|| panic!("preview_document missing from {tools:?}"));
+
+    let props = &tool["inputSchema"]["properties"];
+    for key in ["document", "documentPath", "assetBaseDir", "atMs", "fps"] {
+        assert!(
+            props.get(key).is_some(),
+            "missing property {key} in {props}"
+        );
+    }
+    // No `out` and no `validateOnly`: this tool writes nothing and always
+    // validates. Advertising either would invite a caller to ask for an MP4
+    // from the tool whose whole purpose is not producing one.
+    for key in ["out", "validateOnly"] {
+        assert!(
+            props.get(key).is_none(),
+            "preview_document must not advertise {key} in {props}"
+        );
+    }
+    assert_eq!(
+        tool["inputSchema"]["required"]
+            .as_array()
+            .map(|r| r.contains(&serde_json::json!("atMs"))),
+        Some(true),
+        "atMs must be required: {tool}"
+    );
+}
+
+#[test]
 fn resources_list_includes_the_schema_and_the_corpus() {
     let mut server = Server::start();
     server.initialize();

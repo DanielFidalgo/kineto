@@ -51,6 +51,30 @@ pub fn load_document(
     }
 }
 
+/// Resolve the export rate: the explicit argument, else the document's own
+/// `defaultFps`, else 30 (spec §4.1).
+///
+/// `crates/core` does not validate `default_fps`, so an unusable one reaches
+/// us here. The error says where the number came from — otherwise a caller who
+/// passed no `fps` is told off for a value they never sent.
+pub fn resolve_fps(explicit: Option<i64>, doc: &Document) -> Result<i64, ToolError> {
+    let (fps, from_document) = match explicit {
+        Some(fps) => (fps, false),
+        None => match doc.default_fps {
+            Some(fps) => (i64::from(fps), true),
+            None => (crate::tools::default_fps(), false),
+        },
+    };
+    check_fps(fps).map_err(|e| {
+        if from_document {
+            ToolError::Invalid(format!("the document's `defaultFps` is unusable — {e}"))
+        } else {
+            e
+        }
+    })?;
+    Ok(fps)
+}
+
 /// Stage bytes for every asset the document references.
 ///
 /// Reserved font srcs (`kineto:inter`, `kineto:jetbrains-mono`) come from

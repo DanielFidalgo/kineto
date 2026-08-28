@@ -90,6 +90,78 @@ pub fn success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreviewDocumentParams {
+    /// Canonical kineto document JSON. Provide exactly one of `document` or
+    /// `documentPath`.
+    #[serde(default)]
+    pub document: Option<String>,
+
+    /// Path to a `.json` document. Provide exactly one of `document` or
+    /// `documentPath`. Prefer this while iterating: edit the file and preview
+    /// again rather than resending the whole document each time.
+    #[serde(default)]
+    pub document_path: Option<String>,
+
+    /// Directory that image and font `src` values resolve against. Defaults to
+    /// the document's own directory, or the working directory for an inline
+    /// document.
+    #[serde(default)]
+    pub asset_base_dir: Option<String>,
+
+    /// Moments to look at, in whole milliseconds from the start of the
+    /// document. Each is snapped to the frame containing it, and the frame it
+    /// resolved to is reported back. At most 12 per call.
+    pub at_ms: Vec<i64>,
+
+    /// Frames per second, which sets the frame grid moments snap to. Must be
+    /// at most 1000 and divide 705600000 exactly (24, 25, 30, 50, 60...).
+    /// Defaults to the document's own `defaultFps`, or 30.
+    #[serde(default)]
+    pub fps: Option<i64>,
+}
+
+/// The preview result: a summary, then each frame labelled with the moment it
+/// answers, then the image itself.
+///
+/// The labels matter — a model handed three unlabelled images has to guess
+/// which is which, and the whole point of the tool is that it can tell.
+pub fn preview_success(
+    outcome: &crate::render::PreviewOutcome,
+    frames: &[u64],
+    previews: Vec<String>,
+) -> CallToolResult {
+    let summary = format!(
+        "previewed {} moment(s) of a {}x{} document ({} frames at {} fps, {:.3}s)",
+        outcome.samples.len(),
+        outcome.width,
+        outcome.height,
+        outcome.frame_count,
+        outcome.fps,
+        outcome.duration_seconds
+    );
+
+    let mut content = vec![ContentBlock::text(summary)];
+    for (index, png) in frames.iter().zip(previews) {
+        let asked: Vec<String> = outcome
+            .samples
+            .iter()
+            .filter(|s| s.frame_index == *index)
+            .map(|s| format!("{} ms", s.requested_ms))
+            .collect();
+        content.push(ContentBlock::text(format!(
+            "frame {index} — requested {}",
+            asked.join(", ")
+        )));
+        content.push(ContentBlock::image(png, "image/png"));
+    }
+
+    let mut result = CallToolResult::success(content);
+    result.structured_content = serde_json::to_value(outcome).ok();
+    result
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeParams {
     /// Background color, `#RRGGBB`.
     #[serde(default)]
