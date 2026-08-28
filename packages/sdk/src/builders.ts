@@ -8,6 +8,7 @@ import { TIMEBASE } from "./time";
 import type {
   Cap,
   Join,
+  Paint,
   Align,
   Common,
   Ease,
@@ -74,13 +75,13 @@ export function path(
     strokeWidth?: number;
     cap?: Cap;
     join?: Join;
-    fill?: string;
+    fill?: Paint;
   } = {},
 ): ZoeElement {
   return { type: "path", points, ...opts };
 }
 
-export function rect(r: [number, number, number, number], fill: string): ZoeElement {
+export function rect(r: [number, number, number, number], fill: Paint): ZoeElement {
   return { type: "rect", rect: r, fill };
 }
 

@@ -11,13 +11,14 @@
 
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
-use crate::doc::{Align, Cap, Element, Join};
+use crate::doc::{Align, Cap, Element, Gradient, Join, Paint};
 use crate::text::{layout_text, TextLayout};
 use cosmic_text::SwashContent;
 use std::collections::HashMap;
 use tiny_skia::{
-    BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pixmap,
-    PixmapMut, PixmapPaint, Rect as SkRect, Shader, Stroke, Transform,
+    BlendMode, Color, FillRule, FilterQuality, GradientStop, LineCap, LineJoin, LinearGradient,
+    Paint as SkPaint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Point, RadialGradient,
+    Rect as SkRect, Shader, SpreadMode, Stroke, Transform,
 };
 
 /// Axis-aligned base bounding box, in the element's parent-local coordinate
@@ -130,6 +131,76 @@ pub fn base_bbox(el: &Element) -> BBox {
             })
         }
     }
+}
+
+/// Build the tiny-skia shader for a `Paint` over `bbox`.
+///
+/// Gradient coordinates are unit-space over the element's own box, mapped
+/// here into the same local space as the geometry being filled. `fill_path`
+/// applies its transform to the shader as well as the path (see tiny-skia's
+/// `painter.rs`), so a rotated element carries its gradient with it without
+/// any extra work, and without the matrix being applied twice.
+///
+/// Alpha is folded into every stop rather than applied afterwards, so a
+/// gradient honours an animated `opacity` exactly as a solid fill does.
+fn shader_for(paint: &Paint, bbox: &BBox, opacity: f64) -> Shader<'static> {
+    let scale = |c: &crate::color::Color| {
+        let (r, g, b, a) = c.rgba8();
+        let alpha = ((a as f32) * (opacity as f32)).round().clamp(0.0, 255.0) as u8;
+        Color::from_rgba8(r, g, b, alpha)
+    };
+
+    let gradient = match paint {
+        Paint::Solid(c) => return Shader::SolidColor(scale(c)),
+        Paint::Gradient(g) => g,
+    };
+
+    let stops: Vec<GradientStop> = gradient
+        .stops()
+        .iter()
+        .map(|s| GradientStop::new(s.at.0 as f32, scale(&s.color)))
+        .collect();
+
+    // Unit space to the element's own box.
+    let at =
+        |u: f64, v: f64| Point::from_xy(bbox.x + (u as f32) * bbox.w, bbox.y + (v as f32) * bbox.h);
+
+    let built = match gradient {
+        Gradient::Linear { from, to, .. } => LinearGradient::new(
+            at(from[0].0, from[1].0),
+            at(to[0].0, to[1].0),
+            stops,
+            SpreadMode::Pad,
+            Transform::identity(),
+        ),
+        Gradient::Radial { center, radius, .. } => {
+            // Radius is a fraction of the longer edge, so a wide box does not
+            // get an ellipse-shaped falloff on one axis only.
+            let r = (radius.0 as f32) * bbox.w.abs().max(bbox.h.abs());
+            let c = at(center[0].0, center[1].0);
+            RadialGradient::new(
+                c,
+                0.0,
+                c,
+                r.max(f32::EPSILON),
+                stops,
+                SpreadMode::Pad,
+                Transform::identity(),
+            )
+        }
+    };
+
+    // `None` only for a degenerate gradient (validation rejects those), so
+    // falling back to the first stop keeps the renderer total.
+    built.unwrap_or_else(|| {
+        Shader::SolidColor(
+            gradient
+                .stops()
+                .first()
+                .map(|s| scale(&s.color))
+                .unwrap_or(Color::TRANSPARENT),
+        )
+    })
 }
 
 fn union_bbox(a: BBox, b: BBox) -> BBox {
@@ -307,12 +378,8 @@ impl Renderer {
                     };
                     let path = PathBuilder::from_rect(sk_rect);
 
-                    let (r, g, b, a) = fill.rgba8();
-                    let alpha = ((a as f32) * (resolved.opacity as f32))
-                        .round()
-                        .clamp(0.0, 255.0) as u8;
-                    let paint = Paint {
-                        shader: Shader::SolidColor(tiny_skia::Color::from_rgba8(r, g, b, alpha)),
+                    let paint = SkPaint {
+                        shader: shader_for(fill, &bbox, resolved.opacity),
                         anti_alias: true,
                         ..Default::default()
                     };
@@ -357,19 +424,13 @@ impl Renderer {
                         continue; // degenerate (e.g. every point identical)
                     };
 
-                    let paint_for = |c: &crate::color::Color| {
-                        let (r, g, b, a) = c.rgba8();
-                        let alpha = ((a as f32) * (resolved.opacity as f32))
-                            .round()
-                            .clamp(0.0, 255.0) as u8;
-                        Paint {
-                            shader: Shader::SolidColor(tiny_skia::Color::from_rgba8(
-                                r, g, b, alpha,
-                            )),
-                            anti_alias: true,
-                            ..Default::default()
-                        }
+                    let paint_for = |p: &Paint| SkPaint {
+                        shader: shader_for(p, &bbox, resolved.opacity),
+                        anti_alias: true,
+                        ..Default::default()
                     };
+                    let stroke_paint =
+                        |c: &crate::color::Color| paint_for(&Paint::Solid(c.clone()));
 
                     // Fill first so a stroke reads as an outline on top of it.
                     if let Some(f) = fill {
@@ -392,7 +453,7 @@ impl Renderer {
                             },
                             ..Default::default()
                         };
-                        canvas.stroke_path(&path, &paint_for(s), &sk_stroke, matrix, None);
+                        canvas.stroke_path(&path, &stroke_paint(s), &sk_stroke, matrix, None);
                     }
                 }
                 Element::Image {

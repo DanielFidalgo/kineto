@@ -112,6 +112,18 @@ fn example_full_doc() -> Document {
     d.push_scene(
         Scene::new("scene-1", seconds(1.0))
             .with_element(group)
+            .with_element(Element::rect(
+                [0.0, 0.0, 120.0, 60.0],
+                Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 0.5],
+                    vec![
+                        Stop::new(0.0, "#FF9900"),
+                        Stop::new(0.25, "#F2F5F7"),
+                        Stop::new(1.0, "#4ECDC4"),
+                    ],
+                ),
+            ))
             .with_element(
                 Element::path(vec![[0.0, 0.0], [40.0, 25.5], [0.0, 51.0]])
                     .with_closed(true)
@@ -197,4 +209,56 @@ fn path_defaults_are_omitted_from_canonical_json() {
     assert!(!json.contains("closed"), "{json}");
     assert!(!json.contains("cap"), "{json}");
     assert!(!json.contains("join"), "{json}");
+}
+
+#[test]
+fn a_gradient_fill_round_trips_through_canonical_json() {
+    let mut d = Document::new(200, 100);
+    d.push_scene(
+        Scene::new("s", seconds(1.0))
+            .with_element(Element::rect(
+                [0.0, 0.0, 200.0, 100.0],
+                Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 1.0],
+                    vec![Stop::new(0.0, "#FF9900"), Stop::new(1.0, "#4ECDC4")],
+                ),
+            ))
+            .with_element(
+                Element::path(vec![[0.0, 0.0], [50.0, 0.0], [50.0, 50.0]])
+                    .with_closed(true)
+                    .with_path_fill(Gradient::radial(
+                        [0.5, 0.5],
+                        0.75,
+                        vec![Stop::new(0.0, "#FFFFFF"), Stop::new(1.0, "#000000")],
+                    )),
+            ),
+    );
+
+    let json = d.canonical_json();
+    assert!(json.contains(r#""type":"linear""#), "{json}");
+    assert!(json.contains(r#""type":"radial""#), "{json}");
+    let back = Document::from_json(&json).expect("gradient document parses");
+    assert_eq!(
+        back.canonical_json(),
+        json,
+        "canonical form is a fixed point"
+    );
+}
+
+#[test]
+fn a_solid_fill_still_serialises_as_a_bare_string() {
+    // The compatibility property: making `fill` a union must not change one
+    // byte of any document that does not use a gradient, or every existing
+    // golden and the TS cross-SDK comparison move at once.
+    let mut d = Document::new(50, 50);
+    d.push_scene(
+        Scene::new("s", seconds(1.0))
+            .with_element(Element::rect([0.0, 0.0, 10.0, 10.0], "#FF9900")),
+    );
+    assert!(
+        d.canonical_json().contains(r##""fill":"#FF9900""##),
+        "{}",
+        d.canonical_json()
+    );
 }
