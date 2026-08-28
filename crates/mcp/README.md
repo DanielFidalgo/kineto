@@ -105,18 +105,33 @@ video. This is the cheap way to check a document while still changing it:
 it writes no file, needs no ffmpeg, and rasterizes only the frames asked
 for rather than the whole timeline.
 
-`atMs` is required — the moments to look at, in whole milliseconds from the
-start of the document, at most 12 per call. A millisecond is exactly 705600
+Name moments with `atMs`, `atScenes`, or both — at least one is required,
+and at most 12 moments in total per call.
+
+`atMs` takes whole milliseconds from the start of the document. A millisecond is exactly 705600
 ticks, so the conversion is integer-only and cannot round. Each moment is
 snapped to the frame containing it at the effective `fps`, which means every
 image returned is a frame `render_document` would also have written.
+
+`atScenes` takes scene ids, and previews each at that scene's **midpoint**.
+Prefer it for anything long: it needs no arithmetic over scene durations and
+survives edits that shift the timeline. The midpoint rather than the start
+because a crossfaded scene is fully transparent at its own start tick — a
+frame there shows the *previous* scene.
 
 The reply reports what each moment actually resolved to, in
 `structuredContent.samples`:
 
 ```json
-{ "requestedMs": 500, "frameIndex": 15, "tick": 352800000, "actualMs": 500 }
+{ "requestedMs": 500, "frameIndex": 15, "tick": 352800000, "actualMs": 500,
+  "sceneId": "s01", "sceneLocalMs": 120 }
 ```
+
+`sceneId` names the scene dominating that frame, which is not always the one
+requested — inside a crossfade it is the neighbour, which is how a caller
+discovers it is looking at a transition rather than the scene it had in mind.
+`actualMs` is rounded to the nearest millisecond so that feeding it back as
+`atMs` returns the same frame.
 
 Moments past the end of the document clamp to the last frame — compare
 `requestedMs` against `actualMs` to detect it. Several moments landing on
@@ -132,10 +147,30 @@ writes anything, and always validates.
   "name": "preview_document",
   "arguments": {
     "documentPath": "/tmp/scene.json",
-    "atMs": [0, 500, 1200]
+    "atMs": [0, 500],
+    "atScenes": ["intro", "outro"]
   }
 }
 ```
+
+### The `timeline` block
+
+Every tool's `structuredContent` carries a `timeline` describing the
+document's scene spans:
+
+```json
+"timeline": {
+  "nominalMs": 60000, "actualMs": 53667, "transitionOverlapMs": 6333,
+  "scenes": [ { "id": "s00", "startMs": 0, "durationMs": 3000 },
+              { "id": "s01", "startMs": 2667, "durationMs": 3000 } ]
+}
+```
+
+**Watch `nominalMs` against `actualMs`.** Crossfades overlap the scenes they
+join, so a document of twenty 3-second scenes joined by 19 third-of-a-second
+crossfades is 53.667 s long, not 60 s. Nothing in the document says this, and
+summing scene durations gets it wrong — as do the scene start times, which is
+why they are reported rather than left to the caller.
 
 Prefer `documentPath` while iterating: edit the file and preview again,
 rather than resending the whole document on every call.
