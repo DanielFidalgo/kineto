@@ -72,6 +72,22 @@ pub fn base_bbox(el: &Element) -> BBox {
             w: rect[2].0 as f32,
             h: rect[3].0 as f32,
         },
+        Element::Path { points, .. } => {
+            let mut it = points.iter();
+            let Some(first) = it.next() else {
+                return BBox { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
+            };
+            let (mut x0, mut y0) = (first[0].0 as f32, first[1].0 as f32);
+            let (mut x1, mut y1) = (x0, y0);
+            for p in it {
+                let (px, py) = (p[0].0 as f32, p[1].0 as f32);
+                x0 = x0.min(px);
+                y0 = y0.min(py);
+                x1 = x1.max(px);
+                y1 = y1.max(py);
+            }
+            BBox { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+        }
         Element::Text { pos, .. } => BBox {
             x: pos[0].0 as f32,
             y: pos[1].0 as f32,
@@ -293,6 +309,7 @@ impl Renderer {
 
                     canvas.fill_path(&path, &paint, FillRule::Winding, matrix, None);
                 }
+                Element::Path { .. } => {}
                 Element::Image {
                     asset,
                     rect,

@@ -133,3 +133,42 @@ fn canonical_full_covers_drift_prone_surfaces() {
     assert!(j.contains("\"align\":\"center\""));
     assert!(j.contains("\"align\":\"right\""));
 }
+
+#[test]
+fn a_path_element_round_trips_through_canonical_json() {
+    let mut d = Document::new(200, 100);
+    d.push_scene(
+        Scene::new("s", seconds(1.0)).with_element(
+            Element::path(vec![[10.0, 10.0], [90.0, 50.0], [20.0, 80.0]])
+                .with_stroke("#FF9900", 3.0)
+                .with_join(Join::Round)
+                .with_cap(Cap::Round),
+        ),
+    );
+
+    let json = d.canonical_json();
+    assert!(json.contains("\"type\":\"path\""), "{json}");
+    let back = Document::from_json(&json).expect("path document parses");
+    assert_eq!(
+        back.canonical_json(),
+        json,
+        "canonical form must be a fixed point"
+    );
+}
+
+#[test]
+fn path_defaults_are_omitted_from_canonical_json() {
+    // `closed`, `cap` and `join` at their defaults must not be written, for
+    // the same reason `ease` is skipped when Linear: the canonical form is
+    // what the cross-SDK golden compares, so every optional field that is
+    // emitted is one the TS builder must emit identically.
+    let mut d = Document::new(50, 50);
+    d.push_scene(
+        Scene::new("s", seconds(1.0))
+            .with_element(Element::path(vec![[0.0, 0.0], [10.0, 10.0]]).with_stroke("#FFFFFF", 1.0)),
+    );
+    let json = d.canonical_json();
+    assert!(!json.contains("closed"), "{json}");
+    assert!(!json.contains("cap"), "{json}");
+    assert!(!json.contains("join"), "{json}");
+}

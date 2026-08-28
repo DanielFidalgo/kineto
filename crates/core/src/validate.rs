@@ -84,6 +84,9 @@ const TEXT_KEYS: &[&str] = &[
     "type", "text", "font", "sizePx", "color", "pos", "maxW", "align",
 ];
 const RECT_KEYS: &[&str] = &["type", "rect", "fill"];
+const PATH_KEYS: &[&str] = &[
+    "type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill",
+];
 const GROUP_KEYS: &[&str] = &["type", "origin", "children"];
 
 fn check_keys(obj: &Map<String, Value>, allowed: &[&[&str]], ctx: &str) -> Result<(), DocError> {
@@ -146,6 +149,7 @@ fn walk_element(v: &Value) -> Result<(), DocError> {
         Some("image") => check_keys(obj, &[IMAGE_KEYS, COMMON_KEYS], "element")?,
         Some("text") => check_keys(obj, &[TEXT_KEYS, COMMON_KEYS], "element")?,
         Some("rect") => check_keys(obj, &[RECT_KEYS, COMMON_KEYS], "element")?,
+        Some("path") => check_keys(obj, &[PATH_KEYS, COMMON_KEYS], "element")?,
         Some("group") => check_keys(obj, &[GROUP_KEYS, COMMON_KEYS], "element")?,
         Some(other) => {
             return Err(DocError::UnknownField {
@@ -294,6 +298,9 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             if !Color::parse_ok(&fill.0) {
                 return Err(DocError::BadColor(fill.0.clone()));
             }
+            validate_common(common)?;
+        }
+        Element::Path { common, .. } => {
             validate_common(common)?;
         }
         Element::Group {
