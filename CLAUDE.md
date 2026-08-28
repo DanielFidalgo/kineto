@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **217 tests**.
+   output. Workspace suite is **233 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -86,8 +86,19 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
   only. That number factors as 2⁹·3²·5⁵·7², so a legal fps is any divisor —
   7, 24, 25, 30, 50, 60 all divide it; 11 and 27 do not.
 - Document → Scenes (local clocks, ordered, `cut`/`crossfade`) → Elements
-  (`image`, `text`, `rect`, `group`). Static base geometry; only
+  (`image`, `text`, `rect`, `path`, `group`). Static base geometry; only
   `translate/scale/rotation/opacity` animate (keyframes, 4 cubic easings).
+- **`path` was added after v1** (2026-08-28): open/closed polylines,
+  straight segments only, with `stroke`/`strokeWidth`/`cap`/`join`/`fill`.
+  Cap and join are format fields because they are rasterizer parameters
+  geometry cannot express; **arrowheads deliberately are not** — a filled
+  closed path expresses one, and orienting it belongs to the authoring
+  layer. No béziers: curve flattening carries a tolerance parameter and is
+  the most parity-fragile part of a path renderer. The v1 spec's element
+  list predates this and is not being rewritten; this note is the record.
+  The `paths-strokes` corpus entry is the only golden exercising diagonal
+  AA, miter/round joins and sub-pixel widths — native vs wasm+simd128 was
+  20/20 at the time it landed.
 - Bundled fonts are referenced by reserved src: **`kineto:inter`** and
   **`kineto:jetbrains-mono`** (`crates/core/src/assets.rs`). These are part
   of the document format — changing them is a breaking format change.

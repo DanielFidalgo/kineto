@@ -141,9 +141,18 @@ fn canonical_full_covers_drift_prone_surfaces() {
     assert!(j.contains("\"opacity\":0.1"));
     assert!(j.contains("\"translate\":[10,20]"));
     // Path: key order, non-default cap/join, and a fractional stroke width.
-    assert!(j.contains(r#""type":"path","points":[[0,0],[40,25.5],[0,51]]"#), "{j}");
-    assert!(j.contains(r##""closed":true,"stroke":"#FF9900","strokeWidth":2.5"##), "{j}");
-    assert!(j.contains(r##""cap":"round","join":"bevel","fill":"#00FF00""##), "{j}");
+    assert!(
+        j.contains(r#""type":"path","points":[[0,0],[40,25.5],[0,51]]"#),
+        "{j}"
+    );
+    assert!(
+        j.contains(r##""closed":true,"stroke":"#FF9900","strokeWidth":2.5"##),
+        "{j}"
+    );
+    assert!(
+        j.contains(r##""cap":"round","join":"bevel","fill":"#00FF00""##),
+        "{j}"
+    );
     assert!(j.contains("\"type\":\"group\""));
     assert!(j.contains("\"prop\":\"translate\""));
     assert!(j.contains("\"align\":\"center\""));
