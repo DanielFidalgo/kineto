@@ -1,5 +1,6 @@
 //! MCP server exposing the native kineto engine over stdio.
 
+pub mod check;
 pub mod error;
 pub mod render;
 pub mod resources;

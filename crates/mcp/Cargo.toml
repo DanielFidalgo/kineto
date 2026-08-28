@@ -9,6 +9,8 @@ name = "kineto-mcp"
 path = "src/main.rs"
 
 [dependencies]
+# For element_matrix: off-canvas detection has to account for rotation.
+tiny-skia = "0.12.0"
 # default-features off: upstream defaults would be acceptable, but pinning the
 # set explicitly keeps the heavy optional tree (reqwest, hyper, oauth2,
 # jsonwebtoken, process-wrap) permanently off. `base64` is NOT optional to us:
