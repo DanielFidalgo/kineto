@@ -103,7 +103,10 @@ function buildExampleFullDoc(): ZoeDocument {
       ],
     },
   );
-  const chip = rect([0, 0, 40, 40], "#3366FF", 8.5);
+  const chip: ZoeElement = {
+    ...rect([0, 0, 40, 40], "#3366FF", 8.5),
+    shadow: { color: "#0D141966", blur: 10, dy: 6 },
+  };
   // Built as a literal rather than spread over `image(...)`: the builder
   // returns the element union, and the union's other arms have no `fit`.
   const framed: ZoeElement = {

@@ -438,3 +438,37 @@ fn an_unknown_key_inside_a_clip_is_rejected() {
     let err = Document::from_json(&v.to_string()).expect_err("expected rejection");
     assert!(matches!(err, DocError::UnknownField { .. }), "got {err:?}");
 }
+
+#[test]
+fn a_shadow_on_text_or_group_is_rejected() {
+    // Rejected rather than ignored: those render through isolated layers, so
+    // a shadow would mean blurring the layer, which is a different feature.
+    for el in [
+        serde_json::json!({ "type": "text", "text": "x", "font": "f", "sizePx": 10,
+                            "color": "#FFFFFF", "pos": [0, 0],
+                            "shadow": { "color": "#000000", "blur": 4 } }),
+        serde_json::json!({ "type": "group", "origin": [0, 0], "children": [],
+                            "shadow": { "color": "#000000", "blur": 4 } }),
+    ] {
+        let v = serde_json::json!({
+            "v": 1, "timebase": 705600000, "size": { "w": 50, "h": 50 },
+            "assets": { "f": { "type": "font", "src": "kineto:inter" } },
+            "scenes": [{ "id": "s", "duration": 705600000, "elements": [el] }]
+        });
+        let err = Document::from_json(&v.to_string()).expect_err("expected rejection");
+        assert!(matches!(err, DocError::ShadowUnsupported(_)), "got {err:?}");
+    }
+}
+
+#[test]
+fn an_absurd_shadow_blur_is_rejected() {
+    let v = serde_json::json!({
+        "v": 1, "timebase": 705600000, "size": { "w": 50, "h": 50 },
+        "scenes": [{ "id": "s", "duration": 705600000, "elements": [
+            { "type": "rect", "rect": [0, 0, 10, 10], "fill": "#FFFFFF",
+              "shadow": { "color": "#000000", "blur": 100000 } }
+        ]}]
+    });
+    let err = Document::from_json(&v.to_string()).expect_err("expected rejection");
+    assert!(matches!(err, DocError::ShadowBlur(_)), "got {err:?}");
+}

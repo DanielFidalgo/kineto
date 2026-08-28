@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **300 tests**.
+   output. Workspace suite is **305 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -109,6 +109,14 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
   rotation carries the gradient with it for free. 2-8 stops, strictly
   increasing over 0..1. `stroke` stays a flat colour. Corpus entry
   `gradients`; parity 22/22 at landing.
+- **Drop shadows were added after v1** (2026-08-28): `Common.shadow`
+  (color, blur, dx, dy) on `rect`, `path` and `image` — the three kinds with
+  a silhouette. **Rejected on `text` and `group`**, which render through
+  isolated layers and would need the layer itself blurred. The blur is three
+  separable box passes in **integer arithmetic**, chosen for that reason: no
+  floating point means no new surface for native and wasm to disagree on, so
+  a shadow did not re-open the parity question a float filter would have.
+  Blur is capped at 128.
 - **Clip windows and image fit were added after v1** (2026-08-28):
   `Common.clip` is a static window (rect + optional radius) in the element's
   **parent** space, deliberately *not* carried by the element's own transform
@@ -167,7 +175,7 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
 ## Testing notes
 
 - `testdata/golden/hashes.json` holds sha256 of **rendered frame buffers**.
-  26 keys are corpus parity (`name@tick`); the rest are raster/render unit
+  27 keys are corpus parity (`name@tick`); the rest are raster/render unit
   goldens. Regenerate with `UPDATE_GOLDEN=1`.
 - The `raster-text` / `raster-text-tinted` specimens render
   **"Hamburgefons"**, deliberately *not* the product name. A pixel golden

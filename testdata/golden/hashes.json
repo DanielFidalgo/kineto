@@ -32,6 +32,7 @@
   "raster-rect-opacity": "9e82b8c4523f081c1046617e15ccd103a1d2792014e302154435ccd465ae4e24",
   "raster-rect-radius": "41ccf085d3d2e21aa1db0f915772ec2d53d3a381fb39da53706e915ae1564ab6",
   "raster-rect-rotation-45": "e12051faaac1f57bd26e24b95fd33046e723306ba52289d263f14be77ce15fa7",
+  "raster-shadow": "adbd9da2d2048c6c0bd6338eaa0aa11bc3623a51ed0321edce69714e1ebf454b",
   "raster-text": "881cbb0cdc4c88ab3b196b21a0bb7bb6429da5a037ed559f3975e7becacb2e0e",
   "raster-text-right-rot": "b1ac71cc18ab4b876d3874c3c3bcc90c2828f58bd68c5c85c433626cd060c3b9",
   "raster-text-tinted": "2b91f0e99c2793059daf66d377a9e47b792eae54c33951a093f7b76b424aef4f",
@@ -42,6 +43,7 @@
   "render-crossfade-mid": "e6d2283ad64cc7eb536e58e6e0b50d57ca71a482d4adb41ce9a8f9c3f088f494",
   "render-past-end": "df894663e850afa3619ed3d3825d9d1c6520f15fcd76aac25c4407c405fa8cfe",
   "render-sceneA": "4ab589b8423c13f8f33994356d5b696d9b3b56d968e1939f2088c53b5149e6cf",
+  "shadows@0": "2d29a5d1abcd2ab57e8496aca98aff9527697a0a4c32407d31e6ebb4bd9483c4",
   "text-wrap@0": "20e0964156f875db62707815dd5decf075aaf67d42e485de70e4e862e28329e1",
   "text-wrap@176400000": "20e0964156f875db62707815dd5decf075aaf67d42e485de70e4e862e28329e1"
 }

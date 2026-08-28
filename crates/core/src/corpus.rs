@@ -12,7 +12,7 @@
 
 use crate::doc::{
     ms, Align, Asset, Cap, Clip, Document, Ease, Element, Fit, Gradient, Join, Key, Prop, Scene,
-    Stop, Track, Transition,
+    Shadow, Stop, Track, Transition,
 };
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "bundled-fonts"))]
@@ -34,6 +34,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
         gradients(),
         radius_easings(),
         clip_fit(),
+        shadows(),
         image_transform(),
         text_wrap(),
         groups_nested(),
@@ -93,6 +94,45 @@ fn rects_easings() -> CorpusDoc {
         name: "rects-easings",
         doc,
         ticks: vec![0, dur / 2, dur - 1],
+    }
+}
+
+/// Drop shadows: blurred, offset, and on all three element kinds that have a
+/// silhouette. The blur is integer arithmetic, so this adds no new
+/// floating-point surface for native and wasm to disagree over — the mask
+/// rasterisation it rides on is already covered by `clip-fit`.
+fn shadows() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H).with_bg("#F2F5F7");
+    doc.add_asset("grad", Asset::image("grad.png"));
+    let scene = Scene::new("s", dur)
+        .with_element(
+            Element::rect([20.0, 20.0, 110.0, 60.0], "#FFFFFF")
+                .with_radius(12.0)
+                .with_shadow(Shadow::new("#0D141966", 10, 0.0, 6.0)),
+        )
+        // Hard silhouette: blur 0 is an offset shape, not a no-op.
+        .with_element(
+            Element::rect([170.0, 20.0, 110.0, 60.0], "#FF9900")
+                .with_shadow(Shadow::new("#0D1419", 0, 8.0, 8.0)),
+        )
+        // On a closed path, and on an image.
+        .with_element(
+            Element::path(vec![[40.0, 180.0], [100.0, 110.0], [160.0, 180.0]])
+                .with_closed(true)
+                .with_path_fill("#C77DFF")
+                .with_shadow(Shadow::new("#0D141980", 8, 4.0, 6.0)),
+        )
+        .with_element(
+            Element::image("grad", [200.0, 110.0, 90.0, 70.0])
+                .with_fit(Fit::Cover)
+                .with_shadow(Shadow::new("#0D141999", 12, 0.0, 8.0)),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "shadows",
+        doc,
+        ticks: vec![0],
     }
 }
 
