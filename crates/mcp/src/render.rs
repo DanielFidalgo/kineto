@@ -140,6 +140,90 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
     }
 }
 
+/// One requested moment and the frame it resolved to.
+///
+/// `requested_ms` is echoed back deliberately: clamping and frame snapping
+/// both move the answer, and a caller comparing what it asked for against
+/// `actual_ms` is how it learns that 5000 ms in a one-second document is the
+/// last frame rather than a failure.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewSample {
+    pub requested_ms: i64,
+    pub frame_index: u64,
+    pub tick: i64,
+    pub actual_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewOutcome {
+    pub width: u32,
+    pub height: u32,
+    pub fps: i64,
+    pub frame_count: u64,
+    pub duration_ticks: i64,
+    pub duration_seconds: f64,
+    pub samples: Vec<PreviewSample>,
+}
+
+/// Resolve requested millisecond offsets into the metadata to report and the
+/// distinct frame indices to encode.
+///
+/// The two differ on purpose: several moments can land on one frame, and that
+/// frame is rasterized and encoded once, while every moment the caller asked
+/// about still appears in `samples`.
+pub fn resolve_preview(
+    engine: &Engine,
+    fps: i64,
+    at_ms: &[i64],
+) -> Result<(PreviewOutcome, Vec<u64>), ToolError> {
+    if at_ms.is_empty() {
+        return Err(ToolError::Invalid(
+            "`atMs` must name at least one moment to preview".into(),
+        ));
+    }
+    if at_ms.len() > PREVIEW_MAX_COUNT {
+        return Err(ToolError::Invalid(format!(
+            "`atMs` names {} moments but at most {PREVIEW_MAX_COUNT} may be \
+             previewed per call; ask for fewer rather than being given a \
+             silently truncated answer",
+            at_ms.len()
+        )));
+    }
+
+    let total = frame_count(engine, fps);
+    let mut samples = Vec::with_capacity(at_ms.len());
+    let mut frames: Vec<u64> = Vec::new();
+    for &ms in at_ms {
+        let frame_index = frame_for_ms(ms, fps, total)?;
+        let tick = engine.tick_for_frame(frame_index as i64, fps);
+        if !frames.contains(&frame_index) {
+            frames.push(frame_index);
+        }
+        samples.push(PreviewSample {
+            requested_ms: ms,
+            frame_index,
+            tick,
+            actual_ms: tick / TICKS_PER_MS,
+        });
+    }
+
+    let ticks = engine.total_duration();
+    Ok((
+        PreviewOutcome {
+            width: engine.width(),
+            height: engine.height(),
+            fps,
+            frame_count: total,
+            duration_ticks: ticks,
+            duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+            samples,
+        },
+        frames,
+    ))
+}
+
 /// Render `count` evenly spaced frames as base64-encoded PNGs.
 pub fn sample_frames(
     engine: &mut Engine,
@@ -432,6 +516,58 @@ mod tests {
         // Nothing to look at: a zero-duration document has no frames, and
         // clamping to `frame_count - 1` would underflow.
         assert!(frame_for_ms(0, 30, 0).is_err());
+    }
+
+    #[test]
+    fn resolving_moments_reports_the_frame_the_caller_actually_gets() {
+        // The caller asks in milliseconds; what closes the loop is being told
+        // which frame that became. 5000ms is past the end of a one-second
+        // document and clamps, which the caller can only detect from the
+        // reported values.
+        let engine = animated_engine();
+        let (outcome, frames) = resolve_preview(&engine, 30, &[0, 50, 5_000]).unwrap();
+
+        assert_eq!(frames, vec![0, 1, 29]);
+        assert_eq!(outcome.frame_count, 30);
+        let got: Vec<(i64, u64, i64)> = outcome
+            .samples
+            .iter()
+            .map(|s| (s.requested_ms, s.frame_index, s.actual_ms))
+            .collect();
+        assert_eq!(got, vec![(0, 0, 0), (50, 1, 33), (5_000, 29, 966)]);
+    }
+
+    #[test]
+    fn moments_landing_on_one_frame_are_encoded_once_but_reported_each() {
+        // 0ms and 10ms are both inside frame 0 at 30 fps. Encoding that frame
+        // twice would spend a second base64 PNG of context to say nothing, but
+        // dropping the caller's second question would be worse — it stays in
+        // `samples`.
+        let engine = animated_engine();
+        let (outcome, frames) = resolve_preview(&engine, 30, &[0, 10, 50]).unwrap();
+
+        assert_eq!(frames, vec![0, 1], "frame 0 must be encoded once");
+        assert_eq!(outcome.samples.len(), 3, "every requested moment reported");
+        assert_eq!(outcome.samples[1].requested_ms, 10);
+        assert_eq!(outcome.samples[1].frame_index, 0);
+    }
+
+    #[test]
+    fn asking_for_no_moments_is_an_error() {
+        let engine = animated_engine();
+        assert!(resolve_preview(&engine, 30, &[]).is_err());
+    }
+
+    #[test]
+    fn more_moments_than_the_cap_is_a_rejection_not_a_silent_truncation() {
+        // Quietly dropping frames someone explicitly named sends them off to
+        // reason about images they never received.
+        let engine = animated_engine();
+        let many: Vec<i64> = (0..=PREVIEW_MAX_COUNT as i64).collect();
+        let msg = resolve_preview(&engine, 30, &many)
+            .unwrap_err()
+            .to_string();
+        assert!(msg.contains("12"), "the error must name the cap: {msg}");
     }
 
     #[test]
