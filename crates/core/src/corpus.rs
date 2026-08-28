@@ -32,6 +32,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
         rects_easings(),
         paths_strokes(),
         gradients(),
+        radius_easings(),
         image_transform(),
         text_wrap(),
         groups_nested(),
@@ -91,6 +92,38 @@ fn rects_easings() -> CorpusDoc {
         name: "rects-easings",
         doc,
         ticks: vec![0, dur / 2, dur - 1],
+    }
+}
+
+/// Rounded corners and the expressive easings, which only exist together
+/// here: `back` overshoots past its target and `expo` is nearly flat for most
+/// of its run, so both need a mid-tick sample to be worth anything.
+fn radius_easings() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H);
+    let slide = |e: Ease, y: f64| {
+        Element::rect([20.0, y, 90.0, 26.0], "#FF9900")
+            .with_radius(13.0)
+            .with_animation(Track::new(
+                Prop::Translate,
+                vec![
+                    Key::vec2(0, [0.0, 0.0]),
+                    Key::vec2(dur, [190.0, 0.0]).with_ease(e),
+                ],
+            ))
+    };
+    let scene = Scene::new("s", dur)
+        .with_element(slide(Ease::OutBack, 12.0))
+        .with_element(slide(Ease::InOutBack, 52.0))
+        .with_element(slide(Ease::OutExpo, 92.0))
+        .with_element(slide(Ease::InOutExpo, 132.0))
+        // A radius larger than half the shorter edge, clamped to a stadium.
+        .with_element(Element::rect([20.0, 172.0, 280.0, 20.0], "#4ECDC4").with_radius(999.0));
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "radius-easings",
+        doc,
+        ticks: vec![0, dur / 2],
     }
 }
 

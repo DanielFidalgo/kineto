@@ -49,14 +49,14 @@ fn corpus_rendered_through_the_server_path_matches_golden_hashes() {
         }
     }
 
-    // The number is knowable, so assert it exactly: the eight corpus entries
-    // contribute 22 `name@tick` keys between them. `> 0` would still pass if
-    // a key-format drift silently skipped 21 of the 22.
+    // The number is knowable, so assert it exactly: the nine corpus entries
+    // contribute 24 `name@tick` keys between them. `> 0` would still pass if
+    // a key-format drift silently skipped 23 of the 24.
     let expected: usize = kineto_core::corpus::corpus()
         .iter()
         .map(|e| e.ticks.len())
         .sum();
-    assert_eq!(expected, 22, "corpus tick count changed");
+    assert_eq!(expected, 24, "corpus tick count changed");
     assert_eq!(
         checked, expected,
         "not every corpus tick was checked against a golden — the key format \
@@ -124,11 +124,11 @@ fn a_millisecond_request_resolves_to_the_exact_tick_the_goldens_pin() {
         }
     }
 
-    // 20 of the 22 golden ticks are whole milliseconds; the other two are
+    // 22 of the 24 golden ticks are whole milliseconds; the other two are
     // `dur - 1`. Asserted exactly so that a key-format or alignment drift
     // that silently skipped most of them cannot pass.
     assert_eq!(
-        checked, 20,
-        "expected 20 whole-millisecond corpus ticks to be checked"
+        checked, 22,
+        "expected 22 whole-millisecond corpus ticks to be checked"
     );
 }

@@ -403,3 +403,25 @@ fn a_gradient_stop_colour_is_validated() {
     .expect_err("expected rejection");
     assert!(matches!(err, DocError::BadColor(_)), "got {err:?}");
 }
+
+#[test]
+fn an_unknown_key_inside_a_gradient_is_rejected() {
+    // serde ignores unknown keys in the gradient object, so without the walk
+    // a typo'd axis would be silently dropped and render as a default.
+    let err = grad_doc(serde_json::json!({
+        "type": "linear", "from": [0, 0], "two": [1, 1],
+        "stops": [{ "at": 0, "color": "#FF9900" }, { "at": 1, "color": "#4ECDC4" }]
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::UnknownField { .. }), "got {err:?}");
+}
+
+#[test]
+fn an_unknown_key_inside_a_gradient_stop_is_rejected() {
+    let err = grad_doc(linear(serde_json::json!([
+        { "at": 0, "color": "#FF9900", "colour": "#fff" },
+        { "at": 1, "color": "#4ECDC4" }
+    ])))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::UnknownField { .. }), "got {err:?}");
+}

@@ -97,7 +97,10 @@ const IMAGE_KEYS: &[&str] = &["type", "asset", "rect"];
 const TEXT_KEYS: &[&str] = &[
     "type", "text", "font", "sizePx", "color", "pos", "maxW", "align",
 ];
-const RECT_KEYS: &[&str] = &["type", "rect", "fill"];
+const RECT_KEYS: &[&str] = &["type", "rect", "fill", "radius"];
+const LINEAR_KEYS: &[&str] = &["type", "from", "to", "stops"];
+const RADIAL_KEYS: &[&str] = &["type", "center", "radius", "stops"];
+const STOP_KEYS: &[&str] = &["at", "color"];
 const PATH_KEYS: &[&str] = &[
     "type",
     "points",
@@ -161,6 +164,35 @@ fn walk_scene(v: &Value) -> Result<(), DocError> {
     Ok(())
 }
 
+/// A `fill` may be a bare colour string or a gradient object. serde ignores
+/// unknown keys inside the gradient, so without this a typo'd stop or axis
+/// would be silently dropped rather than reported — the same strictness the
+/// element walk exists to provide.
+fn walk_paint(v: &Value) -> Result<(), DocError> {
+    let Some(obj) = v.as_object() else {
+        return Ok(()); // a plain colour string
+    };
+    match obj.get("type").and_then(Value::as_str) {
+        Some("linear") => check_keys(obj, &[LINEAR_KEYS], "gradient")?,
+        Some("radial") => check_keys(obj, &[RADIAL_KEYS], "gradient")?,
+        Some(other) => {
+            return Err(DocError::UnknownField {
+                ctx: "gradient.type".to_string(),
+                field: other.to_string(),
+            })
+        }
+        None => return Ok(()),
+    }
+    if let Some(stops) = obj.get("stops").and_then(Value::as_array) {
+        for stop in stops {
+            if let Some(so) = stop.as_object() {
+                check_keys(so, &[STOP_KEYS], "gradient stop")?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn walk_element(v: &Value) -> Result<(), DocError> {
     let Some(obj) = v.as_object() else {
         return Ok(());
@@ -169,8 +201,18 @@ fn walk_element(v: &Value) -> Result<(), DocError> {
     match ty {
         Some("image") => check_keys(obj, &[IMAGE_KEYS, COMMON_KEYS], "element")?,
         Some("text") => check_keys(obj, &[TEXT_KEYS, COMMON_KEYS], "element")?,
-        Some("rect") => check_keys(obj, &[RECT_KEYS, COMMON_KEYS], "element")?,
-        Some("path") => check_keys(obj, &[PATH_KEYS, COMMON_KEYS], "element")?,
+        Some("rect") => {
+            check_keys(obj, &[RECT_KEYS, COMMON_KEYS], "element")?;
+            if let Some(f) = obj.get("fill") {
+                walk_paint(f)?;
+            }
+        }
+        Some("path") => {
+            check_keys(obj, &[PATH_KEYS, COMMON_KEYS], "element")?;
+            if let Some(f) = obj.get("fill") {
+                walk_paint(f)?;
+            }
+        }
         Some("group") => check_keys(obj, &[GROUP_KEYS, COMMON_KEYS], "element")?,
         Some(other) => {
             return Err(DocError::UnknownField {

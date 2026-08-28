@@ -28,7 +28,7 @@ const ORDER = {
   transition: ["type", "duration"],
   image: ["type", "asset", "rect"],
   text: ["type", "text", "font", "sizePx", "color", "pos", "maxW", "align"],
-  rect: ["type", "rect", "fill"],
+  rect: ["type", "rect", "fill", "radius"],
   path: ["type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
   linear: ["type", "from", "to", "stops"],
   radial: ["type", "center", "radius", "stops"],
@@ -165,6 +165,7 @@ function serElement(el: ZoeElement): string {
         type: serStr("rect"),
         rect: serArr(el.rect),
         fill: serPaint(el.fill),
+        radius: el.radius !== undefined ? serNum(el.radius) : undefined,
         ...serCommonFields(el),
       });
     case "path":

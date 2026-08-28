@@ -41,7 +41,19 @@ export type Gradient =
 export type Paint = string | Gradient;
 /** How two stroke segments meet. Defaults to `"miter"` when omitted. */
 export type Join = "miter" | "round" | "bevel";
-export type Ease = "linear" | "inCubic" | "outCubic" | "inOutCubic";
+export type Ease =
+  | "linear"
+  | "inCubic"
+  | "outCubic"
+  | "inOutCubic"
+  /** Overshoots past the target and settles back. Opacity is clamped to
+   * 0..1 by the engine; geometry is free to overshoot. */
+  | "inBack"
+  | "outBack"
+  | "inOutBack"
+  | "inExpo"
+  | "outExpo"
+  | "inOutExpo";
 export type Prop = "translate" | "scale" | "rotation" | "opacity";
 
 /** A single track's value: a scalar for `scale`/`rotation`/`opacity`, or
@@ -92,6 +104,8 @@ export type ZoeElement =
       type: "rect";
       rect: [number, number, number, number];
       fill: Paint;
+      /** Corner radius in pixels, clamped to half the shorter edge. */
+      radius?: number;
     } & Common)
   | ({
       /** Open or closed polyline; straight segments only (no beziers in v1).
