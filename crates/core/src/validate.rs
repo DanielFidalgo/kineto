@@ -91,7 +91,14 @@ const TEXT_KEYS: &[&str] = &[
 ];
 const RECT_KEYS: &[&str] = &["type", "rect", "fill"];
 const PATH_KEYS: &[&str] = &[
-    "type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill",
+    "type",
+    "points",
+    "closed",
+    "stroke",
+    "strokeWidth",
+    "cap",
+    "join",
+    "fill",
 ];
 const GROUP_KEYS: &[&str] = &["type", "origin", "children"];
 

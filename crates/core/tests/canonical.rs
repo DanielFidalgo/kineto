@@ -164,8 +164,9 @@ fn path_defaults_are_omitted_from_canonical_json() {
     // emitted is one the TS builder must emit identically.
     let mut d = Document::new(50, 50);
     d.push_scene(
-        Scene::new("s", seconds(1.0))
-            .with_element(Element::path(vec![[0.0, 0.0], [10.0, 10.0]]).with_stroke("#FFFFFF", 1.0)),
+        Scene::new("s", seconds(1.0)).with_element(
+            Element::path(vec![[0.0, 0.0], [10.0, 10.0]]).with_stroke("#FFFFFF", 1.0),
+        ),
     );
     let json = d.canonical_json();
     assert!(!json.contains("closed"), "{json}");

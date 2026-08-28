@@ -275,10 +275,7 @@ fn a_path_needs_at_least_two_points() {
             "type": "path", "points": pts, "stroke": "#FFFFFF", "strokeWidth": 1
         }))
         .expect_err("expected rejection");
-        assert!(
-            matches!(err, DocError::PathTooFewPoints(_)),
-            "got {err:?}"
-        );
+        assert!(matches!(err, DocError::PathTooFewPoints(_)), "got {err:?}");
     }
 }
 

@@ -11,13 +11,13 @@
 
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
-use crate::doc::{Align, Element};
+use crate::doc::{Align, Cap, Element, Join};
 use crate::text::{layout_text, TextLayout};
 use cosmic_text::SwashContent;
 use std::collections::HashMap;
 use tiny_skia::{
-    BlendMode, Color, FillRule, FilterQuality, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint,
-    Rect as SkRect, Shader, Transform,
+    BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Paint, PathBuilder, Pixmap,
+    PixmapMut, PixmapPaint, Rect as SkRect, Shader, Stroke, Transform,
 };
 
 /// Axis-aligned base bounding box, in the element's parent-local coordinate
@@ -75,7 +75,12 @@ pub fn base_bbox(el: &Element) -> BBox {
         Element::Path { points, .. } => {
             let mut it = points.iter();
             let Some(first) = it.next() else {
-                return BBox { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
+                return BBox {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 0.0,
+                    h: 0.0,
+                };
             };
             let (mut x0, mut y0) = (first[0].0 as f32, first[1].0 as f32);
             let (mut x1, mut y1) = (x0, y0);
@@ -86,7 +91,12 @@ pub fn base_bbox(el: &Element) -> BBox {
                 x1 = x1.max(px);
                 y1 = y1.max(py);
             }
-            BBox { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+            BBox {
+                x: x0,
+                y: y0,
+                w: x1 - x0,
+                h: y1 - y0,
+            }
         }
         Element::Text { pos, .. } => BBox {
             x: pos[0].0 as f32,
@@ -309,7 +319,82 @@ impl Renderer {
 
                     canvas.fill_path(&path, &paint, FillRule::Winding, matrix, None);
                 }
-                Element::Path { .. } => {}
+                Element::Path {
+                    points,
+                    closed,
+                    stroke,
+                    stroke_width,
+                    cap,
+                    join,
+                    fill,
+                    common,
+                } => {
+                    let resolved = resolve_common(common, t);
+                    // Pivot off the point bounds, so `rotation`/`scale` turn a
+                    // path about its own centre like every other element.
+                    let base = base_bbox(el);
+                    let bbox = BBox {
+                        x: base.x + offset.0,
+                        y: base.y + offset.1,
+                        w: base.w,
+                        h: base.h,
+                    };
+                    let matrix = element_matrix(&bbox, &resolved);
+
+                    let mut pb = PathBuilder::new();
+                    let mut pts = points.iter();
+                    let Some(first) = pts.next() else {
+                        continue; // validation rejects this; the renderer stays total
+                    };
+                    pb.move_to(first[0].0 as f32 + offset.0, first[1].0 as f32 + offset.1);
+                    for p in pts {
+                        pb.line_to(p[0].0 as f32 + offset.0, p[1].0 as f32 + offset.1);
+                    }
+                    if *closed {
+                        pb.close();
+                    }
+                    let Some(path) = pb.finish() else {
+                        continue; // degenerate (e.g. every point identical)
+                    };
+
+                    let paint_for = |c: &crate::color::Color| {
+                        let (r, g, b, a) = c.rgba8();
+                        let alpha = ((a as f32) * (resolved.opacity as f32))
+                            .round()
+                            .clamp(0.0, 255.0) as u8;
+                        Paint {
+                            shader: Shader::SolidColor(tiny_skia::Color::from_rgba8(
+                                r, g, b, alpha,
+                            )),
+                            anti_alias: true,
+                            ..Default::default()
+                        }
+                    };
+
+                    // Fill first so a stroke reads as an outline on top of it.
+                    if let Some(f) = fill {
+                        canvas.fill_path(&path, &paint_for(f), FillRule::Winding, matrix, None);
+                    }
+                    if let Some(s) = stroke {
+                        let sk_stroke = Stroke {
+                            // Absent width means 1.0, not 0.0 — a zero-width
+                            // stroke paints nothing at all.
+                            width: stroke_width.map(|w| w.0 as f32).unwrap_or(1.0),
+                            line_cap: match cap {
+                                Cap::Butt => LineCap::Butt,
+                                Cap::Round => LineCap::Round,
+                                Cap::Square => LineCap::Square,
+                            },
+                            line_join: match join {
+                                Join::Miter => LineJoin::Miter,
+                                Join::Round => LineJoin::Round,
+                                Join::Bevel => LineJoin::Bevel,
+                            },
+                            ..Default::default()
+                        };
+                        canvas.stroke_path(&path, &paint_for(s), &sk_stroke, matrix, None);
+                    }
+                }
                 Element::Image {
                     asset,
                     rect,

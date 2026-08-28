@@ -1,6 +1,6 @@
 mod common;
 
-use kineto_core::doc::{Align, Asset, Common, Element};
+use kineto_core::doc::{Align, Asset, Cap, Common, Element, Join};
 use kineto_core::raster::{element_matrix, BBox, Renderer};
 use kineto_core::{anim::Resolved, resolve_reserved_src, AssetStore, Document};
 
@@ -609,4 +609,181 @@ fn layout_cache_shared_across_colors_still_renders_each_color() {
         red.data().chunks_exact(4).filter(|px| px[2] > 0).count(),
         "red text should not paint any blue"
     );
+}
+
+// ---- path element ----
+
+fn path_el(points: Vec<[f64; 2]>) -> Element {
+    Element::path(points)
+}
+
+/// Horizontal stroke, width 4, centred on y=32: the span's interior has no
+/// antialiased edge, so the painted pixels are exact.
+#[test]
+fn path_stroke_paints_its_span() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = path_el(vec![[8.0, 32.0], [56.0, 32.0]]).with_stroke("#FF0000", 4.0);
+
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let on = pm.pixel(32, 32).unwrap();
+    assert_eq!(
+        (on.red(), on.green(), on.blue()),
+        (255, 0, 0),
+        "on the line"
+    );
+    let off = pm.pixel(32, 10).unwrap();
+    assert_eq!((off.red(), off.blue()), (0, 0), "far from the line");
+
+    common::assert_golden_hash("raster-path-stroke", pm.width(), pm.height(), pm.data());
+}
+
+/// Stroke width is optional in the format; absent must mean 1.0 rather than
+/// zero, which would silently paint nothing.
+#[test]
+fn path_stroke_width_defaults_to_one() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = Element::Path {
+        points: vec![[8.0.into(), 32.0.into()], [56.0.into(), 32.0.into()]],
+        closed: false,
+        stroke: Some("#FF0000".into()),
+        stroke_width: None,
+        cap: Cap::default(),
+        join: Join::default(),
+        fill: None,
+        common: Common::default(),
+    };
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    // A 1px stroke centred on y=32.0 straddles rows 31 and 32 at half
+    // coverage each, so assert *some* red landed rather than a exact value.
+    let a = pm.pixel(32, 31).unwrap().red();
+    let b = pm.pixel(32, 32).unwrap().red();
+    assert!(a > 0 || b > 0, "a widthless stroke painted nothing");
+}
+
+/// A closed path draws the segment from its last point back to its first.
+/// Open vs closed differ only in that segment, so this fails if `closed` is
+/// ignored.
+#[test]
+fn a_closed_path_draws_the_closing_segment() {
+    fn render(closed: bool) -> tiny_skia::Pixmap {
+        let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+        let el = path_el(vec![[10.0, 10.0], [54.0, 10.0], [54.0, 54.0]])
+            .with_stroke("#FF0000", 4.0)
+            .with_closed(closed);
+        let mut renderer = Renderer::new();
+        let mut assets = AssetStore::new();
+        renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+        pm
+    }
+
+    let open = render(false);
+    let closed = render(true);
+    // The closing segment runs from (54,54) back to (10,10) — the diagonal.
+    // Its midpoint (32,32) is painted only when the path is closed.
+    assert_eq!(
+        open.pixel(32, 32).unwrap().red(),
+        0,
+        "open path drew a diagonal"
+    );
+    assert!(
+        closed.pixel(32, 32).unwrap().red() > 0,
+        "closed path lost its diagonal"
+    );
+}
+
+/// A closed path with `fill` and no `stroke` — the arrowhead case.
+#[test]
+fn path_fill_paints_the_interior() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let el = path_el(vec![[10.0, 10.0], [54.0, 32.0], [10.0, 54.0]])
+        .with_closed(true)
+        .with_path_fill("#00FF00");
+
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let inside = pm.pixel(20, 32).unwrap();
+    assert_eq!(
+        (inside.red(), inside.green()),
+        (0, 255),
+        "interior unfilled"
+    );
+    let outside = pm.pixel(50, 12).unwrap();
+    assert_eq!(outside.green(), 0, "painted outside the triangle");
+
+    common::assert_golden_hash("raster-path-fill", pm.width(), pm.height(), pm.data());
+}
+
+/// Opacity must multiply the stroke's alpha exactly as it does a rect's —
+/// same derivation as `rect_fill_and_opacity`: 255*0.5 premultiplied over
+/// opaque black gives 128.
+#[test]
+fn path_stroke_respects_opacity() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let mut el = path_el(vec![[8.0, 32.0], [56.0, 32.0]]).with_stroke("#FF0000", 4.0);
+    if let Element::Path { common, .. } = &mut el {
+        common.opacity = Some(0.5.into());
+    }
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    let px = pm.pixel(32, 32).unwrap();
+    assert_eq!(px.red(), 128);
+    assert_eq!(px.alpha(), 255);
+}
+
+/// A stroke extends `width/2` beyond the point bounds, so a 12px stroke on a
+/// horizontal line paints rows its zero-height point box does not contain.
+/// Group layers clip to the *canvas*, not to an element's box (raster.rs's
+/// Text/Group arms document that limitation), so this must survive nesting.
+/// A regression guard rather than a discovery: it would fail if base_bbox
+/// were ever used as a draw-time clip.
+#[test]
+fn a_thick_stroke_inside_a_group_is_not_clipped_to_its_point_bounds() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let line = path_el(vec![[8.0, 32.0], [56.0, 32.0]]).with_stroke("#FF0000", 12.0);
+    let group = Element::Group {
+        origin: [0.0.into(), 0.0.into()],
+        children: vec![line],
+        common: Common::default(),
+    };
+
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[group], &mut assets, 0, (0.0, 0.0));
+
+    for y in [27, 32, 36] {
+        assert!(
+            pm.pixel(32, y).unwrap().red() > 0,
+            "row {y} of a 12px stroke was clipped away"
+        );
+    }
+}
+
+/// Rotation pivots on the path's own point bounds, like every other element.
+/// A horizontal line turned 90deg about its centre becomes a vertical line
+/// through that same centre.
+#[test]
+fn path_rotation_pivots_on_its_point_bounds() {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let mut el = path_el(vec![[8.0, 32.0], [56.0, 32.0]]).with_stroke("#FF0000", 4.0);
+    if let Element::Path { common, .. } = &mut el {
+        common.rotation = Some(90.0.into());
+    }
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, 0, (0.0, 0.0));
+
+    // Now vertical about (32,32): painted along the column, clear along the row.
+    assert!(pm.pixel(32, 12).unwrap().red() > 0, "not vertical after rotation");
+    assert!(pm.pixel(32, 52).unwrap().red() > 0, "not vertical after rotation");
+    assert_eq!(pm.pixel(12, 32).unwrap().red(), 0, "still horizontal");
 }
