@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **183 tests**.
+   output. Workspace suite is **203 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -61,9 +61,11 @@ magnitude ~[1e-5, 1e15] (`scalar.rs`/`canonical.ts`); nothing in CI asserts
 the shipped wasm is SIMD-built (a stray `RUSTFLAGS` would silently drop it,
 costing ~4×).
 
-**MCP server:** the validate/render/preview tail is duplicated verbatim
-across all three `_impl` functions (verified byte-identical at merge —
-extract when a fourth caller arrives); `render::frame_count`/`describe` are
+**MCP server:** the validate/render-mp4/preview tail is duplicated verbatim
+across the three *render* `_impl` functions. `preview_document` (added
+2026-08-27) was the fourth tool but not a fourth caller of that tail — it
+writes no MP4 — so the trigger has not fired; it did share the fps-resolution
+block, which is now `source::resolve_fps`; `render::frame_count`/`describe` are
 public and panic on an fps that was not gated, safe today only because every
 caller gates first; a storyboard image shorter than the 56 px caption band
 renders the band partly off-canvas (`validate::check` does no geometry

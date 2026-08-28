@@ -662,7 +662,9 @@ fn preview_document_labels_each_image_with_the_moment_it_answers() {
         .collect();
 
     assert!(
-        labels.iter().any(|l| l.contains("frame 15") && l.contains("500 ms")),
+        labels
+            .iter()
+            .any(|l| l.contains("frame 15") && l.contains("500 ms")),
         "no label ties frame 15 to the 500 ms request: {labels:?}"
     );
 }

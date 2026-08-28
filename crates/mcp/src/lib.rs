@@ -32,7 +32,10 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
     info.instructions = Some(
         "Renders kineto scene documents to MP4. Rendering is deterministic: \
          the same document always produces the same frames. Encoding to MP4 \
-         requires ffmpeg on PATH; `validateOnly` calls do not need it."
+         requires ffmpeg on PATH; `validateOnly` calls do not need it. \
+         While you are still changing a document, use `preview_document` to \
+         look at chosen moments — it writes no file and needs no ffmpeg — \
+         and call `render_document` once it looks right."
             .into(),
     );
     info

@@ -564,9 +564,7 @@ mod tests {
         // reason about images they never received.
         let engine = animated_engine();
         let many: Vec<i64> = (0..=PREVIEW_MAX_COUNT as i64).collect();
-        let msg = resolve_preview(&engine, 30, &many)
-            .unwrap_err()
-            .to_string();
+        let msg = resolve_preview(&engine, 30, &many).unwrap_err().to_string();
         assert!(msg.contains("12"), "the error must name the cap: {msg}");
     }
 
