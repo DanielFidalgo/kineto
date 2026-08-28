@@ -81,7 +81,8 @@ fn frames_panics_on_non_divisor_fps() {
 
 /// Exercises drift-prone serialization surfaces not touched by
 /// `example_doc()`: a `group` element, all four `Common` transform fields,
-/// a `Vec2`-keyed translate track, non-default `Align` variants, and
+/// a `Vec2`-keyed translate track, non-default `Align` variants, a `path`
+/// element with non-default cap/join and a fractional stroke width, and
 /// fractional `Scalar` values (the `serialize_f64` branch).
 fn example_full_doc() -> Document {
     let mut d = Document::new(640, 360);
@@ -108,7 +109,18 @@ fn example_full_doc() -> Document {
         ],
     ));
 
-    d.push_scene(Scene::new("scene-1", seconds(1.0)).with_element(group));
+    d.push_scene(
+        Scene::new("scene-1", seconds(1.0))
+            .with_element(group)
+            .with_element(
+                Element::path(vec![[0.0, 0.0], [40.0, 25.5], [0.0, 51.0]])
+                    .with_closed(true)
+                    .with_stroke("#FF9900", 2.5)
+                    .with_path_fill("#00FF00")
+                    .with_cap(Cap::Round)
+                    .with_join(Join::Bevel),
+            ),
+    );
     d
 }
 
@@ -128,6 +140,10 @@ fn canonical_full_covers_drift_prone_surfaces() {
     assert!(j.contains("\"opacity\":0.5"));
     assert!(j.contains("\"opacity\":0.1"));
     assert!(j.contains("\"translate\":[10,20]"));
+    // Path: key order, non-default cap/join, and a fractional stroke width.
+    assert!(j.contains(r#""type":"path","points":[[0,0],[40,25.5],[0,51]]"#), "{j}");
+    assert!(j.contains(r##""closed":true,"stroke":"#FF9900","strokeWidth":2.5"##), "{j}");
+    assert!(j.contains(r##""cap":"round","join":"bevel","fill":"#00FF00""##), "{j}");
     assert!(j.contains("\"type\":\"group\""));
     assert!(j.contains("\"prop\":\"translate\""));
     assert!(j.contains("\"align\":\"center\""));

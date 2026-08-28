@@ -6,6 +6,8 @@
 // turns a `ZoeDocument` into the canonical byte string.
 import { TIMEBASE } from "./time";
 import type {
+  Cap,
+  Join,
   Align,
   Common,
   Ease,
@@ -62,6 +64,20 @@ export function crossfade(duration: number): ZoeTransition {
 
 export function image(asset: string, rect: [number, number, number, number]): ZoeElement {
   return { type: "image", asset, rect };
+}
+
+export function path(
+  points: [number, number][],
+  opts: {
+    closed?: boolean;
+    stroke?: string;
+    strokeWidth?: number;
+    cap?: Cap;
+    join?: Join;
+    fill?: string;
+  } = {},
+): ZoeElement {
+  return { type: "path", points, ...opts };
 }
 
 export function rect(r: [number, number, number, number], fill: string): ZoeElement {
