@@ -110,8 +110,18 @@ pub struct PreviewDocumentParams {
 
     /// Moments to look at, in whole milliseconds from the start of the
     /// document. Each is snapped to the frame containing it, and the frame it
-    /// resolved to is reported back. At most 12 per call.
+    /// resolved to is reported back. Provide at least one of `atMs` or
+    /// `atScenes`; at most 12 moments in total per call.
+    #[serde(default)]
     pub at_ms: Vec<i64>,
+
+    /// Scene ids to look at, each previewed at that scene's midpoint. Prefer
+    /// this for long documents: it needs no arithmetic over scene durations,
+    /// and it survives edits that shift the timeline. The midpoint rather than
+    /// the start because a crossfaded scene is fully transparent at its own
+    /// start tick, where the frame shows the previous scene instead.
+    #[serde(default)]
+    pub at_scenes: Vec<String>,
 
     /// Frames per second, which sets the frame grid moments snap to. Must be
     /// at most 1000 and divide 705600000 exactly (24, 25, 30, 50, 60...).
@@ -146,12 +156,21 @@ pub fn preview_success(
             .samples
             .iter()
             .filter(|s| s.frame_index == *index)
-            .map(|s| format!("{} ms", s.requested_ms))
+            .map(|s| match (s.requested_ms, &s.requested_scene) {
+                (Some(ms), _) => format!("{ms} ms"),
+                (_, Some(id)) => format!("scene {id}"),
+                _ => "?".to_string(),
+            })
             .collect();
-        content.push(ContentBlock::text(format!(
-            "frame {index} — requested {}",
-            asked.join(", ")
-        )));
+        let mut label = format!("frame {index} — requested {}", asked.join(", "));
+        // Which scene the frame actually shows, which is not always the one
+        // asked for: inside a crossfade the dominant scene is the neighbour.
+        if let Some(s) = outcome.samples.iter().find(|s| s.frame_index == *index) {
+            if let (Some(id), Some(local)) = (&s.scene_id, s.scene_local_ms) {
+                label.push_str(&format!(" — showing scene {id} at {local} ms"));
+            }
+        }
+        content.push(ContentBlock::text(label));
         content.push(ContentBlock::image(png, "image/png"));
     }
 

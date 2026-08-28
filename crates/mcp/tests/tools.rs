@@ -707,7 +707,7 @@ fn preview_document_reports_a_moment_past_the_end_as_the_last_frame() {
     assert_eq!(samples[0]["requestedMs"], 9_000);
     assert_eq!(samples[0]["frameIndex"], 29);
     assert_eq!(
-        samples[0]["actualMs"], 966,
+        samples[0]["actualMs"], 967,
         "the caller must be able to see it did not get 9 seconds"
     );
 }
@@ -738,4 +738,193 @@ fn preview_document_rejects_a_negative_moment() {
     );
 
     assert_eq!(resp["result"]["isError"], json!(true));
+}
+
+/// Three one-second scenes joined by two third-of-a-second crossfades, each a
+/// different solid color so frames from different scenes cannot compare equal.
+/// Nominal length 3000ms; the overlaps make the real length 2333ms.
+fn crossfaded_doc() -> String {
+    let colors = ["#3366FF", "#FF9900", "#4ECDC4"];
+    let scenes: Vec<serde_json::Value> = (0..3)
+        .map(|i| {
+            let mut scene = json!({
+                "id": format!("s{i}"),
+                "duration": 705600000,
+                "elements": [{
+                    "type": "rect",
+                    "rect": [0, 0, 320, 180],
+                    "fill": colors[i]
+                }]
+            });
+            if i > 0 {
+                scene["transition"] = json!({ "type": "crossfade", "duration": 235200000 });
+            }
+            scene
+        })
+        .collect();
+    json!({
+        "v": 1,
+        "timebase": 705600000,
+        "size": { "w": 320, "h": 180 },
+        "scenes": scenes
+    })
+    .to_string()
+}
+
+#[test]
+fn preview_document_addresses_a_scene_by_id() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atScenes": ["s1"] }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+
+    let samples = result["structuredContent"]["samples"]
+        .as_array()
+        .expect("samples array");
+    assert_eq!(samples.len(), 1);
+    assert_eq!(samples[0]["sceneId"], "s1");
+}
+
+#[test]
+fn a_scene_is_previewed_at_its_midpoint_not_its_start() {
+    // The load-bearing assertion. A crossfaded scene is at alpha 0 at its own
+    // start tick, so previewing there shows the scene *before* it. If scene
+    // addressing ever regresses to using the start tick, these two frames
+    // become the same image.
+    let mut server = Server::start();
+    server.initialize();
+
+    let by_scene = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atScenes": ["s1"] }),
+    );
+    // s1 starts at 667ms per the timeline block.
+    let at_start = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atMs": [667] }),
+    );
+
+    let image = |v: &serde_json::Value| -> String {
+        v["result"]["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["type"] == "image")
+            .expect("an image")["data"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+
+    assert_ne!(
+        image(&by_scene),
+        image(&at_start),
+        "previewing scene s1 returned the same pixels as its start tick, \
+         where s1 is fully transparent"
+    );
+    assert_eq!(
+        at_start["result"]["structuredContent"]["samples"][0]["sceneId"], "s0",
+        "at s1's start tick the dominant scene is still s0"
+    );
+}
+
+#[test]
+fn preview_document_reports_nominal_versus_actual_length() {
+    // The crossfade trap: 3 x 1s scenes do not make a 3s video. Nothing in
+    // the document says so, which is why the reply has to.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atScenes": ["s0"] }),
+    );
+
+    let t = &resp["result"]["structuredContent"]["timeline"];
+    assert_eq!(t["nominalMs"], 3000);
+    assert_eq!(t["actualMs"], 2333);
+    assert_eq!(t["transitionOverlapMs"], 667);
+    assert_eq!(t["scenes"][1]["id"], "s1");
+    assert_eq!(
+        t["scenes"][1]["startMs"], 667,
+        "scene 1 is pulled back into scene 0 by its crossfade"
+    );
+}
+
+#[test]
+fn an_unknown_scene_id_is_an_error_that_names_the_valid_ones() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atScenes": ["scene1"] }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+    let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("scene1"), "must echo the bad id: {text}");
+    assert!(text.contains("s1"), "must name the valid ids: {text}");
+}
+
+#[test]
+fn preview_document_requires_at_least_one_way_to_name_a_moment() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc() }),
+    );
+
+    assert_eq!(resp["result"]["isError"], json!(true));
+}
+
+#[test]
+fn at_ms_and_at_scenes_can_be_combined() {
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "preview_document",
+        json!({ "document": crossfaded_doc(), "atMs": [0], "atScenes": ["s2"] }),
+    );
+
+    let result = &resp["result"];
+    assert_ne!(result["isError"], json!(true), "unexpected error: {result}");
+    let samples = result["structuredContent"]["samples"].as_array().unwrap();
+    assert_eq!(samples.len(), 2);
+    assert_eq!(samples[0]["requestedMs"], 0);
+    assert_eq!(samples[1]["sceneId"], "s2");
+}
+
+#[test]
+fn validate_only_reports_the_timeline_too() {
+    // `validateOnly` is the natural "tell me about this document" call, and
+    // authoring time is exactly when the crossfade gap matters.
+    let mut server = Server::start();
+    server.initialize();
+
+    let resp = call(
+        &mut server,
+        "render_document",
+        json!({ "document": crossfaded_doc(), "validateOnly": true }),
+    );
+
+    let t = &resp["result"]["structuredContent"]["timeline"];
+    assert_eq!(t["nominalMs"], 3000);
+    assert_eq!(t["actualMs"], 2333);
 }

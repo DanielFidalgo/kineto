@@ -63,7 +63,14 @@ fn tools_list_advertises_preview_document() {
         .unwrap_or_else(|| panic!("preview_document missing from {tools:?}"));
 
     let props = &tool["inputSchema"]["properties"];
-    for key in ["document", "documentPath", "assetBaseDir", "atMs", "fps"] {
+    for key in [
+        "document",
+        "documentPath",
+        "assetBaseDir",
+        "atMs",
+        "atScenes",
+        "fps",
+    ] {
         assert!(
             props.get(key).is_some(),
             "missing property {key} in {props}"
@@ -78,13 +85,20 @@ fn tools_list_advertises_preview_document() {
             "preview_document must not advertise {key} in {props}"
         );
     }
-    assert_eq!(
-        tool["inputSchema"]["required"]
-            .as_array()
-            .map(|r| r.contains(&serde_json::json!("atMs"))),
-        Some(true),
-        "atMs must be required: {tool}"
-    );
+    // Neither way of naming a moment is required on its own — the rule is
+    // "at least one of the two", which JSON Schema `required` cannot express.
+    // It is enforced at call time instead, so the schema must not claim
+    // either field is mandatory and reject a valid `atScenes`-only call.
+    let required = tool["inputSchema"]["required"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    for key in ["atMs", "atScenes"] {
+        assert!(
+            !required.contains(&serde_json::json!(key)),
+            "{key} must not be schema-required: {required:?}"
+        );
+    }
 }
 
 #[test]

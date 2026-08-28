@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use kineto_mcp::render::{resolve_preview, TICKS_PER_MS};
 use kineto_mcp::source::{load_document, resolve_assets};
+use kineto_mcp::timeline::summary;
 use sha2::{Digest, Sha256};
 
 fn repo(rel: &str) -> PathBuf {
@@ -92,6 +93,7 @@ fn a_millisecond_request_resolves_to_the_exact_tick_the_goldens_pin() {
         let json = entry.doc.canonical_json();
         let (doc, _) = load_document(Some(&json), None).expect("corpus doc parses");
         let assets = resolve_assets(&doc, &assets_dir).expect("corpus assets resolve");
+        let timeline = summary(&doc);
         let mut engine = kineto_core::Engine::new(doc, assets).expect("engine builds");
 
         for tick in &entry.ticks {
@@ -104,8 +106,8 @@ fn a_millisecond_request_resolves_to_the_exact_tick_the_goldens_pin() {
             }
             let ms = tick / TICKS_PER_MS;
 
-            let (outcome, frames) =
-                resolve_preview(&engine, FPS, &[ms]).expect("corpus moment resolves");
+            let (outcome, frames) = resolve_preview(&engine, FPS, &timeline, &[ms], &[])
+                .expect("corpus moment resolves");
             assert_eq!(frames.len(), 1);
             assert_eq!(
                 outcome.samples[0].tick, *tick,

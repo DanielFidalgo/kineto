@@ -32,6 +32,17 @@ pub struct RenderOutcome {
     pub frame_count: u64,
     pub duration_ticks: i64,
     pub duration_seconds: f64,
+    /// Scene spans and the nominal-vs-actual length gap. Absent only where a
+    /// caller had no document to measure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeline: Option<crate::timeline::TimelineSummary>,
+}
+
+impl RenderOutcome {
+    pub fn with_timeline(mut self, timeline: crate::timeline::TimelineSummary) -> Self {
+        self.timeline = Some(timeline);
+        self
+    }
 }
 
 /// Evenly spaced frame indices from the first frame to the last, inclusive.
@@ -59,6 +70,20 @@ pub fn preview_frame_indices(frame_count: u64, count: usize) -> Vec<u64> {
 /// have put rounding on the input path of a renderer whose entire premise is
 /// byte-determinism.
 pub const TICKS_PER_MS: i64 = kineto_core::doc::TIMEBASE / 1000;
+
+/// Ticks to the nearest whole millisecond.
+///
+/// Nearest, not truncated, because these numbers are handed back to a caller
+/// who may feed them in again. Frame 29 at 30 fps sits at 966.67 ms;
+/// truncating reports 966, and 966 ms resolves to frame *28* — the reply
+/// would name a moment that is not the one it showed.
+pub fn round_ms(ticks: i64) -> i64 {
+    if ticks >= 0 {
+        (ticks + TICKS_PER_MS / 2) / TICKS_PER_MS
+    } else {
+        (ticks - TICKS_PER_MS / 2) / TICKS_PER_MS
+    }
+}
 
 /// Resolve a millisecond offset to the index of the frame containing it.
 ///
@@ -97,7 +122,16 @@ pub fn frame_for_ms(ms: i64, fps: i64, frame_count: u64) -> Result<u64, ToolErro
             "`atMs` offset {ms} is too large to be a time within any document"
         ))
     })?;
-    Ok(((tick / step) as u64).min(frame_count - 1))
+    Ok(frame_for_tick(tick, step, frame_count))
+}
+
+/// The index of the frame containing `tick`, clamped to the last frame.
+///
+/// Split out so scene addressing can resolve a midpoint tick directly rather
+/// than converting it to milliseconds first — that round trip would round
+/// twice and could land a frame off.
+fn frame_for_tick(tick: i64, step: i64, frame_count: u64) -> u64 {
+    ((tick.max(0) / step) as u64).min(frame_count - 1)
 }
 
 /// How many frames this engine will emit at `fps`.
@@ -137,6 +171,7 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
         frame_count: frame_count(engine, fps),
         duration_ticks: ticks,
         duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+        timeline: None,
     }
 }
 
@@ -149,10 +184,22 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewSample {
-    pub requested_ms: i64,
+    /// Present when the moment came from `atMs`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_ms: Option<i64>,
+    /// Present when the moment came from `atScenes`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_scene: Option<String>,
     pub frame_index: u64,
     pub tick: i64,
     pub actual_ms: i64,
+    /// The scene dominating this frame — not necessarily the one requested,
+    /// which is the point: it is how a caller discovers it is looking at a
+    /// crossfade rather than the scene it had in mind.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_local_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -164,6 +211,7 @@ pub struct PreviewOutcome {
     pub frame_count: u64,
     pub duration_ticks: i64,
     pub duration_seconds: f64,
+    pub timeline: crate::timeline::TimelineSummary,
     pub samples: Vec<PreviewSample>,
 }
 
@@ -176,37 +224,81 @@ pub struct PreviewOutcome {
 pub fn resolve_preview(
     engine: &Engine,
     fps: i64,
+    timeline: &crate::timeline::TimelineSummary,
     at_ms: &[i64],
+    at_scenes: &[String],
 ) -> Result<(PreviewOutcome, Vec<u64>), ToolError> {
-    if at_ms.is_empty() {
+    if at_ms.is_empty() && at_scenes.is_empty() {
         return Err(ToolError::Invalid(
-            "`atMs` must name at least one moment to preview".into(),
+            "provide at least one of `atMs` (moments in milliseconds) or \
+             `atScenes` (scene ids, each previewed at its midpoint)"
+                .into(),
         ));
     }
-    if at_ms.len() > PREVIEW_MAX_COUNT {
+    let asked = at_ms.len() + at_scenes.len();
+    if asked > PREVIEW_MAX_COUNT {
         return Err(ToolError::Invalid(format!(
-            "`atMs` names {} moments but at most {PREVIEW_MAX_COUNT} may be \
+            "{asked} moments were named but at most {PREVIEW_MAX_COUNT} may be \
              previewed per call; ask for fewer rather than being given a \
-             silently truncated answer",
-            at_ms.len()
+             silently truncated answer"
         )));
     }
 
     let total = frame_count(engine, fps);
-    let mut samples = Vec::with_capacity(at_ms.len());
+    let step = kineto_core::doc::TIMEBASE / fps;
+    let mut samples: Vec<PreviewSample> = Vec::with_capacity(asked);
     let mut frames: Vec<u64> = Vec::new();
-    for &ms in at_ms {
-        let frame_index = frame_for_ms(ms, fps, total)?;
+
+    // Every sample is built here so scene attribution cannot differ between
+    // the two ways of naming a moment.
+    let mut record = |samples: &mut Vec<PreviewSample>,
+                      frames: &mut Vec<u64>,
+                      frame_index: u64,
+                      requested_ms: Option<i64>,
+                      requested_scene: Option<String>| {
         let tick = engine.tick_for_frame(frame_index as i64, fps);
         if !frames.contains(&frame_index) {
             frames.push(frame_index);
         }
+        let dominant = timeline.scene_at(tick);
         samples.push(PreviewSample {
-            requested_ms: ms,
+            requested_ms,
+            requested_scene,
             frame_index,
             tick,
-            actual_ms: tick / TICKS_PER_MS,
+            actual_ms: round_ms(tick),
+            scene_id: dominant.map(|s| s.id.clone()),
+            scene_local_ms: dominant.map(|s| round_ms(tick - s.start_tick)),
         });
+    };
+
+    for &ms in at_ms {
+        let frame_index = frame_for_ms(ms, fps, total)?;
+        record(&mut samples, &mut frames, frame_index, Some(ms), None);
+    }
+
+    for id in at_scenes {
+        let span = timeline.find(id).ok_or_else(|| {
+            ToolError::Invalid(format!(
+                "no scene with id '{id}' — this document's scenes are: {}",
+                timeline.ids().join(", ")
+            ))
+        })?;
+        if total == 0 {
+            return Err(ToolError::Invalid(
+                "this document has no frames to preview: its total duration is zero".into(),
+            ));
+        }
+        // Resolved from the midpoint *tick*, not via milliseconds: routing a
+        // tick through ms and back would round twice and can land a frame off.
+        let frame_index = frame_for_tick(span.midpoint_tick(), step, total);
+        record(
+            &mut samples,
+            &mut frames,
+            frame_index,
+            None,
+            Some(id.clone()),
+        );
     }
 
     let ticks = engine.total_duration();
@@ -218,6 +310,7 @@ pub fn resolve_preview(
             frame_count: total,
             duration_ticks: ticks,
             duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+            timeline: timeline.clone(),
             samples,
         },
         frames,
@@ -329,6 +422,7 @@ pub fn render_to_mp4(engine: &mut Engine, fps: i64, out: &str) -> Result<RenderO
         frame_count: count,
         duration_ticks: ticks,
         duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+        timeline: None,
     })
 }
 
@@ -525,16 +619,17 @@ mod tests {
         // document and clamps, which the caller can only detect from the
         // reported values.
         let engine = animated_engine();
-        let (outcome, frames) = resolve_preview(&engine, 30, &[0, 50, 5_000]).unwrap();
+        let (outcome, frames) =
+            resolve_preview(&engine, 30, &animated_tl(), &[0, 50, 5_000], &[]).unwrap();
 
         assert_eq!(frames, vec![0, 1, 29]);
         assert_eq!(outcome.frame_count, 30);
         let got: Vec<(i64, u64, i64)> = outcome
             .samples
             .iter()
-            .map(|s| (s.requested_ms, s.frame_index, s.actual_ms))
+            .map(|s| (s.requested_ms.unwrap(), s.frame_index, s.actual_ms))
             .collect();
-        assert_eq!(got, vec![(0, 0, 0), (50, 1, 33), (5_000, 29, 966)]);
+        assert_eq!(got, vec![(0, 0, 0), (50, 1, 33), (5_000, 29, 967)]);
     }
 
     #[test]
@@ -544,18 +639,37 @@ mod tests {
         // dropping the caller's second question would be worse — it stays in
         // `samples`.
         let engine = animated_engine();
-        let (outcome, frames) = resolve_preview(&engine, 30, &[0, 10, 50]).unwrap();
+        let (outcome, frames) =
+            resolve_preview(&engine, 30, &animated_tl(), &[0, 10, 50], &[]).unwrap();
 
         assert_eq!(frames, vec![0, 1], "frame 0 must be encoded once");
         assert_eq!(outcome.samples.len(), 3, "every requested moment reported");
-        assert_eq!(outcome.samples[1].requested_ms, 10);
+        assert_eq!(outcome.samples[1].requested_ms, Some(10));
         assert_eq!(outcome.samples[1].frame_index, 0);
+    }
+
+    #[test]
+    fn a_reported_moment_resolves_back_to_the_same_frame() {
+        // `actualMs` is only useful if it round-trips: a caller that reads
+        // "you got 966 ms" and asks for 966 ms must land on the frame it was
+        // just looking at. Truncating the tick instead of rounding it reports
+        // a moment that belongs to the *previous* frame — 966 ms is inside
+        // frame 28, not frame 29.
+        let engine = animated_engine();
+        let (first, _) = resolve_preview(&engine, 30, &animated_tl(), &[999], &[]).unwrap();
+        let reported = first.samples[0].actual_ms;
+
+        let (again, _) = resolve_preview(&engine, 30, &animated_tl(), &[reported], &[]).unwrap();
+        assert_eq!(
+            again.samples[0].frame_index, first.samples[0].frame_index,
+            "reported {reported} ms resolved to a different frame than it named"
+        );
     }
 
     #[test]
     fn asking_for_no_moments_is_an_error() {
         let engine = animated_engine();
-        assert!(resolve_preview(&engine, 30, &[]).is_err());
+        assert!(resolve_preview(&engine, 30, &animated_tl(), &[], &[]).is_err());
     }
 
     #[test]
@@ -564,7 +678,9 @@ mod tests {
         // reason about images they never received.
         let engine = animated_engine();
         let many: Vec<i64> = (0..=PREVIEW_MAX_COUNT as i64).collect();
-        let msg = resolve_preview(&engine, 30, &many).unwrap_err().to_string();
+        let msg = resolve_preview(&engine, 30, &animated_tl(), &many, &[])
+            .unwrap_err()
+            .to_string();
         assert!(msg.contains("12"), "the error must name the cap: {msg}");
     }
 
@@ -625,6 +741,15 @@ mod tests {
     /// pixels. Byte-identity assertions against a static document cannot fail
     /// on a wrong frame index; against this one they can.
     fn animated_engine() -> kineto_core::Engine {
+        kineto_core::Engine::new(animated_doc(), kineto_core::AssetStore::new()).unwrap()
+    }
+
+    /// The timeline of `animated_doc`, for calls that need scene spans.
+    fn animated_tl() -> crate::timeline::TimelineSummary {
+        crate::timeline::summary(&animated_doc())
+    }
+
+    fn animated_doc() -> kineto_core::Document {
         use kineto_core::doc::{Key, Prop, Track};
         use kineto_core::{Document, Element, Scene};
         let mut doc = Document::new(320, 180);
@@ -641,7 +766,7 @@ mod tests {
                     )),
                 ),
         );
-        kineto_core::Engine::new(doc, kineto_core::AssetStore::new()).unwrap()
+        doc
     }
 
     fn base64_decode(s: &str) -> Vec<u8> {
