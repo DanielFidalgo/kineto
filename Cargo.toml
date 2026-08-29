@@ -6,9 +6,8 @@ members = ["crates/core", "crates/wasm", "crates/mcp", "adapters/asciicast"]
 version = "0.1.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-# repository/homepage are deliberately absent until the repo's permanent
-# home is settled -- a published crate's metadata cannot be edited, only
-# superseded by a new version.
+repository = "https://github.com/DanielFidalgo/kineto"
+homepage = "https://github.com/DanielFidalgo/kineto"
 keywords = ["video", "mp4", "render", "deterministic", "mcp"]
 categories = ["multimedia::video", "command-line-utilities"]
 

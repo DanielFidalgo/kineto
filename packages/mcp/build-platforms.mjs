@@ -72,6 +72,14 @@ for (const t of TARGETS) {
         version,
         description: `Kineto MCP server binary for ${t.os} ${t.cpu}.`,
         license: "MIT OR Apache-2.0",
+        // Provenance attests which repo and workflow built a package, and npm
+        // requires `repository` to match the publishing workflow to issue it.
+        repository: {
+          type: "git",
+          url: "git+https://github.com/DanielFidalgo/kineto.git",
+          directory: "packages/mcp",
+        },
+        homepage: "https://github.com/DanielFidalgo/kineto",
         // npm reads these to decide whether to install this package at all.
         os: [t.os],
         cpu: [t.cpu],

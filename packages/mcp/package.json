@@ -11,6 +11,15 @@
     "agent"
   ],
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanielFidalgo/kineto.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/DanielFidalgo/kineto",
+  "bugs": {
+    "url": "https://github.com/DanielFidalgo/kineto/issues"
+  },
   "type": "module",
   "bin": {
     "kineto-mcp": "bin/kineto-mcp.mjs"

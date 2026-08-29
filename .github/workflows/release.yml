@@ -256,6 +256,12 @@ jobs:
     needs: [verify, publish]
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      contents: read
+      # Provenance is signed with an OIDC token from this workflow. It is what
+      # lets anyone verify which repository and which run produced a package --
+      # a stronger claim than trusting the right credentials were used.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -305,12 +311,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          for d in dist/npm/*/; do npm publish --dry-run "./$d"; done
+          for d in dist/npm/*/; do npm publish --provenance --dry-run "./$d"; done
           # ./ is load-bearing. `npm publish packages/mcp` reads a bare
           # two-segment argument as a GitHub shorthand and tries to clone
           # github.com/packages/mcp; the platform dirs escaped it only because
           # they have three segments and a trailing slash.
-          npm publish --dry-run ./packages/mcp
+          npm publish --provenance --dry-run ./packages/mcp
 
       - name: Publish
         env:
@@ -321,7 +327,7 @@ jobs:
           # went wrong, and the preflight cannot tell them apart either -- a
           # token can authenticate perfectly and still have no authority here.
           publish() {
-            if ! npm publish "$1"; then
+            if ! npm publish --provenance "$1"; then
               echo "::error::publish of $1 failed. A 403 'you may not perform \
           that action with these credentials' means the token authenticated but \
           cannot create this package. These names are UNSCOPED, so a token \
