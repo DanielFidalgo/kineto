@@ -21,7 +21,14 @@ Kineto ships an **MCP server**. Point Claude Code — or any MCP client — at i
 and an agent can render, inspect and correct video without a browser, a
 display, or a render farm.
 
-**With Rust** — one line:
+**Nothing to install** — `npx` fetches the binary for your platform on first
+use:
+
+```sh
+claude mcp add --scope user kineto npx kineto-mcp
+```
+
+**Or as a binary on your PATH**, which also gives you the `kineto` CLI:
 
 ```sh
 cargo install kineto

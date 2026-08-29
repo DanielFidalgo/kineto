@@ -46,7 +46,7 @@ The repo directory on disk is `~/personal/repos/kineto`; the old
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
    output. Workspace suite is **329 tests**.
-4. **Status: PUBLIC AND RELEASED (2026-08-29).** Remote is
+4. **Status: PUBLIC AND RELEASED ON BOTH REGISTRIES (2026-08-29).** Remote is
    `github.com/DanielFidalgo/kineto`, default branch `main`. CI is green,
    and **parity passed 27/27 on x86_64** — the largest open unknown of the
    v1 build, now closed, so the tiny-skia `simd`-disabling lever was never
@@ -222,7 +222,7 @@ an installed std, so a four-wide matrix was exercising one path.
   binary. `crates/mcp/tests/manifest.rs` fails if those versions drift from
   `workspace.package.version` — cargo catches a major/minor mismatch itself,
   but `^0.1.0` matches `0.1.1`, so a patch bump slips through unaided.
-- **npm distribution (2026-08-29, built; not yet published):** `kineto-mcp`
+- **npm distribution (2026-08-29, PUBLISHED at 0.1.2):** `kineto-mcp`
   is a thin wrapper (`packages/mcp`) whose four `optionalDependencies` carry
   the prebuilt `kineto-mcp` binary; npm selects one via `os`/`cpu`. The
   esbuild pattern, chosen over a postinstall download because postinstall
@@ -282,6 +282,13 @@ an installed std, so a four-wide matrix was exercising one path.
 - `crates/mcp/tests/parity.rs` drives corpus documents through the MCP
   server's own loading path and checks them against the same goldens, so
   the server cannot become a second source of truth.
+- **Never test `npx <pkg>` from inside this repo.** `node_modules` holds
+  `kineto-mcp` as a workspace symlink, so npx runs the local shim — whose
+  optional platform dependency is not installed — and reports a failure that
+  looks exactly like a broken published package. Run it from a directory
+  outside the repo (`sh -c 'cd /tmp/x && exec npx ...'`; the shell tool here
+  resets cwd, so a bare `cd` is not enough). This produced one confidently
+  wrong "the published package is broken" diagnosis.
 - Recurring failure mode on this codebase: **tests that cannot fail on the
   bug they target.** Seven were caught during the MCP build. When writing a
   test, ask whether it would still pass if the code under it were stubbed
