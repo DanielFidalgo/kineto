@@ -236,16 +236,17 @@ fn load_font(
 }
 
 /// Reserved src strings that resolve to fonts bundled in this repo
-/// (`assets/fonts/`), so docs can reference them without a file path.
+/// (`crates/core/assets/fonts/`, inside this crate so `cargo publish`
+/// packages them), so docs can reference them without a file path.
 /// Native-only (`bundled-fonts` feature, default-on): `crates/wasm` disables
 /// this feature so the fonts are never compiled into the wasm binary — the
 /// JS host supplies the bytes there instead.
 #[cfg(feature = "bundled-fonts")]
 pub fn resolve_reserved_src(src: &str) -> Option<&'static [u8]> {
     match src {
-        "kineto:inter" => Some(include_bytes!("../../../assets/fonts/Inter-Regular.ttf")),
+        "kineto:inter" => Some(include_bytes!("../assets/fonts/Inter-Regular.ttf")),
         "kineto:jetbrains-mono" => Some(include_bytes!(
-            "../../../assets/fonts/JetBrainsMono-Regular.ttf"
+            "../assets/fonts/JetBrainsMono-Regular.ttf"
         )),
         _ => None,
     }

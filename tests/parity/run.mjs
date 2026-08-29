@@ -37,8 +37,8 @@ const native = JSON.parse(
 // `include_bytes!`s; everything else is a corpus fixture under
 // testdata/assets/.
 const RESERVED = {
-  "kineto:inter": "assets/fonts/Inter-Regular.ttf",
-  "kineto:jetbrains-mono": "assets/fonts/JetBrainsMono-Regular.ttf",
+  "kineto:inter": "crates/core/assets/fonts/Inter-Regular.ttf",
+  "kineto:jetbrains-mono": "crates/core/assets/fonts/JetBrainsMono-Regular.ttf",
 };
 
 let fail = 0;

@@ -59,7 +59,7 @@ const isNode =
 
 /**
  * Bytes for the SDK-bundled Inter font (`packages/sdk/assets/`, copied
- * from `assets/fonts/` in the repo root), resolved relative to this
+ * from `crates/core/assets/fonts/`), resolved relative to this
  * module so it works regardless of the SDK consumer's own working
  * directory.
  */
