@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/core", "crates/wasm", "crates/mcp", "adapters/asciicast"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 # repository/homepage are deliberately absent until the repo's permanent
@@ -17,8 +17,8 @@ categories = ["multimedia::video", "command-line-utilities"]
 # rather than inline per member: `just release` bumps a single line, and
 # tests/manifest.rs fails if these drift from workspace.package.version.
 [workspace.dependencies]
-kineto-core = { path = "crates/core", version = "0.1.0" }
-kineto-asciicast = { path = "adapters/asciicast", version = "0.1.0" }
+kineto-core = { path = "crates/core", version = "0.1.1" }
+kineto-asciicast = { path = "adapters/asciicast", version = "0.1.1" }
 
 [profile.release]
 lto = true
