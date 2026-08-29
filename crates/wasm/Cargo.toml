@@ -3,11 +3,17 @@ name = "kineto-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "WebAssembly bindings for the Kineto video compiler."
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# NOT workspace = true: a member's `default-features = false` is ignored
+# when the dependency comes from [workspace.dependencies], which would
+# compile the bundled fonts into the wasm binary and blow the size
+# budget (spec §5). This crate is publish = false, so it needs no version.
 kineto-core = { path = "../core", default-features = false }
 wasm-bindgen = "0.2"
 

@@ -535,6 +535,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kineto"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "image",
+ "kineto-asciicast",
+ "kineto-core",
+ "pico-args",
+ "rmcp",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tiny-skia",
+ "tokio",
+]
+
+[[package]]
 name = "kineto-asciicast"
 version = "0.1.0"
 dependencies = [
@@ -560,26 +580,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tiny-skia",
-]
-
-[[package]]
-name = "kineto-mcp"
-version = "0.1.0"
-dependencies = [
- "base64",
- "image",
- "kineto-asciicast",
- "kineto-core",
- "pico-args",
- "rmcp",
- "schemars",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "tiny-skia",
- "tokio",
 ]
 
 [[package]]

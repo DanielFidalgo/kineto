@@ -1,4 +1,4 @@
-use kineto_mcp::KinetoServer;
+use kineto::KinetoServer;
 use rmcp::ServiceExt;
 
 #[tokio::main(flavor = "current_thread")]

@@ -5,9 +5,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use kineto_mcp::render::{resolve_preview, TICKS_PER_MS};
-use kineto_mcp::source::{load_document, resolve_assets};
-use kineto_mcp::timeline::summary;
+use kineto::render::{resolve_preview, TICKS_PER_MS};
+use kineto::source::{load_document, resolve_assets};
+use kineto::timeline::summary;
 use sha2::{Digest, Sha256};
 
 fn repo(rel: &str) -> PathBuf {

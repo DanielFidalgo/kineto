@@ -3,6 +3,9 @@ name = "kineto-asciicast"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Render asciinema .cast recordings to video with Kineto. No browser, no display."
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "kineto-cast"
@@ -17,7 +20,7 @@ thiserror = "2.0.20"
 # Default features on (bundled-fonts): this adapter is native-only (CLI,
 # Task 23), so it needs `resolve_reserved_src` to stage the bundled
 # JetBrains Mono bytes for its converted documents.
-kineto-core = { path = "../../crates/core" }
+kineto-core = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.27.0"

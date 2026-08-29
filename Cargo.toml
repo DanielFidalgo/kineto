@@ -6,6 +6,19 @@ members = ["crates/core", "crates/wasm", "crates/mcp", "adapters/asciicast"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+# repository/homepage are deliberately absent until the repo's permanent
+# home is settled -- a published crate's metadata cannot be edited, only
+# superseded by a new version.
+keywords = ["video", "mp4", "render", "deterministic", "mcp"]
+categories = ["multimedia::video", "command-line-utilities"]
+
+# Path dependencies need a version to be publishable, and crates.io resolves
+# against the version while a local build uses the path. Declared once here
+# rather than inline per member: `just release` bumps a single line, and
+# tests/manifest.rs fails if these drift from workspace.package.version.
+[workspace.dependencies]
+kineto-core = { path = "crates/core", version = "0.1.0" }
+kineto-asciicast = { path = "adapters/asciicast", version = "0.1.0" }
 
 [profile.release]
 lto = true

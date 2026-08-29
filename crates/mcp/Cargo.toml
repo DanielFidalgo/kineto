@@ -1,8 +1,11 @@
 [package]
-name = "kineto-mcp"
+name = "kineto"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Compile declarative scene documents to MP4, animated WebP or PNG. CLI and MCP server for the Kineto video compiler."
+keywords.workspace = true
+categories.workspace = true
 
 [[bin]]
 name = "kineto-mcp"
@@ -35,8 +38,8 @@ thiserror = "2.0.20"
 # the current-thread runtime is sufficient and keeps the dependency surface
 # smaller.
 tokio = { version = "1", features = ["rt", "macros", "io-std"] }
-kineto-asciicast = { path = "../../adapters/asciicast" }
-kineto-core = { path = "../core" }
+kineto-asciicast = { workspace = true }
+kineto-core = { workspace = true }
 # rmcp enables the `base64` crate internally (its own "base64" feature) but
 # exposes no public encoding API of its own — `ContentBlock::image` takes an
 # already-encoded `String`. Pinned to 0.23 to match the version rmcp already

@@ -3,6 +3,9 @@ name = "kineto-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Deterministic video compiler: declarative scene documents to rendered frames. The engine behind Kineto."
+keywords.workspace = true
+categories.workspace = true
 
 [features]
 default = ["bundled-fonts"]

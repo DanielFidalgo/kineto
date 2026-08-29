@@ -197,7 +197,27 @@ an installed std, so a four-wide matrix was exercising one path.
   prints and leaves PNGs behind. `crates/mcp` compensates by preflighting
   `ffmpeg_available()` before rendering a frame. **Do not "fix" the core
   contract** — the asymmetry is deliberate.
-- License **MIT OR Apache-2.0**. No crates.io/npm publishing yet.
+- **Publishing (2026-08-29, decided but not yet executed):** the bare name
+  `kineto` on crates.io belongs to the **CLI + MCP package** (`crates/mcp`,
+  renamed from `kineto-mcp`), so `cargo install kineto` yields the `kineto`
+  and `kineto-mcp` binaries; the engine stays `kineto-core` for
+  `cargo add kineto-core`. The ripgrep pattern, chosen because the audience
+  runs Kineto rather than embeds it. **The binary name `kineto-mcp` and the
+  MCP `serverInfo.name` did not change** — only the package. `kineto-wasm` is
+  `publish = false` (a cdylib consumed through wasm-pack, and its test
+  fixtures live outside the crate). Publishing happens **only from CI**
+  against a repo secret, never a laptop, so no local credential decides which
+  account ships. crates.io is irreversible: a name can never be freed and a
+  version can only be yanked, so the `crates-io` job runs last and dry-runs
+  every crate before publishing any.
+- Path dependencies live in `[workspace.dependencies]` with a `version`,
+  which crates.io requires. `crates/wasm` is deliberately **not** routed
+  through it: a member's `default-features = false` is silently ignored for a
+  workspace dependency, which would compile the bundled fonts into the wasm
+  binary. `crates/mcp/tests/manifest.rs` fails if those versions drift from
+  `workspace.package.version` — cargo catches a major/minor mismatch itself,
+  but `^0.1.0` matches `0.1.1`, so a patch bump slips through unaided.
+- License **MIT OR Apache-2.0**.
 - Repo layout: `crates/core`, `crates/wasm`, `crates/mcp`,
   `adapters/asciicast`, `packages/sdk`, `packages/demo-tape`.
 - YAGNI fence: no audio, video elements, effects, WebGPU, expressions,

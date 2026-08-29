@@ -245,9 +245,9 @@ fn load_font(
 pub fn resolve_reserved_src(src: &str) -> Option<&'static [u8]> {
     match src {
         "kineto:inter" => Some(include_bytes!("../assets/fonts/Inter-Regular.ttf")),
-        "kineto:jetbrains-mono" => Some(include_bytes!(
-            "../assets/fonts/JetBrainsMono-Regular.ttf"
-        )),
+        "kineto:jetbrains-mono" => {
+            Some(include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf"))
+        }
         _ => None,
     }
 }

@@ -147,6 +147,16 @@ release version:
         Cargo.toml > Cargo.toml.new
     grep -q '^version = "{{version}}"' Cargo.toml.new || { rm -f Cargo.toml.new; echo "error: version rewrite did not take" >&2; exit 1; }
     mv Cargo.toml.new Cargo.toml
+    # [workspace.dependencies] entries carry their own version for crates.io.
+    # The pass above only touches a line *starting* with `version = `, so these
+    # need a second one -- and cargo will not complain if they are left behind
+    # on a patch bump, since ^0.1.0 matches 0.1.1.
+    awk -v v='{{version}}' '/path = "/ { gsub(/version = "[^"]*"/, "version = \"" v "\"") } {print}' \
+        Cargo.toml > Cargo.toml.new
+    mv Cargo.toml.new Cargo.toml
+    # tests/manifest.rs is the authority on the two agreeing; running it here
+    # means a bad rewrite fails before the tag exists rather than after.
+    cargo test -p kineto --test manifest
     cargo update -w --quiet          # refresh Cargo.lock's own version entries
     git add Cargo.toml Cargo.lock
     # Re-releasing the version already in the manifest is the normal case for

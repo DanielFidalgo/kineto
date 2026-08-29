@@ -20,9 +20,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use kineto_mcp::check;
-use kineto_mcp::render;
-use kineto_mcp::source;
+use kineto::check;
+use kineto::render;
+use kineto::source;
 
 const USAGE: &str = "\
 kineto — compile a scene document to a video
