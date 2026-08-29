@@ -16,7 +16,7 @@ default:
 
 # Build the release binaries: the MCP server and the `kineto` CLI.
 build:
-    cargo build -p kineto-mcp --release --bins
+    cargo build -p kineto --release --bins
 
 # Alias kept because the README's manual install mentions it.
 build-mcp: build

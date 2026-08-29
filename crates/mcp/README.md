@@ -62,7 +62,7 @@ until the project is ready to publish. You must build the binary from
 source:
 
 ```sh
-cargo build -p kineto-mcp --release
+cargo build -p kineto --release
 ```
 
 This produces `target/release/kineto-mcp`.

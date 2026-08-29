@@ -21,11 +21,20 @@ Kineto ships an **MCP server**. Point Claude Code — or any MCP client — at i
 and an agent can render, inspect and correct video without a browser, a
 display, or a render farm.
 
-**From a release** — no Rust toolchain needed:
+**With Rust** — one line:
 
 ```sh
-tar xzf kineto-v0.1.0-<target>.tar.gz
-sudo mv kineto-v0.1.0-<target>/kineto* /usr/local/bin/
+cargo install kineto
+claude mcp add --scope user kineto "$(which kineto-mcp)"
+```
+
+**Without Rust** — grab a build from
+[Releases](https://github.com/DanielFidalgo/kineto/releases) for macOS or
+Linux, on arm64 or x64:
+
+```sh
+tar xzf kineto-v<version>-<target>.tar.gz
+sudo mv kineto-v<version>-<target>/kineto* /usr/local/bin/
 claude mcp add --scope user kineto /usr/local/bin/kineto-mcp
 ```
 
@@ -46,13 +55,7 @@ any session:
 > Explain this architecture as a diagram, then make it move.
 
 No `just`? [It's one line to install](https://just.systems/man/en/packages.html),
-or do it by hand:
-
-```sh
-cargo build -p kineto-mcp --release
-cp target/release/kineto-mcp ~/.local/bin/
-claude mcp add --scope user kineto ~/.local/bin/kineto-mcp
-```
+or skip the clone entirely and use `cargo install kineto` above.
 
 > Use `--scope user`, not the default. Project scope registers the server for
 > one directory only, which is a confusing way to discover that your other
