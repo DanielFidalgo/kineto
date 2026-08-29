@@ -1,5 +1,6 @@
 //! MCP server exposing the native kineto engine over stdio.
 
+pub mod chart;
 pub mod check;
 pub mod error;
 pub mod examples;
@@ -376,6 +377,89 @@ impl KinetoServer {
                 params.out,
                 doc.scenes.len(),
                 total as f64 / 1000.0
+            )),
+        ]))
+    }
+
+    #[tool(
+        name = "build_chart",
+        description = "Turn data into a chart document: line, area or bar, \
+                       with measured axes, round-number ticks and animated \
+                       series. Writes the document and renders nothing — pass \
+                       it to `check_document`, `preview_document` or \
+                       `render_document`. The result is ordinary paths, rects \
+                       and text, so it can be edited afterwards like any other \
+                       document; there is no chart element in the format."
+    )]
+    pub async fn build_chart(
+        &self,
+        Parameters(params): Parameters<crate::tools::BuildChartParams>,
+    ) -> CallToolResult {
+        match Self::build_chart_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn build_chart_impl(
+        params: crate::tools::BuildChartParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let kind = match params.kind.as_str() {
+            "line" => crate::chart::ChartKind::Line,
+            "area" => crate::chart::ChartKind::Area,
+            "bar" => crate::chart::ChartKind::Bar,
+            other => {
+                return Err(ToolError::Invalid(format!(
+                    "unknown chart kind '{other}': use line, area or bar"
+                )))
+            }
+        };
+        let spec = crate::chart::ChartSpec {
+            kind,
+            labels: params.labels,
+            series: params
+                .series
+                .into_iter()
+                .map(|s| crate::chart::Series {
+                    name: s.name,
+                    values: s.values,
+                    color: s.color,
+                })
+                .collect(),
+            title: params.title,
+            subtitle: params.subtitle,
+            width: params.width.unwrap_or(1280),
+            height: params.height.unwrap_or(720),
+            seconds: params.seconds.unwrap_or(6.0),
+        };
+        crate::source::check_canvas_size(spec.width, spec.height)?;
+        let doc = crate::chart::build(&spec)?;
+        let json = doc.canonical_json();
+
+        let out = std::path::Path::new(&params.out);
+        if let Some(parent) = out.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| ToolError::Io {
+                    context: "creating output directory",
+                    path: parent.display().to_string(),
+                    source: e,
+                })?;
+            }
+        }
+        std::fs::write(out, &json).map_err(|e| ToolError::Io {
+            context: "writing chart document",
+            path: params.out.clone(),
+            source: e,
+        })?;
+
+        Ok(CallToolResult::success(vec![
+            rmcp::model::ContentBlock::text(format!(
+                "wrote {} — {} series over {} categories, {}x{}",
+                params.out,
+                spec.series.len(),
+                spec.labels.len(),
+                spec.width,
+                spec.height
             )),
         ]))
     }

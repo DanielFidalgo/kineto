@@ -259,6 +259,40 @@ about whether a composition is good or the pacing works — that is what
 `preview_document` is for. Contrast is measured against the document
 background, not against elements layered beneath the text.
 
+### `build_chart`
+
+Turns data into a chart document — `line`, `area` or `bar` — and renders
+nothing. Pass the result to `check_document`, `preview_document` or
+`render_document`.
+
+```json
+{
+  "name": "build_chart",
+  "arguments": {
+    "kind": "bar",
+    "title": "Render time by release",
+    "labels": ["Q1", "Q2", "Q3", "Q4"],
+    "series": [
+      { "name": "native", "values": [41, 38, 29, 24] },
+      { "name": "wasm", "values": [63, 52, 44, 31] }
+    ],
+    "out": "/tmp/chart.json"
+  }
+}
+```
+
+There is deliberately **no chart element in the format**. Every decision a
+chart makes — tick count, baseline, bar radius, where the legend sits — is
+opinion, and the engine has none. This emits paths, rects and text, so the
+output is an ordinary document that can be edited, re-themed or animated
+further afterwards.
+
+Layout is measured, not guessed. The left margin is the width of the widest
+y-axis label, category labels are centred by their own width, and ticks land
+on round numbers (1, 2, 2.5 or 5 times a power of ten) so a reader can do
+arithmetic with them. Bar charts always include zero — a bar chart whose axis
+starts at 40 exaggerates every difference on it.
+
 ### `render_asciicast`
 
 Renders an asciinema v2 `.cast` terminal recording to an MP4 — from the

@@ -350,6 +350,46 @@ pub struct CompileSessionParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BuildChartParams {
+    /// `line`, `area` or `bar`.
+    pub kind: String,
+
+    /// One label per category, along the x axis.
+    pub labels: Vec<String>,
+
+    /// Each series needs exactly one value per label.
+    pub series: Vec<ChartSeriesParams>,
+
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub subtitle: Option<String>,
+
+    /// Where to write the document JSON. Renders nothing — pass the result to
+    /// `check_document`, `preview_document` or `render_document`.
+    pub out: String,
+
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// How long the chart holds. Series animate in over the first second.
+    #[serde(default)]
+    pub seconds: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ChartSeriesParams {
+    pub name: String,
+    pub values: Vec<f64>,
+    /// `#RRGGBB`. Defaults to the next colour in a six-hue palette.
+    #[serde(default)]
+    pub color: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ThemeParams {
     /// Background color, `#RRGGBB`.
     #[serde(default)]

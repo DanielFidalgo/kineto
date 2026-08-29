@@ -67,11 +67,19 @@ all.
 |---|---|---|
 | `check_document` | ~20 tokens | is it correct, and readable? |
 | `preview_document` | ~390 tokens/frame | how does it *look*? |
+| `build_chart` | — | data → a line, area or bar chart document |
 | `compile_session` | — | turn a work journal into a document |
 | `session_append` | — | record one thing that happened |
 | `render_document` | seconds + a file | ship it |
 | `render_asciicast` | seconds + a file | a terminal recording → video |
 | `render_storyboard` | seconds + a file | screenshots + captions → video |
+
+`build_chart` emits ordinary paths, rects and text — there is no chart
+element in the format, because every choice a chart makes is opinion and the
+engine has none. Axes are *measured*: the left margin is the width of the
+widest tick label, categories are centred by their own width, and ticks land
+on round numbers. The result is a document you can edit afterwards like any
+other.
 
 `check_document` is the unusual one. It reports what's wrong *before* anything
 renders — text invisible against its background, an element animated off the
