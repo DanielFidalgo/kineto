@@ -80,11 +80,19 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
+
+      # Not the action's `targets:` input, which installs into the toolchain
+      # the action selects -- while rust-toolchain.toml pins 1.97 for anything
+      # run inside the checkout, so cargo never sees that target and fails with
+      # "can't find crate for `core`". Run inside the repo, rustup honours the
+      # toolchain file, so this installs against the toolchain that builds.
+      # A no-op for the three host targets; the only one it matters for is the
+      # single genuine cross-compile, x86_64-apple-darwin.
+      - name: Install target
+        run: rustup target add ${{ matrix.target }}
 
       - name: Build binaries
         # `--bins` applies to the whole invocation; repeating it per package
