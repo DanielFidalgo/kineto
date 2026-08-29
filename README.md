@@ -251,20 +251,6 @@ it and never the other way round.
 - [Node.js](https://nodejs.org/) ≥ 22 — for the TypeScript packages
 - [just](https://just.systems/) — optional, but every command here assumes it
 
-## Releasing
-
-Tagging is the release.
-
-```sh
-just release 0.2.0     # check, set the version, commit, tag
-git push && git push --tags
-```
-
-The tag triggers `.github/workflows/release.yml`, which refuses if the tag
-disagrees with `Cargo.toml`, re-runs the full gate on that exact commit, then
-cross-compiles and publishes signed-by-checksum archives for macOS
-(arm64/x64) and Linux (arm64/x64).
-
 ## Contributing
 
 `just check` runs exactly what CI runs: formatting, clippy with warnings

@@ -17,9 +17,8 @@ previous codename `zoetrope` was already taken on crates.io; `kinora` was
 rejected because the `@kinora` npm scope is owned by an active unrelated
 project. Re-verify all three namespaces before ever renaming again.)
 
-**Not yet renamed:** the repo *directory* on disk is still
-`~/personal/repos/zoetrope`. Renaming it is a user action — nothing in the
-build depends on the directory name.
+The repo directory on disk is `~/personal/repos/kineto`; the old
+`zoetrope` path is gone. Nothing in the build ever depended on it.
 
 ## Start here
 
@@ -42,13 +41,14 @@ build depends on the directory name.
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
    output. Workspace suite is **329 tests**.
-4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
-   repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
-   Parity has never executed on x86_64; if it diverges there, the
-   pre-agreed lever is disabling tiny-skia's `simd` feature and
-   regenerating goldens. The `rust` job now also installs ffmpeg so the
-   MCP mux test executes rather than skipping — that step has likewise
-   never run on a real runner.
+4. **Status: PUBLIC AND RELEASED (2026-08-29).** Remote is
+   `github.com/DanielFidalgo/kineto`, default branch `main`. CI is green,
+   and **parity passed 27/27 on x86_64** — the largest open unknown of the
+   v1 build, now closed, so the tiny-skia `simd`-disabling lever was never
+   needed. `just release <version>` tags; the tag drives
+   `.github/workflows/release.yml`. **v0.1.0 is published** with four
+   platform archives, each verified end to end (checksum, extract, render)
+   rather than assumed from a green check.
 
 ## Known issues (backlog, none blocking)
 
@@ -82,6 +82,20 @@ bounds-checking); nothing enforces agreement between `crates/mcp/README.md`
 and the parameter structs in `tools.rs`, so a new field can drift silently;
 the MCP spec's §3 dependency block is stale (the shipped manifest also
 carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
+
+**Release pipeline** (2026-08-29, both defects found only by running it):
+`macos-13` is being retired — a job requesting it is never assigned a runner
+and sits queued indefinitely, and because `publish` needs all four builds,
+one dead label blocks the whole release. `x86_64-apple-darwin` is therefore
+cross-compiled on `macos-14`. Separately, **do not restore
+`dtolnay/rust-toolchain`'s `targets:` input**: it installs into the toolchain
+that action selects, while `rust-toolchain.toml` pins 1.97 for anything run
+inside the checkout, so the target never reaches the toolchain that builds
+and the job dies on ``can't find crate for `core` ``. The explicit
+`rustup target add` step honours the toolchain file. Both hid for the same
+reason — `x86_64-apple-darwin` is the *only* genuine cross-compile in the
+matrix; the other three are host targets needing neither a scarce runner nor
+an installed std, so a four-wide matrix was exercising one path.
 
 ## Locked decisions (recall — the specs have the detail)
 
