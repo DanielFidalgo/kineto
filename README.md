@@ -1,119 +1,225 @@
+<div align="center">
+
 # Kineto
 
-Kineto is a declarative video compiler: you author a scene document (JSON,
-integer-tick time, resolution/fps-independent) and it compiles to a
-deterministic MP4, the same way a build compiles source to a binary — video
-as a build artifact, not a screen recording. One Rust engine renders that
-document on two targets — in the browser via WebCodecs (wasm, $0 server
-cost) and natively headless (CI, no display, no browser) — and both targets
-are byte-identical for the same document. Typed authoring surfaces (a Rust
-crate, a TS package, and an MCP server) build the same canonical JSON; the engine only
-ever sees the document, never your code.
+**Video as a build artifact.** You write a document; it compiles to a video —
+the same way source compiles to a binary.
+
+![Kineto](docs/media/kineto-loop.webp)
+
+[Watch the 27-second tour](docs/media/kineto-hero.mp4) ·
+[Quick start](#quick-start) · [Why](#why-this-is-different) ·
+[Document format](#the-document) · [License](#license)
+
+</div>
+
+---
+
+## Give your agent a camera
+
+Kineto ships an **MCP server**. Point Claude Code — or any MCP client — at it,
+and an agent can render, inspect and correct video without a browser, a
+display, or a render farm.
+
+```sh
+git clone https://github.com/YOUR-USER/kineto.git && cd kineto
+just install
+```
+
+That builds the server, copies it somewhere stable, and registers it. Then, in
+any session:
+
+> Turn these screenshots into a 20-second clip with captions.
+
+> Render a release video from the last ten commits.
+
+> Explain this architecture as a diagram, then make it move.
+
+No `just`? [It's one line to install](https://just.systems/man/en/packages.html),
+or do it by hand:
+
+```sh
+cargo build -p kineto-mcp --release
+cp target/release/kineto-mcp ~/.local/bin/
+claude mcp add --scope user kineto ~/.local/bin/kineto-mcp
+```
+
+> Use `--scope user`, not the default. Project scope registers the server for
+> one directory only, which is a confusing way to discover that your other
+> sessions cannot see it.
+
+### The seven tools
+
+The pipeline is cheapest-first. Most of what an agent does costs no pixels at
+all.
+
+| tool | cost | answers |
+|---|---|---|
+| `check_document` | ~20 tokens | is it correct, and readable? |
+| `preview_document` | ~390 tokens/frame | how does it *look*? |
+| `compile_session` | — | turn a work journal into a document |
+| `session_append` | — | record one thing that happened |
+| `render_document` | seconds + a file | ship it |
+| `render_asciicast` | seconds + a file | a terminal recording → video |
+| `render_storyboard` | seconds + a file | screenshots + captions → video |
+
+`check_document` is the unusual one. It reports what's wrong *before* anything
+renders — text invisible against its background, an element animated off the
+canvas, text running past the edge, a scene too short to read at 300 wpm — and
+returns no images, so it costs a fraction of a look. It catches the class of
+mistake that is invisible in the JSON and obvious on screen.
+
+The server also exposes reference documents at `kineto://example/` — seven
+different *shot types*, because a video reads as a slide deck when every scene
+has the same shape.
+
+---
+
+## Why this is different
+
+**No browser. No display.** Everything renders on the CPU through
+[`tiny-skia`](https://github.com/RazrFalcon/tiny-skia). It runs in CI, in a
+container, over SSH. `vhs` drives a headless browser to do this; Kineto
+doesn't.
+
+**Byte-identical across targets.** The same document produces the same frames
+on native aarch64 and on WebAssembly with SIMD — currently **27/27 corpus
+frames**, enforced by CI on every push. That is what makes rendering
+checkable, cacheable and diffable rather than merely repeatable-ish.
+
+**The document is data.** Not code, not a timeline file — JSON an agent can
+read, edit, diff and reason about. Time is integer ticks at 705,600,000/s
+([flicks](https://github.com/facebookarchive/Flicks)), so 24, 25, 30, 50 and
+60 fps are all exact and fps is an export hint rather than a commitment.
+
+**One engine, two targets.** The same Rust renders natively and in the browser
+via WebCodecs, at $0 server cost.
+
+> **Scope of the determinism claim:** the *frames* are byte-identical. The MP4
+> container is not — ffmpeg records its own version and thread count. Never
+> promise reproducible MP4 bytes; promise reproducible pixels.
+
+---
+
+## Quick start
+
+```sh
+just            # list every recipe
+just check      # fmt, clippy, tests, and the parity gate
+just install    # build + register the MCP server
+just demo       # the browser demo on localhost:5200
+```
+
+### Without an agent
+
+Turn an [asciinema](https://asciinema.org/) recording into a video, headlessly:
+
+```sh
+just cast adapters/asciicast/tests/fixture.cast out/demo
+```
+
+That writes a PNG frame per frame into `out/demo/`, then muxes them to
+`out/demo/out.mp4` if ffmpeg is present — and leaves the frames behind if it
+isn't, which is the deterministic artifact anyway.
+
+### Output formats
+
+The output extension chooses the format.
+
+| extension | when |
+|---|---|
+| `.mp4` | anything longer than a few seconds — h264, ~28× smaller |
+| `.webp` | short loops embedded inline in markdown — 24-bit colour and real alpha |
+
+Choose by length. Animated WebP has no inter-frame prediction, so every frame
+is essentially a standalone image: roughly **280 KB per second at 720p**. A few
+seconds is a README loop; a minute is 17 MB. (The loop at the top of this page
+is WebP; the 27-second tour is MP4.)
+
+---
+
+## The document
+
+```json
+{
+  "v": 1,
+  "timebase": 705600000,
+  "size": { "w": 1280, "h": 720 },
+  "bg": "#0B1116",
+  "assets": { "body": { "type": "font", "src": "kineto:inter" } },
+  "scenes": [{
+    "id": "title",
+    "duration": 2116800000,
+    "elements": [
+      { "type": "rect", "rect": [80, 300, 420, 90], "radius": 16,
+        "fill": { "type": "linear", "from": [0, 0], "to": [1, 0],
+                  "stops": [{ "at": 0, "color": "#FF9F45" },
+                            { "at": 1, "color": "#C77DFF" }] },
+        "shadow": { "color": "#00000059", "blur": 20, "dy": 10 } },
+      { "type": "text", "text": "Kineto", "font": "body", "sizePx": 64,
+        "color": "#F4F7F9", "pos": [110, 318],
+        "animations": [{ "prop": "opacity", "keys": [
+          { "t": 0, "v": 0 },
+          { "t": 176400000, "v": 1, "ease": "outBack" }]}] }
+    ]
+  }]
+}
+```
+
+Five element types — `image`, `text`, `rect`, `path`, `group` — with gradient
+fills, corner radius, drop shadows, clip windows and image fit modes. Only
+`translate`, `scale`, `rotation` and `opacity` animate, across ten easing
+curves. Scenes join with a cut or a crossfade.
+
+The full JSON Schema is served by the MCP server at
+`kineto://schema/document`.
+
+### Authoring surfaces
+
+Three typed front-ends emit the same canonical JSON, byte-for-byte — a
+cross-SDK golden test enforces it:
+
+- **Rust** — `kineto_core`'s builders
+- **TypeScript** — `@kineto/sdk`, plus in-browser export via WebCodecs
+- **MCP** — the tools above
+
+The engine only ever sees the document.
+
+---
+
+## Repository
+
+```
+crates/core        the engine — document, timeline, raster, export
+crates/wasm        WebAssembly bindings
+crates/mcp         the MCP server
+adapters/asciicast .cast → document, and the kineto-cast CLI
+packages/sdk       TypeScript authoring + browser export
+packages/demo-tape the flagship browser demo
+```
+
+`crates/core` depends on nothing else in the repo; everything else depends on
+it and never the other way round.
 
 ## Requirements
 
-- [rustup](https://rustup.rs/) (stable toolchain; pinned via
-  `rust-toolchain.toml`)
-- [Node.js](https://nodejs.org/) ≥ 22
-- (optional) [ffmpeg](https://ffmpeg.org/) on `PATH` — only needed for the
-  CLI demo to mux its exported frames into an `.mp4`; without it the CLI
-  still writes the frame sequence.
+- [Rust](https://rustup.rs/) (stable, pinned in `rust-toolchain.toml`)
+- [ffmpeg](https://ffmpeg.org/) on `PATH` — for encoding only; frames render
+  without it
+- [Node.js](https://nodejs.org/) ≥ 22 — for the TypeScript packages
+- [just](https://just.systems/) — optional, but every command here assumes it
 
-## Browser demo quickstart
+## Contributing
 
-The flagship demo turns a [mysteryshopper](#relationship-to-mysteryshopper)
-tape into a captioned, crossfaded MP4 entirely in your browser.
+`just check` runs exactly what CI runs: formatting, clippy with warnings
+denied, the full test suite, and the native-vs-wasm parity gate.
 
-```sh
-npm ci
-cargo install wasm-pack
-wasm-pack build crates/wasm --target web --release
-npm -w @kineto/demo-tape run dev
-```
-
-Open <http://localhost:5200>, click **Load fixture tape**, then click
-**Export MP4**.
-
-## CLI demo quickstart
-
-The CLI demo converts an [asciinema](https://asciinema.org/) `.cast`
-terminal recording to an MP4 headlessly (no browser involved at all — this
-is the Rust-community wedge; note that tools like `vhs` drive a headless
-browser under the hood to do this, kineto does not).
-
-```sh
-cargo run -p kineto-asciicast --bin kineto-cast -- adapters/asciicast/tests/fixture.cast -o out
-```
-
-This writes a PNG frame sequence to `out/`. If `ffmpeg` is on `PATH`, it
-also muxes those frames into `out/out.mp4`.
-
-## MCP server
-
-`crates/mcp` is a fourth surface onto the same native engine — an MCP
-server (`kineto-mcp`) that exposes document, asciicast, and storyboard
-rendering to MCP-speaking agents over stdio, alongside the CLI above and
-the two authoring SDKs. It has no published package yet and must be built
-from source (`cargo build -p kineto-mcp --release`); see
-[`crates/mcp/README.md`](crates/mcp/README.md) for the ffmpeg prerequisite,
-client configuration, and worked tool examples, and the design spec at
-[`docs/superpowers/specs/2026-08-27-kineto-mcp-design.md`](docs/superpowers/specs/2026-08-27-kineto-mcp-design.md)
-for the full rationale.
-
-## Browser support
-
-The in-browser exporter (`render()` in `@kineto/sdk`, and the browser demo
-above) requires [WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API)
-— specifically a global `VideoEncoder` that supports H.264. This means:
-
-- **Supported**: current Chrome, Edge, and other Chromium-based browsers.
-  Safari shipped WebCodecs in 16.4, but whether its `VideoEncoder` accepts
-  H.264 depends on the Safari version and the device's hardware encoder —
-  `render()` probes this itself via `VideoEncoder.isConfigSupported` across
-  `CODEC_CANDIDATES` and throws `"kineto: no supported H.264 encoder
-  config"` if none match, rather than assuming support either way.
-- **Not supported**: browsers without a `VideoEncoder` global at all (e.g.
-  Firefox does not ship WebCodecs support at the time of writing).
-
-When WebCodecs is unavailable, `render()` throws before doing any work,
-with this exact message:
-
-```
-kineto: WebCodecs is required in this browser (see README#browser-support)
-```
-
-Live preview via `mount()` does not need WebCodecs and works in any modern
-browser — only the MP4 export path (`render()`) is gated on it. There is no
-polyfill or fallback path in v1 (see the design spec's YAGNI fence, §9);
-native/CLI export (see the CLI demo above) has no such requirement.
-
-## Document format
-
-kineto's scene document format — time model, scenes/elements/animations,
-canonical serialization, and the architecture that renders it — is
-specified in full in
-[`docs/superpowers/specs/2026-08-26-kineto-design.md`](docs/superpowers/specs/2026-08-26-kineto-design.md).
-That document is the binding source of truth; this README only summarizes
-enough to get the two demos running.
-
-## Relationship to mysteryshopper
-
-The browser demo's tape adapter (`packages/demo-tape`) consumes
-mysteryshopper's tape format v1 (`actions.jsonl` + `step-NN.jpg`). kineto
-takes no code dependency on mysteryshopper — the adapter only reads that
-frozen file format.
+Two things to know before changing the renderer. Golden hashes in
+`testdata/golden/hashes.json` are the sha256 of *frame buffers* — if one moves
+without an intended visual change, that is the bug, not the golden. And the
+parity gate is the instrument for anything touching rasterisation; a change
+that passes tests but breaks parity has broken the central promise.
 
 ## License
 
-Licensed under either of
-
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-
-at your option.
-
-The bundled fonts under [`assets/fonts/`](assets/fonts/) — Inter
-(`Inter-Regular.ttf`) and JetBrains Mono (`JetBrainsMono-Regular.ttf`) — are
-each licensed separately under the SIL Open Font License 1.1; see
-[`assets/fonts/OFL-Inter.txt`](assets/fonts/OFL-Inter.txt) and
-[`assets/fonts/OFL-JetBrainsMono.txt`](assets/fonts/OFL-JetBrainsMono.txt).
+MIT OR Apache-2.0, at your option.
