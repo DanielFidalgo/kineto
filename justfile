@@ -154,14 +154,15 @@ release version:
     awk -v v='{{version}}' '/path = "/ { gsub(/version = "[^"]*"/, "version = \"" v "\"") } {print}' \
         Cargo.toml > Cargo.toml.new
     mv Cargo.toml.new Cargo.toml
-    # tests/manifest.rs is the authority on every version in the repo agreeing
-    # -- cargo path deps and the npm wrapper's five. Running it here means a
-    # bad rewrite fails before the tag exists rather than after.
-    cargo test -p kineto --test manifest
     cargo update -w --quiet          # refresh Cargo.lock's own version entries
     # The npm wrapper carries the same version in five places and pins its
     # platform packages exactly, so it moves in lockstep with the crates.
     node scripts/bump-npm-version.mjs '{{version}}'
+    # tests/manifest.rs is the authority on every version in the repo agreeing
+    # -- cargo path deps and the npm wrapper's five. It runs after *every*
+    # rewrite, never between them. Ordered before the npm bump it failed each
+    # release on precisely the version it was about to set, which it did.
+    cargo test -p kineto --test manifest
     git add Cargo.toml Cargo.lock packages/mcp/package.json
     # Re-releasing the version already in the manifest is the normal case for
     # the very first tag, and produces no diff. `git commit` would exit 1 and
