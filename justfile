@@ -25,6 +25,7 @@ build-mcp: build
 #
 # Copied out of the cargo target directory on purpose: `cargo clean` would
 # otherwise delete a binary every other project's MCP config points at.
+# Build, install to ~/.local/bin, and register with Claude Code.
 install: build
     mkdir -p "{{install_dir}}"
     cp "{{built_mcp}}" "{{install_dir}}/kineto-mcp"
@@ -59,12 +60,14 @@ fmt-check:
 
 # The byte-identical gate: native aarch64/x86_64 against wasm+simd128.
 # Must run from the repo root — run.mjs resolves paths against the cwd.
+# The byte-identical gate: native against wasm+simd128.
 parity: wasm-corpus
     cargo run -p kineto-core --bin dump-parity --features parity
     node tests/parity/run.mjs
 
 # Regenerate golden hashes after an intentional renderer change. Read the
 # diff before committing: a golden that moves without a reason is the bug.
+# Regenerate golden hashes after an intentional renderer change.
 golden:
     UPDATE_GOLDEN=1 cargo test -p kineto-core -- --test-threads=1
 
@@ -72,6 +75,7 @@ golden:
 
 # Release wasm build. Run from crates/wasm so .cargo/config.toml applies and
 # simd128 is actually enabled — without it the browser renders ~4x slower.
+# Release wasm build, with simd128 enabled.
 wasm:
     cd crates/wasm && wasm-pack build . --target web --release
 
@@ -94,6 +98,7 @@ demo: wasm
 
 # Turn an asciinema recording into frames plus an out.mp4, headlessly.
 #   just cast adapters/asciicast/tests/fixture.cast out/demo
+# Turn an asciinema recording into frames plus an out.mp4.
 cast input dir:
     cargo run -q -p kineto-asciicast --bin kineto-cast -- {{input}} -o {{dir}}
 
@@ -104,12 +109,46 @@ cast input dir:
 # the loop is scaled by the engine, and the poster is a frame the engine
 # writes. Both used to be ffmpeg calls standing in for gaps that are now
 # closed.
+# Rebuild the README video, loop, poster and social card.
 media: build
     "{{kineto}}" docs/media/hero.json --check
     "{{kineto}}" docs/media/hero.json -o docs/media/kineto-hero.mp4
     "{{kineto}}" docs/media/hero.json -o docs/media/kineto-poster.png --at 1600 --width 960
     "{{kineto}}" docs/media/hero-loop.json -o docs/media/kineto-loop.webp --width 960
-    @echo "wrote docs/media/"
+    "{{kineto}}" docs/media/social.json --check
+    "{{kineto}}" docs/media/social.json -o docs/media/social.png --at 0
+    @echo "wrote docs/media/ — upload social.png at Settings → Social preview"
+
+# ---------------------------------------------------------------- releasing ---
+
+# Cut a release: set the version, commit, tag, push. The tag is the trigger —
+# .github/workflows/release.yml builds and publishes from it.
+#
+#   just release 0.2.0
+#
+# Refuses on a dirty tree or a tag that already exists, because both produce a
+# release whose contents nobody can reconstruct from the tag.
+# Cut a release: check, set version, commit, tag.
+release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "error: working tree is dirty" >&2; exit 1
+    fi
+    if git rev-parse "v{{version}}" >/dev/null 2>&1; then
+        echo "error: tag v{{version}} already exists" >&2; exit 1
+    fi
+    just check
+    sed -i.bak -E '0,/^version = ".*"$/s//version = "{{version}}"/' Cargo.toml && rm Cargo.toml.bak
+    cargo update -w --quiet          # refresh Cargo.lock's own version entries
+    git add Cargo.toml Cargo.lock
+    git commit -m "chore: release v{{version}}"
+    git tag -a "v{{version}}" -m "v{{version}}"
+    @echo "tagged v{{version}} — push with: git push && git push --tags"
+
+# What version is this?
+version:
+    @grep -m1 '^version' Cargo.toml | cut -d'"' -f2
 
 # --------------------------------------------------------------------- dev ---
 

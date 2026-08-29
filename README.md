@@ -21,6 +21,16 @@ Kineto ships an **MCP server**. Point Claude Code — or any MCP client — at i
 and an agent can render, inspect and correct video without a browser, a
 display, or a render farm.
 
+**From a release** — no Rust toolchain needed:
+
+```sh
+tar xzf kineto-v0.1.0-<target>.tar.gz
+sudo mv kineto-v0.1.0-<target>/kineto* /usr/local/bin/
+claude mcp add --scope user kineto /usr/local/bin/kineto-mcp
+```
+
+**From source:**
+
 ```sh
 git clone https://github.com/YOUR-USER/kineto.git && cd kineto
 just install
@@ -232,6 +242,20 @@ it and never the other way round.
   without it
 - [Node.js](https://nodejs.org/) ≥ 22 — for the TypeScript packages
 - [just](https://just.systems/) — optional, but every command here assumes it
+
+## Releasing
+
+Tagging is the release.
+
+```sh
+just release 0.2.0     # check, set the version, commit, tag
+git push && git push --tags
+```
+
+The tag triggers `.github/workflows/release.yml`, which refuses if the tag
+disagrees with `Cargo.toml`, re-runs the full gate on that exact commit, then
+cross-compiles and publishes signed-by-checksum archives for macOS
+(arm64/x64) and Linux (arm64/x64).
 
 ## Contributing
 

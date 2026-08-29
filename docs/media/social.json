@@ -1,0 +1,128 @@
+{
+  "v": 1,
+  "timebase": 705600000,
+  "defaultFps": 30,
+  "size": { "w": 1280, "h": 640 },
+  "bg": "#0B1116",
+  "assets": {
+    "inter": { "type": "font", "src": "kineto:inter" },
+    "mono": { "type": "font", "src": "kineto:jetbrains-mono" }
+  },
+  "scenes": [
+    {
+      "id": "card",
+      "duration": 4233600000,
+      "elements": [
+        {
+          "type": "path",
+          "closed": true,
+          "points": [[0, 0], [1280, 0], [1280, 640], [0, 640]],
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 1],
+            "stops": [
+              { "at": 0, "color": "#14293a" },
+              { "at": 0.55, "color": "#0D1620" },
+              { "at": 1, "color": "#0B1116" }
+            ]
+          }
+        },
+        {
+          "type": "rect",
+          "rect": [96, 150, 168, 8],
+          "radius": 4,
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 0],
+            "stops": [
+              { "at": 0, "color": "#FF9F45" },
+              { "at": 1, "color": "#C77DFF" }
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "text": "Kineto",
+          "font": "inter",
+          "sizePx": 128,
+          "color": "#F4F7F9",
+          "pos": [92, 196]
+        },
+        {
+          "type": "text",
+          "text": "video as a build artifact",
+          "font": "mono",
+          "sizePx": 34,
+          "color": "#8FA3B0",
+          "pos": [100, 356]
+        },
+        {
+          "type": "text",
+          "text": "You write a document. It compiles to a video.",
+          "font": "inter",
+          "sizePx": 32,
+          "color": "#F4F7F9",
+          "pos": [98, 440],
+          "maxW": 1000
+        },
+        {
+          "type": "text",
+          "text": "deterministic  ·  no browser  ·  no display  ·  MCP server included",
+          "font": "mono",
+          "sizePx": 21,
+          "color": "#7C93A3",
+          "pos": [100, 500]
+        },
+        {
+          "type": "rect",
+          "rect": [960, 190, 224, 224],
+          "radius": 26,
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 1],
+            "stops": [
+              { "at": 0, "color": "#1d3040" },
+              { "at": 1, "color": "#131f2a" }
+            ]
+          },
+          "shadow": { "color": "#00000073", "blur": 28, "dy": 14 }
+        },
+        {
+          "type": "rect",
+          "rect": [996, 240, 152, 12],
+          "radius": 6,
+          "fill": "#4ECDC4"
+        },
+        {
+          "type": "rect",
+          "rect": [996, 278, 96, 12],
+          "radius": 6,
+          "fill": "#2c3d4a"
+        },
+        {
+          "type": "rect",
+          "rect": [996, 316, 124, 12],
+          "radius": 6,
+          "fill": "#2c3d4a"
+        },
+        {
+          "type": "rect",
+          "rect": [996, 356, 72, 34],
+          "radius": 10,
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 0],
+            "stops": [
+              { "at": 0, "color": "#FF9F45" },
+              { "at": 1, "color": "#C77DFF" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

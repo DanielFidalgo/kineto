@@ -1,0 +1,166 @@
+name: release
+
+# Tagging is the release. `just release 0.2.0` writes the version, commits,
+# and pushes the tag; everything below is what happens next.
+on:
+  push:
+    tags: ["v*"]
+  # Runnable by hand against a tag, for when a release job fails on
+  # something unrelated to the code and needs rerunning.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing tag to build, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # A tag that disagrees with Cargo.toml produces binaries reporting a
+  # version nobody can find. Cheaper to refuse here than to yank later.
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - id: v
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag || github.ref_name }}"
+          tag_version="${tag#v}"
+          manifest=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "$tag_version" != "$manifest" ]; then
+            echo "::error::tag $tag says $tag_version, Cargo.toml says $manifest"
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+
+  # The same gate `just check` runs, on the exact commit being released.
+  # ci.yml also runs on the tag push; this makes the dependency explicit so a
+  # release cannot be published from a red commit.
+  check:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  build:
+    needs: [verify, check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build binaries
+        # `--bins` applies to the whole invocation; repeating it per package
+        # is rejected by cargo. Verified locally before this was committed.
+        run: cargo build --release --target ${{ matrix.target }} -p kineto-mcp -p kineto-asciicast --bins
+
+      # Smoke test on the machine that built it. `--help` exercises argument
+      # parsing and proves the binary actually links and runs, which a
+      # successful compile does not.
+      - name: Smoke test
+        if: ${{ !contains(matrix.target, 'aarch64-unknown-linux') || runner.arch == 'ARM64' }}
+        run: ./target/${{ matrix.target }}/release/kineto --help
+
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ needs.verify.outputs.version }}"
+          name="kineto-v${v}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp target/${{ matrix.target }}/release/kineto \
+             target/${{ matrix.target }}/release/kineto-mcp \
+             target/${{ matrix.target }}/release/kineto-cast "dist/$name/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          # Checksums are per-artifact so they can be verified without
+          # downloading every platform's build.
+          (cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*.tar.gz*
+          if-no-files-found: error
+
+  publish:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ needs.verify.outputs.version }}"
+          {
+            echo "## Install"
+            echo
+            echo 'Download the archive for your platform below, then:'
+            echo
+            echo '```sh'
+            echo 'tar xzf kineto-v'"$v"'-<target>.tar.gz'
+            echo 'sudo mv kineto-v'"$v"'-<target>/kineto* /usr/local/bin/'
+            echo 'claude mcp add --scope user kineto /usr/local/bin/kineto-mcp'
+            echo '```'
+            echo
+            echo 'Three binaries: `kineto` (render a document), `kineto-mcp`'
+            echo '(the MCP server), `kineto-cast` (asciicast → video).'
+            echo
+            echo 'ffmpeg is required for encoding only — frames render without it.'
+            echo
+            echo '### Verify'
+            echo
+            echo '```sh'
+            echo 'shasum -a 256 -c kineto-v'"$v"'-<target>.tar.gz.sha256'
+            echo '```'
+          } > notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: kineto v${{ needs.verify.outputs.version }}
+          body_path: notes.md
+          files: dist/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
