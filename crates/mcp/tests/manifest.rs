@@ -13,6 +13,13 @@
 //! fails to compile for a consumer.
 //!
 //! Patch releases being the common case, that gap is the one worth a test.
+//!
+//! The npm wrapper has the same problem and no equivalent of cargo's
+//! resolution check at all: `@kineto/mcp` pins its four platform packages by
+//! exact version, and if a release bumps the crates but not `package.json`,
+//! npm installs a wrapper that demands binaries which were never published.
+//! Checked here rather than in a JS test because this is the file
+//! `just release` already runs before it creates a tag.
 
 /// Reads the workspace manifest, or `None` when it is not reachable.
 ///
@@ -73,6 +80,53 @@ fn path_dependency_versions_match_the_workspace_version() {
             "a [workspace.dependencies] entry is at {got}, workspace.package \
              is at {expected} -- `just release` bumped one and not the other, \
              and cargo publish will reject this"
+        );
+    }
+}
+
+/// Reads the npm wrapper manifest, or `None` when it is not reachable.
+fn npm_manifest() -> Option<serde_json::Value> {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/mcp/package.json");
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+#[test]
+fn npm_wrapper_version_matches_the_workspace_version() {
+    let (Some(manifest), Some(npm)) = (workspace_manifest(), npm_manifest()) else {
+        eprintln!("skipping: not running from the workspace");
+        return;
+    };
+    let expected = versions_in_section(&manifest, "[workspace.package]")
+        .first()
+        .expect("a version in [workspace.package]")
+        .clone();
+
+    assert_eq!(
+        npm["version"].as_str(),
+        Some(expected.as_str()),
+        "@kineto/mcp is at {:?}, workspace is at {expected}",
+        npm["version"]
+    );
+
+    // Pinned exactly, so a bumped wrapper with unbumped platform pins would
+    // install nothing installable.
+    let deps = npm["optionalDependencies"]
+        .as_object()
+        .expect("optionalDependencies");
+    assert_eq!(
+        deps.len(),
+        4,
+        "expected four platform packages, got {}",
+        deps.len()
+    );
+    for (name, got) in deps {
+        assert_eq!(
+            got.as_str(),
+            Some(expected.as_str()),
+            "{name} is pinned at {got}, workspace is at {expected} -- npm would \
+             resolve a platform package that was never published"
         );
     }
 }

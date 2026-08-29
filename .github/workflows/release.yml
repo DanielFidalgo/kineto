@@ -217,3 +217,60 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --workspace --exclude kineto-wasm
+
+  # npm gets the *same* binaries the release archives contain, repackaged --
+  # never a second build, which could differ from what users checksum.
+  #
+  # Like crates-io, this runs only after the GitHub release exists, and npm is
+  # less forgiving still: unpublishing is allowed for 72 hours and the name
+  # stays taken regardless.
+  npm:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # Writes an .npmrc pointing at the public registry and reading
+          # NODE_AUTH_TOKEN, so no credential is ever committed or persisted.
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Build platform packages
+        run: |
+          node packages/mcp/build-platforms.mjs \
+            --version "${{ needs.verify.outputs.version }}" \
+            --from dist --out dist/npm
+
+      # The wrapper pins its four platform packages by exact version, so it is
+      # unusable until they exist. Dry-run everything first, then publish
+      # platforms before the wrapper.
+      - name: Dry run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for d in dist/npm/*/; do npm publish --dry-run "$d"; done
+          npm publish --dry-run packages/mcp
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          for d in dist/npm/*/; do
+            echo "::group::$d"
+            npm publish "$d"
+            echo "::endgroup::"
+          done
+          # Last: a wrapper on the registry whose dependencies are not yet
+          # there is an install that fails for whoever hits that window.
+          npm publish packages/mcp

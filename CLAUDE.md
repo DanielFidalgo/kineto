@@ -217,6 +217,36 @@ an installed std, so a four-wide matrix was exercising one path.
   binary. `crates/mcp/tests/manifest.rs` fails if those versions drift from
   `workspace.package.version` — cargo catches a major/minor mismatch itself,
   but `^0.1.0` matches `0.1.1`, so a patch bump slips through unaided.
+- **npm distribution (2026-08-29, built; not yet published):** `@kineto/mcp`
+  is a thin wrapper (`packages/mcp`) whose four `optionalDependencies` carry
+  the prebuilt `kineto-mcp` binary; npm selects one via `os`/`cpu`. The
+  esbuild pattern, chosen over a postinstall download because postinstall
+  scripts are routinely disabled (`--ignore-scripts`) and a tool that claims
+  to work in CI cannot have an install step that silently no-ops. The
+  platform packages are **repackaged from the release archives**, never built
+  a second time, so npm cannot ship different bytes than the tarballs users
+  checksum. Publish order is platforms first, wrapper last — the wrapper pins
+  exact versions and is broken until they exist.
+- **`scripts/guard-publish.mjs` refuses to publish outside GitHub Actions**,
+  and runs as `prepublishOnly` in every publishable npm package (the build
+  script copies it into each generated one). This is not ceremony: cargo takes
+  its credential from an env var, but npm reads `~/.npmrc`, which is global to
+  the machine — a stray `npm publish` here would use whatever account is
+  logged in, and npm only allows unpublishing for 72 hours while the name
+  stays taken forever. **Do not remove it to "just publish quickly".**
+- The shim must **never write to stdout** — an MCP client reads it as
+  JSON-RPC, so a diagnostic there is a corrupt stream, not a bad message.
+  `packages/mcp/test/shim.test.mjs` asserts this. It also asserts
+  `targets.mjs` matches the release build matrix, which is the invariant that
+  can actually break; comparing `PACKAGES` to `TARGETS` would be tautological
+  since one is derived from the other.
+- Node resolves a module's realpath, so under `npm link`, workspaces or pnpm
+  the shim's `import.meta.url` points outside the install tree. It falls back
+  to `process.argv[1]` then `cwd`. A registry install needs none of that.
+- **Provenance (`npm publish --provenance`) is not enabled yet** because it
+  requires a `repository` field, which is being held until the repo's
+  permanent home is settled. It is the strongest available answer to "prove
+  which repo built this" — worth turning on the moment that is decided.
 - License **MIT OR Apache-2.0**.
 - Repo layout: `crates/core`, `crates/wasm`, `crates/mcp`,
   `adapters/asciicast`, `packages/sdk`, `packages/demo-tape`.

@@ -1,0 +1,40 @@
+{
+  "name": "@kineto/mcp",
+  "version": "0.1.1",
+  "description": "Kineto MCP server: give your coding agent a camera. Compiles declarative scene documents to MP4, animated WebP or PNG. No browser, no display.",
+  "keywords": [
+    "mcp",
+    "video",
+    "mp4",
+    "render",
+    "deterministic",
+    "agent"
+  ],
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "bin": {
+    "kineto-mcp": "bin/kineto-mcp.mjs"
+  },
+  "files": [
+    "bin/kineto-mcp.mjs",
+    "targets.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepublishOnly": "node ../../scripts/guard-publish.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "optionalDependencies": {
+    "@kineto/mcp-darwin-arm64": "0.1.1",
+    "@kineto/mcp-darwin-x64": "0.1.1",
+    "@kineto/mcp-linux-arm64": "0.1.1",
+    "@kineto/mcp-linux-x64": "0.1.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
