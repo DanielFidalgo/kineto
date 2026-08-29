@@ -10,3 +10,6 @@ blob-report/
 playwright/.cache/
 .superpowers/
 .DS_Store
+.superpowers/
+docs/superpowers/
+CLAUDE.md

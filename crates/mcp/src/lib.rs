@@ -135,7 +135,8 @@ impl KinetoServer {
             ToolError::Invalid("`out` is required unless `validateOnly` is true".into())
         })?;
 
-        let outcome = crate::render::render_to_mp4(&mut engine, fps, &out)?.with_timeline(timeline);
+        let outcome =
+            crate::render::render_to_file(&mut engine, fps, &out)?.with_timeline(timeline);
         let previews = crate::render::sample_frames(&mut engine, fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
     }
@@ -431,7 +432,7 @@ impl KinetoServer {
         })?;
 
         let outcome =
-            crate::render::render_to_mp4(&mut engine, params.fps, &out)?.with_timeline(timeline);
+            crate::render::render_to_file(&mut engine, params.fps, &out)?.with_timeline(timeline);
         let previews =
             crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
@@ -507,7 +508,7 @@ impl KinetoServer {
         })?;
 
         let outcome =
-            crate::render::render_to_mp4(&mut engine, params.fps, &out)?.with_timeline(timeline);
+            crate::render::render_to_file(&mut engine, params.fps, &out)?.with_timeline(timeline);
         let previews =
             crate::render::sample_frames(&mut engine, params.fps, params.preview_frames)?;
         Ok(crate::tools::success(&outcome, previews))
