@@ -32,7 +32,7 @@ claude mcp add --scope user kineto /usr/local/bin/kineto-mcp
 **From source:**
 
 ```sh
-git clone https://github.com/YOUR-USER/kineto.git && cd kineto
+git clone https://github.com/DanielFidalgo/kineto.git && cd kineto
 just install
 ```
 
