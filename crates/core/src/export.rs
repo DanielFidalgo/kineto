@@ -20,6 +20,33 @@ use std::process::Command;
 /// color space. This is the standard PNG encoding (browsers and image tools
 /// expect unpremultiplied).
 pub fn export_frames(engine: &mut Engine, fps: i64, dir: &Path) -> io::Result<u64> {
+    export_frames_scaled(engine, fps, dir, None)
+}
+
+/// The size a frame is written at, given a target width.
+///
+/// Height follows the document's aspect ratio, and both are forced even:
+/// h264's 4:2:0 chroma subsampling cannot represent an odd dimension, and
+/// ffmpeg would otherwise refuse the encode.
+pub fn scaled_size(w: u32, h: u32, target_w: u32) -> (u32, u32) {
+    let target_w = target_w.max(2);
+    let th = ((target_w as u64 * h as u64) as f64 / w as f64).round() as u32;
+    (target_w & !1, th.max(2) & !1)
+}
+
+/// `export_frames`, optionally resampling each frame to `target_w` wide.
+///
+/// Resampling happens on *export*, never in `Engine::render` — the parity
+/// gate compares rendered frames, and scaling there would put a resampler
+/// inside the thing being proven identical. Triangle filtering is chosen for
+/// the same reason the preview path chooses it: it is deterministic, which
+/// matters more here than the last few percent of sharpness.
+pub fn export_frames_scaled(
+    engine: &mut Engine,
+    fps: i64,
+    dir: &Path,
+    target_w: Option<u32>,
+) -> io::Result<u64> {
     // Create the directory if it doesn't exist
     std::fs::create_dir_all(dir)?;
 
@@ -46,8 +73,18 @@ pub fn export_frames(engine: &mut Engine, fps: i64, dir: &Path) -> io::Result<u6
         let height = engine.height();
         let frame_path = dir.join(format!("frame-{:05}.png", frame_count));
 
-        image::save_buffer(&frame_path, &rgba, width, height, image::ColorType::Rgba8)
-            .map_err(io::Error::other)?;
+        match target_w {
+            None => image::save_buffer(&frame_path, &rgba, width, height, image::ColorType::Rgba8)
+                .map_err(io::Error::other)?,
+            Some(tw) => {
+                let (nw, nh) = scaled_size(width, height, tw);
+                let img = image::RgbaImage::from_raw(width, height, rgba)
+                    .expect("frame buffer is always w*h*4");
+                let out =
+                    image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Triangle);
+                out.save(&frame_path).map_err(io::Error::other)?;
+            }
+        }
 
         frame_count += 1;
     }
@@ -68,6 +105,45 @@ pub fn ffmpeg_available() -> bool {
 
 /// Mux PNG frames to an MP4 file using ffmpeg if available.
 ///
+/// Render one frame to a PNG.
+///
+/// The engine could always render any tick; there was no way to keep one.
+/// Separate from `export_frames` because a poster, a thumbnail or an
+/// `og:image` is a different job from a sequence, and asking for a whole
+/// sequence to keep one frame is how a pipeline ends up shelling out.
+pub fn write_still(
+    engine: &mut Engine,
+    tick: i64,
+    path: &Path,
+    target_w: Option<u32>,
+) -> io::Result<(u32, u32)> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let (width, height) = (engine.width(), engine.height());
+    let mut rgba = engine.render(tick).to_vec();
+    crate::render::unpremultiply(&mut rgba);
+
+    match target_w {
+        None => {
+            image::save_buffer(path, &rgba, width, height, image::ColorType::Rgba8)
+                .map_err(io::Error::other)?;
+            Ok((width, height))
+        }
+        Some(tw) => {
+            let (nw, nh) = scaled_size(width, height, tw);
+            let img =
+                image::RgbaImage::from_raw(width, height, rgba).expect("frame buffer is w*h*4");
+            image::imageops::resize(&img, nw, nh, image::imageops::FilterType::Triangle)
+                .save(path)
+                .map_err(io::Error::other)?;
+            Ok((nw, nh))
+        }
+    }
+}
+
 /// A container the frame sequence can be encoded into.
 ///
 /// Chosen from the output path's extension rather than a parameter: the
@@ -82,6 +158,8 @@ pub enum Format {
     /// Animated WebP: 24-bit colour and real alpha, unlike GIF, which bands
     /// gradients into stripes and posterises soft shadows.
     WebP,
+    /// A single frame. Not muxed at all — `write_still` handles it.
+    Png,
 }
 
 impl Format {
@@ -89,6 +167,7 @@ impl Format {
         match p.extension()?.to_str()?.to_ascii_lowercase().as_str() {
             "mp4" => Some(Format::Mp4),
             "webp" => Some(Format::WebP),
+            "png" => Some(Format::Png),
             _ => None,
         }
     }
@@ -99,6 +178,7 @@ impl Format {
         match self {
             Format::Mp4 => "libx264",
             Format::WebP => "libwebp",
+            Format::Png => "none",
         }
     }
 }
@@ -144,6 +224,14 @@ pub fn mux_with_ffmpeg(dir: &Path, fps: i64, out: &Path) -> io::Result<bool> {
             ),
         )
     })?;
+    if format == Format::Png {
+        // A still is not a sequence; `write_still` is the path for it, and
+        // silently muxing one frame into a video would be a strange answer.
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a .png output is a single frame — use write_still, not the muxer",
+        ));
+    }
 
     let input_pattern = dir.join("frame-%05d.png");
     let fps_str = fps.to_string();
@@ -153,6 +241,7 @@ pub fn mux_with_ffmpeg(dir: &Path, fps: i64, out: &Path) -> io::Result<bool> {
     let mut cmd = Command::new("ffmpeg");
     cmd.args(["-y", "-framerate", &fps_str, "-i", input_str]);
     match format {
+        Format::Png => unreachable!("rejected above"),
         Format::Mp4 => {
             cmd.args(["-c:v", "libx264", "-pix_fmt", "yuv420p"]);
         }

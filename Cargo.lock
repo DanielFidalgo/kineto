@@ -570,6 +570,7 @@ dependencies = [
  "image",
  "kineto-asciicast",
  "kineto-core",
+ "pico-args",
  "rmcp",
  "schemars",
  "serde",
