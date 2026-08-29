@@ -158,7 +158,10 @@ release version:
         git commit -m "chore: release v{{version}}"
     fi
     git tag -a "v{{version}}" -m "v{{version}}"
-    @echo "tagged v{{version}} — push with: git push && git push --tags"
+    # Plain echo, not `@echo`: in a shebang recipe every line is script text,
+    # so `@` is not just's line-prefix here — bash looks for a command called
+    # `@echo` and exits 127, after the tag has already been made.
+    echo "tagged v{{version}} — push with: git push && git push --tags"
 
 # What version is this?
 version:
