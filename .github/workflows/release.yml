@@ -200,23 +200,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      # --dry-run on every crate first. Publishing kineto-core and then
-      # discovering kineto is unpublishable would leave a version on
-      # crates.io that cannot be withdrawn.
+      # --workspace, not a loop over -p. Publishing one crate at a time
+      # cannot work for a first release: verifying kineto-asciicast resolves
+      # kineto-core from the registry, where it does not exist yet, and the
+      # command fails before anything is published. --workspace publishes in
+      # dependency order and resolves the crates against each other.
+      # Verified locally with `cargo package --workspace`, which performs the
+      # same packaging and compile-from-tarball for all three.
+      #
+      # --exclude is belt-and-braces: `publish = false` already keeps
+      # kineto-wasm out, but this is an irreversible operation.
       - name: Dry run
-        run: |
-          set -euo pipefail
-          for c in kineto-core kineto-asciicast kineto; do
-            cargo publish --dry-run -p "$c"
-          done
+        run: cargo publish --workspace --exclude kineto-wasm --dry-run
 
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          set -euo pipefail
-          for c in kineto-core kineto-asciicast kineto; do
-            echo "::group::$c"
-            cargo publish -p "$c"
-            echo "::endgroup::"
-          done
+        run: cargo publish --workspace --exclude kineto-wasm
