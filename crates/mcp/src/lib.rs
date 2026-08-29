@@ -37,8 +37,9 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
         "Renders kineto scene documents to MP4. Rendering is deterministic: \
          the same document always produces the same frames. Encoding to MP4 \
          requires ffmpeg on PATH; `validateOnly` calls do not need it.\n\n\
-         Before authoring, read `kineto://example/flow`, `/metric` and \
-         `/steps`. They are short and exist to be imitated. The \
+         Before authoring, read the `kineto://example/` documents. They are \
+         short and exist to be imitated, and each is a different *shot type*: \
+         statement, split, cards, reveal, flow, metric, steps. The \
          `kineto://corpus/` documents are renderer tests — valid, but written \
          to exercise easings and group nesting rather than to be copied.\n\n\
          What separates a video from a slide deck, in this format: one idea \
@@ -47,6 +48,12 @@ fn server_info(capabilities: ServerCapabilities) -> ServerInfo {
          rather than asserted; the number itself on screen, large. A scene of \
          centred prose is the thing to avoid, and `check_document` will say \
          so.\n\n\
+         Vary the shot. A sequence reads as a slide deck when every scene has \
+         the same shape — a header, a title, a paragraph, repeated. Alternate: \
+         a full-bleed statement with no chrome, a split with a panel, a set of \
+         cards entering in sequence, a number shown as a bar. Gradients, \
+         rounded corners, shadows and clip windows exist for this; a flat \
+         rectangle on a flat background is a slide.\n\n\
          The working order is cheapest-first: `check_document` for \
          correctness and pacing (no images, a fraction of the cost), \
          `preview_document` for chosen moments when you need to judge how it \

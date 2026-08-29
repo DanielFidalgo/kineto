@@ -6,18 +6,25 @@
 //! nothing to imitate produces centred prose on slides. These are neither.
 //!
 //! Each one is small, self-contained (bundled fonts, no image assets) and
-//! demonstrates one habit worth copying:
+//! demonstrates one *shot type*. That framing matters more than any single
+//! example: a video reads as a slide deck when every scene has the same
+//! shape, so the set exists to show that scenes can differ structurally, not
+//! only in wording.
 //!
-//! - `flow`   — show a relationship as a path between two things
-//! - `metric` — put the number on screen, large, with its context beneath
-//! - `steps`  — one idea per scene, marked so progress is visible
+//! - `statement` — full bleed, no chrome, one sentence. Breaks the rhythm.
+//! - `split`     — text against a panel; the commonest two-column shot
+//! - `flow`      — a relationship as a path between things
+//! - `metric`    — one number, large, with the quantity actually shown
+//! - `cards`     — a set of peers, entering in sequence
+//! - `reveal`    — content arriving from behind a fixed window
+//! - `steps`     — one idea per scene, with progress visible
 //!
 //! They are built through the Rust builders rather than embedded as JSON so
 //! they cannot drift from the format, and a test renders each one through the
 //! same lint the tools apply: an example we tell a model to copy has to pass
 //! the rules we would judge its output by.
 
-use kineto_core::doc::{ms, Cap, Ease, Gradient, Join, Key, Prop, Stop, Track};
+use kineto_core::doc::{ms, Cap, Clip, Ease, Gradient, Join, Key, Prop, Shadow, Stop, Track};
 use kineto_core::{Asset, Document, Element, Scene};
 
 const W: u32 = 1280;
@@ -38,6 +45,36 @@ pub struct Example {
 
 pub fn examples() -> Vec<Example> {
     vec![
+        Example {
+            name: "statement",
+            description: "Full bleed, no header, one sentence. A shot with no \
+                          chrome at all is what stops a sequence reading as a \
+                          deck — use it to break rhythm, not to open.",
+            doc: statement(),
+        },
+        Example {
+            name: "split",
+            description: "Text against a panel: the everyday two-column shot. \
+                          Rounded corners, a gradient and a shadow are what \
+                          separate a panel from a rectangle.",
+            doc: split(),
+        },
+        Example {
+            name: "cards",
+            description: "A set of peers entering in sequence. Stagger the \
+                          entrances and let them overshoot — simultaneous \
+                          arrival reads as a diagram, sequenced reads as \
+                          motion.",
+            doc: cards(),
+        },
+        Example {
+            name: "reveal",
+            description: "Content arriving from behind a fixed window. A clip \
+                          does not travel with its element, so the content \
+                          slides and the frame stays — that is the only \
+                          reveal in this format that is not a fade.",
+            doc: reveal(),
+        },
         Example {
             name: "flow",
             description: "A relationship drawn as a path between two things, \
@@ -123,6 +160,197 @@ fn arrow(x0: f64, y0: f64, x1: f64, y1: f64, color: &str, dur: i64, hold: i64) -
         .with_path_fill(color)
         .with_animation(fade(hold, dur)),
     ]
+}
+
+/// No header, no rule, no kicker: the absence of chrome is the point.
+fn statement() -> Document {
+    let mut d = base();
+    let dur = ms(5000);
+    let sc = Scene::new("statement", dur)
+        // A full-canvas gradient, so the shot does not share the flat
+        // background every other scene uses.
+        .with_element(Element::rect(
+            [0.0, 0.0, W as f64, H as f64],
+            Gradient::linear(
+                [0.0, 0.0],
+                [1.0, 1.0],
+                vec![Stop::new(0.0, "#12202b"), Stop::new(1.0, BG)],
+            ),
+        ))
+        .with_element(
+            Element::text(
+                "Determinism is not a feature.\nIt is what makes the rest testable.",
+                "inter",
+                58.0,
+                FG,
+                [110.0, 250.0],
+            )
+            .with_max_w(1060.0)
+            .with_animation(fade(500, dur)),
+        )
+        .with_element(
+            Element::path(vec![[110.0, 470.0], [230.0, 470.0]])
+                .with_stroke(ACCENT, 5.0)
+                .with_cap(Cap::Round)
+                .with_animation(fade(900, dur)),
+        );
+    d.push_scene(sc);
+    d
+}
+
+/// Text on the left, a panel on the right. Rounded, gradient-filled and
+/// shadowed — the three things that separate a panel from a rectangle.
+fn split() -> Document {
+    let mut d = base();
+    let dur = ms(5500);
+    let sc = Scene::new("split", dur)
+        .with_element(kicker("THE SHAPE", dur))
+        .with_element(
+            Element::text(
+                "Two columns, not two\nparagraphs.",
+                "inter",
+                44.0,
+                FG,
+                [90.0, 250.0],
+            )
+            .with_max_w(480.0)
+            .with_animation(fade(400, dur)),
+        )
+        .with_element(
+            Element::text(
+                "Put the words on one side and the thing itself on the other.",
+                "mono",
+                19.0,
+                DIM,
+                [92.0, 400.0],
+            )
+            .with_max_w(470.0)
+            .with_animation(fade(700, dur)),
+        )
+        .with_element(
+            Element::rect(
+                [660.0, 190.0, 520.0, 340.0],
+                Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 1.0],
+                    vec![Stop::new(0.0, "#1d2b36"), Stop::new(1.0, "#14202a")],
+                ),
+            )
+            .with_radius(18.0)
+            .with_shadow(Shadow::new("#00000066", 24, 0.0, 12.0))
+            .with_animation(fade(600, dur)),
+        )
+        .with_element(
+            Element::path(vec![[700.0, 300.0], [900.0, 300.0]])
+                .with_stroke(TEAL, 4.0)
+                .with_cap(Cap::Round)
+                .with_animation(fade(900, dur)),
+        )
+        .with_element(
+            Element::path(vec![[700.0, 350.0], [1030.0, 350.0]])
+                .with_stroke("#2c3d4a", 4.0)
+                .with_cap(Cap::Round)
+                .with_animation(fade(1000, dur)),
+        )
+        .with_element(
+            Element::path(vec![[700.0, 400.0], [840.0, 400.0]])
+                .with_stroke("#2c3d4a", 4.0)
+                .with_cap(Cap::Round)
+                .with_animation(fade(1100, dur)),
+        );
+    d.push_scene(sc);
+    d
+}
+
+/// Three peers, entering one after another and overshooting slightly. The
+/// stagger is what turns a diagram into motion.
+fn cards() -> Document {
+    let mut d = base();
+    let dur = ms(6000);
+    let mut sc = Scene::new("cards", dur)
+        .with_element(kicker("A SET", dur))
+        .with_element(title("Peers arrive in sequence.", dur));
+    let labels = ["deterministic", "headless", "inspectable"];
+    for (i, label) in labels.iter().enumerate() {
+        let x = 100.0 + i as f64 * 366.0;
+        let delay = 400 + i as i64 * 220;
+        sc = sc
+            .with_element(
+                Element::rect([x, 280.0, 330.0, 200.0], "#16212a")
+                    .with_radius(16.0)
+                    .with_shadow(Shadow::new("#00000059", 18, 0.0, 10.0))
+                    .with_animation(fade(delay, dur))
+                    // Overshoot: it rises past its resting place and settles.
+                    .with_animation(Track::new(
+                        Prop::Translate,
+                        vec![
+                            Key::vec2(0, [0.0, 46.0]),
+                            Key::vec2(ms(delay), [0.0, 46.0]),
+                            Key::vec2(ms(delay + 620), [0.0, 0.0]).with_ease(Ease::OutBack),
+                        ],
+                    )),
+            )
+            .with_element(
+                Element::text(label, "mono", 19.0, FG, [x + 24.0, 330.0])
+                    .with_animation(fade(delay + 120, dur)),
+            )
+            .with_element(
+                Element::path(vec![[x + 24.0, 430.0], [x + 24.0 + 60.0, 430.0]])
+                    .with_stroke([ACCENT, TEAL, "#C77DFF"][i], 4.0)
+                    .with_cap(Cap::Round)
+                    .with_animation(fade(delay + 200, dur)),
+            );
+    }
+    d.push_scene(sc);
+    d
+}
+
+/// A fixed window with content sliding in behind it. The clip does not move
+/// with the element, which is what makes this a reveal rather than a fade.
+fn reveal() -> Document {
+    let mut d = base();
+    let dur = ms(5500);
+    let (wx, wy, ww, wh) = (150.0, 250.0, 980.0, 180.0);
+    let sc = Scene::new("reveal", dur)
+        .with_element(kicker("ARRIVAL", dur))
+        .with_element(title("Slide in behind a window.", dur))
+        // The window frame, so the mechanism is visible.
+        .with_element(
+            Element::rect([wx - 2.0, wy - 2.0, ww + 4.0, wh + 4.0], "#16212a")
+                .with_radius(14.0)
+                .with_animation(fade(400, dur)),
+        )
+        .with_element(
+            Element::rect(
+                [wx, wy, ww, wh],
+                Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 0.0],
+                    vec![Stop::new(0.0, ACCENT), Stop::new(1.0, "#C77DFF")],
+                ),
+            )
+            .with_radius(12.0)
+            .with_clip(Clip::new([wx, wy, ww, wh]).with_radius(12.0))
+            .with_animation(Track::new(
+                Prop::Translate,
+                vec![
+                    Key::vec2(0, [-ww, 0.0]),
+                    Key::vec2(ms(1400), [0.0, 0.0]).with_ease(Ease::OutCubic),
+                ],
+            )),
+        )
+        .with_element(
+            Element::text(
+                "the clip stays put; the content moves",
+                "mono",
+                18.0,
+                DIM,
+                [wx + 2.0, wy + wh + 34.0],
+            )
+            .with_animation(fade(1600, dur)),
+        );
+    d.push_scene(sc);
+    d
 }
 
 fn flow() -> Document {

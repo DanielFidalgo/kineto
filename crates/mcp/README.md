@@ -285,11 +285,22 @@ The server also exposes read-only MCP resources:
 
 - `kineto://schema/document` — the JSON Schema for the canonical document
   format accepted by `render_document` and `preview_document`.
-- `kineto://example/<name>` — **reference documents to imitate**: `flow`
-  (a relationship drawn as a path rather than described), `metric` (one
-  number, large, with the quantity actually shown), `steps` (one idea per
-  scene with visible progress). Small, self-contained, and tested against the
-  same lint a caller's output is judged by.
+- `kineto://example/<name>` — **reference documents to imitate**, each a
+  different *shot type*, because a video reads as a deck when every scene has
+  the same shape:
+
+  | name | shot |
+  |---|---|
+  | `statement` | full bleed, no chrome, one sentence — breaks the rhythm |
+  | `split` | text against a rounded, gradient-filled, shadowed panel |
+  | `cards` | a set of peers entering in sequence, overshooting slightly |
+  | `reveal` | content sliding in from behind a fixed clip window |
+  | `flow` | a relationship drawn as a path between things |
+  | `metric` | one number, large, with the quantity actually shown |
+  | `steps` | one idea per scene, with progress visible |
+
+  Small, self-contained, and tested against the same lint a caller's output is
+  judged by.
 - `kineto://corpus/<name>` — renderer *test* documents covering every element
   type, easing, crossfade, wrap and group nesting. Valid and byte-stable, but
   written to exercise features rather than to be copied — an agent imitating
