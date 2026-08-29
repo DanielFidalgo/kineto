@@ -64,8 +64,12 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             os: macos-14
+          # Cross-compiled from Apple Silicon rather than asking for an
+          # Intel runner: macos-13 is being retired and the first release
+          # sat queued forever with no runner ever assigned. Xcode on
+          # macos-14 ships both SDKs, so this needs no extra setup.
           - target: x86_64-apple-darwin
-            os: macos-13
+            os: macos-14
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
@@ -87,11 +91,13 @@ jobs:
         # is rejected by cargo. Verified locally before this was committed.
         run: cargo build --release --target ${{ matrix.target }} -p kineto-mcp -p kineto-asciicast --bins
 
-      # Smoke test on the machine that built it. `--help` exercises argument
-      # parsing and proves the binary actually links and runs, which a
-      # successful compile does not.
+      # `--help` proves the binary links and runs, which a successful compile
+      # does not. Only possible when the target matches the runner's own
+      # architecture — a cross-compiled binary cannot be executed here, and
+      # depending on Rosetta being present would trade a real check for a
+      # flaky one.
       - name: Smoke test
-        if: ${{ !contains(matrix.target, 'aarch64-unknown-linux') || runner.arch == 'ARM64' }}
+        if: ${{ (startsWith(matrix.target, 'aarch64') && runner.arch == 'ARM64') || (startsWith(matrix.target, 'x86_64') && runner.arch == 'X64') }}
         run: ./target/${{ matrix.target }}/release/kineto --help
 
       - name: Package
