@@ -236,3 +236,90 @@ fn mux_with_ffmpeg_creates_an_animated_webp_when_available() {
         "WebP is not animated: no ANIM/ANMF chunk"
     );
 }
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn scaled_size_keeps_aspect_and_forces_even_dimensions() {
+    use kineto_core::export::scaled_size;
+    assert_eq!(scaled_size(1280, 720, 960), (960, 540));
+    assert_eq!(scaled_size(1280, 720, 640), (640, 360));
+    // Odd results are rounded down: h264's 4:2:0 chroma cannot represent an
+    // odd dimension, and ffmpeg refuses the encode outright.
+    let (w, h) = scaled_size(1280, 721, 641);
+    assert_eq!(w % 2, 0);
+    assert_eq!(h % 2, 0);
+    // Never degenerate, however small the request.
+    assert_eq!(scaled_size(1280, 720, 1), (2, 2));
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_still_writes_one_frame_at_the_requested_tick() {
+    use kineto_core::doc::TIMEBASE;
+    let doc = crossfade_doc();
+    let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+
+    let a = dir.path().join("a.png");
+    let (w, h) = kineto_core::export::write_still(&mut engine, 0, &a, None).unwrap();
+    assert_eq!((w, h), (engine.width(), engine.height()));
+    assert!(a.exists());
+    assert_eq!(
+        std::fs::read_dir(dir.path()).unwrap().count(),
+        1,
+        "wrote a sequence"
+    );
+
+    // A different tick must give different pixels, or the tick is ignored —
+    // which a "did a file appear" assertion would not catch.
+    let b = dir.path().join("b.png");
+    kineto_core::export::write_still(&mut engine, TIMEBASE / 4, &b, None).unwrap();
+    assert_ne!(
+        std::fs::read(&a).unwrap(),
+        std::fs::read(&b).unwrap(),
+        "the same image was written for two different ticks"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_scaled_still_is_written_at_the_requested_width() {
+    let doc = crossfade_doc();
+    let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("s.png");
+    let (w, h) = kineto_core::export::write_still(&mut engine, 0, &p, Some(160)).unwrap();
+    assert_eq!(w, 160);
+    let img = image::open(&p).unwrap();
+    assert_eq!(
+        (img.width(), img.height()),
+        (w, h),
+        "file disagrees with report"
+    );
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn scaled_frames_are_written_at_the_requested_width() {
+    let doc = crossfade_doc();
+    let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let n =
+        kineto_core::export::export_frames_scaled(&mut engine, 30, dir.path(), Some(160)).unwrap();
+    assert!(n > 1);
+    let img = image::open(dir.path().join("frame-00000.png")).unwrap();
+    assert_eq!(img.width(), 160);
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn a_png_output_is_refused_by_the_muxer() {
+    if !kineto_core::export::ffmpeg_available() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let frames = dir.path().join("f");
+    std::fs::create_dir(&frames).unwrap();
+    let out = dir.path().join("out.png");
+    assert!(kineto_core::export::mux_with_ffmpeg(&frames, 30, &out).is_err());
+}

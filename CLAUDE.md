@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **314 tests**.
+   output. Workspace suite is **319 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -61,11 +61,14 @@ magnitude ~[1e-5, 1e15] (`scalar.rs`/`canonical.ts`); nothing in CI asserts
 the shipped wasm is SIMD-built (a stray `RUSTFLAGS` would silently drop it,
 costing ~4×).
 
-**Engine gaps the README video works around:** rendering happens at the
-document's own resolution — there is no output scale, so `just media`
-downscales the README loop with ffmpeg; and the engine can render any frame
-but cannot write a single one to a file, so the poster is extracted with
-ffmpeg too. Both are visible in the justfile rather than hidden.
+**Output scaling and stills** (2026-08-28): `--width` resamples on *export*,
+never in `Engine::render` — the parity gate compares rendered frames, and a
+resampler inside that would sit within the thing being proven identical.
+Triangle filter, for determinism. Dimensions are forced even because h264's
+4:2:0 chroma cannot represent an odd one. A `.png` output is a single frame
+via `write_still` and never touches the muxer, which rejects `.png`
+explicitly rather than encoding a one-frame video. Together these removed
+the last two ffmpeg calls from `just media`.
 
 **MCP server:** the validate/render-mp4/preview tail is duplicated verbatim
 across the three *render* `_impl` functions. `preview_document` (added

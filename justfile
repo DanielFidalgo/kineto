@@ -97,24 +97,18 @@ demo: wasm
 cast input dir:
     cargo run -q -p kineto-asciicast --bin kineto-cast -- {{input}} -o {{dir}}
 
-# Rebuild the README video and the inline loop from their documents.
+# Rebuild the README video, the inline loop and the poster.
 #
 # docs/media/hero.json IS the source — the thing this project claims you
-# author. Check it, then render it. That is the entire pipeline, and it is
-# the same one an agent drives through the MCP server.
-#
-# The two ffmpeg calls are honest workarounds rather than steps Kineto needs:
-# rendering happens at the document's own resolution, so scaling to the width
-# a README displays is external, and the engine can render any frame but
-# cannot write a single one to a file. Both are gaps worth closing.
+# author. Check it, then render it, three ways. No other tool is involved:
+# the loop is scaled by the engine, and the poster is a frame the engine
+# writes. Both used to be ffmpeg calls standing in for gaps that are now
+# closed.
 media: build
     "{{kineto}}" docs/media/hero.json --check
     "{{kineto}}" docs/media/hero.json -o docs/media/kineto-hero.mp4
-    "{{kineto}}" docs/media/hero-loop.json -o out/loop.mp4
-    ffmpeg -v error -y -i out/loop.mp4 -vf scale=960:-2 -c:v libwebp -lossless 0 \
-        -q:v 82 -compression_level 4 -preset picture -loop 0 docs/media/kineto-loop.webp
-    ffmpeg -v error -y -ss 1.6 -i docs/media/kineto-hero.mp4 -frames:v 1 \
-        -vf scale=960:-2 docs/media/kineto-poster.png
+    "{{kineto}}" docs/media/hero.json -o docs/media/kineto-poster.png --at 1600 --width 960
+    "{{kineto}}" docs/media/hero-loop.json -o docs/media/kineto-loop.webp --width 960
     @echo "wrote docs/media/"
 
 # --------------------------------------------------------------------- dev ---

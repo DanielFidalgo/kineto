@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use base64::prelude::{Engine as _, BASE64_STANDARD};
-use kineto_core::export::{export_frames, ffmpeg_available, mux_with_ffmpeg};
+use kineto_core::export::{ffmpeg_available, mux_with_ffmpeg};
 use kineto_core::Engine;
 use serde::Serialize;
 
@@ -411,6 +411,20 @@ pub fn render_to_file(
     fps: i64,
     out: &str,
 ) -> Result<RenderOutcome, ToolError> {
+    render_to_file_scaled(engine, fps, out, None)
+}
+
+/// `render_to_file`, optionally writing frames `width` pixels wide.
+///
+/// Scaling happens on export, never inside `Engine::render`: the parity gate
+/// compares rendered frames, and a resampler there would sit inside the very
+/// thing being proven identical across targets.
+pub fn render_to_file_scaled(
+    engine: &mut Engine,
+    fps: i64,
+    out: &str,
+    width: Option<u32>,
+) -> Result<RenderOutcome, ToolError> {
     if !ffmpeg_available() {
         return Err(ToolError::FfmpegMissing);
     }
@@ -439,11 +453,12 @@ pub fn render_to_file(
         source: e,
     })?;
 
-    let count = export_frames(engine, fps, frames_dir.path()).map_err(|e| ToolError::Io {
-        context: "writing frames",
-        path: frames_dir.path().display().to_string(),
-        source: e,
-    })?;
+    let count = kineto_core::export::export_frames_scaled(engine, fps, frames_dir.path(), width)
+        .map_err(|e| ToolError::Io {
+            context: "writing frames",
+            path: frames_dir.path().display().to_string(),
+            source: e,
+        })?;
 
     // `Ok(false)` here can no longer mean "ffmpeg absent" — we checked above —
     // so it means ffmpeg ran and exited nonzero.
@@ -457,10 +472,14 @@ pub fn render_to_file(
     }
 
     let ticks = engine.total_duration();
+    let (w, h) = match width {
+        Some(tw) => kineto_core::export::scaled_size(engine.width(), engine.height(), tw),
+        None => (engine.width(), engine.height()),
+    };
     Ok(RenderOutcome {
         out: Some(out.to_string()),
-        width: engine.width(),
-        height: engine.height(),
+        width: w,
+        height: h,
         fps,
         frame_count: count,
         duration_ticks: ticks,

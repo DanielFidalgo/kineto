@@ -11,9 +11,10 @@
 //! are. A separate crate would have duplicated all three.
 //!
 //! ```text
-//! kineto scene.json -o out.mp4          # or out.webp
-//! kineto scene.json --check             # report problems, render nothing
-//! kineto scene.json -o out.mp4 --fps 60
+//! kineto scene.json -o out.mp4              # or out.webp
+//! kineto scene.json -o poster.png --at 1500 # a single frame
+//! kineto scene.json -o small.mp4 --width 960
+//! kineto scene.json --check                 # report problems, render nothing
 //! ```
 
 use std::path::PathBuf;
@@ -27,11 +28,14 @@ const USAGE: &str = "\
 kineto — compile a scene document to a video
 
 USAGE:
-    kineto <document.json> -o <output>   render (.mp4 or .webp)
+    kineto <document.json> -o <output>   render (.mp4, .webp or .png)
     kineto <document.json> --check       report problems, render nothing
 
 OPTIONS:
     -o, --out <PATH>     output file; the extension picks the format
+                         .mp4 h264 · .webp animated · .png one frame
+        --at <MS>        which moment to write, for a .png (default 0)
+        --width <PX>     scale output to PX wide, keeping aspect
         --fps <N>        override the document's own defaultFps
         --assets <DIR>   resolve image/font srcs against DIR
         --check          check and exit; nonzero if anything is wrong
@@ -59,6 +63,8 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let check_only = args.contains("--check");
     let out: Option<PathBuf> = args.opt_value_from_str(["-o", "--out"])?;
     let fps: Option<i64> = args.opt_value_from_str("--fps")?;
+    let at_ms: Option<i64> = args.opt_value_from_str("--at")?;
+    let width: Option<u32> = args.opt_value_from_str("--width")?;
     let assets_dir: Option<PathBuf> = args.opt_value_from_str("--assets")?;
 
     let rest = args.finish();
@@ -120,7 +126,22 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     };
 
     let mut engine = kineto_core::Engine::new(doc, assets)?;
-    let outcome = render::render_to_file(&mut engine, fps, out.to_str().unwrap_or_default())?;
+
+    // A .png is one frame, not a one-frame video, so it does not go through
+    // the muxer — and needs no ffmpeg at all.
+    if kineto_core::export::Format::from_path(&out) == Some(kineto_core::export::Format::Png) {
+        let tick = at_ms.unwrap_or(0) * (kineto_core::doc::TIMEBASE / 1000);
+        let (w, h) = kineto_core::export::write_still(&mut engine, tick, &out, width)?;
+        println!(
+            "wrote {} ({w}x{h} at {} ms)",
+            out.display(),
+            at_ms.unwrap_or(0)
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let outcome =
+        render::render_to_file_scaled(&mut engine, fps, out.to_str().unwrap_or_default(), width)?;
     println!(
         "wrote {} ({}x{}, {} frames at {} fps, {:.3}s{})",
         out.display(),

@@ -117,8 +117,10 @@ There is a CLI. Write a document, compile it:
 
 ```sh
 just build
-kineto scene.json --check              # report problems, render nothing
-kineto scene.json -o scene.mp4         # or scene.webp
+kineto scene.json --check                    # report problems, render nothing
+kineto scene.json -o scene.mp4               # or scene.webp
+kineto scene.json -o poster.png --at 1500    # one frame, for a thumbnail
+kineto scene.json -o small.mp4 --width 960   # scale on the way out
 ```
 
 `--check` is worth using before every render: it reports text invisible
@@ -126,9 +128,10 @@ against its background, elements animated off the canvas, text past the edge,
 and scenes too short to read — and exits nonzero on anything that is actually
 wrong. It costs no pixels.
 
-The video at the top of this page is built exactly that way. Its document is
+Everything at the top of this page is built exactly that way. The document is
 committed at [`docs/media/hero.json`](docs/media/hero.json), and `just media`
-rebuilds it — check, then render. Nothing else.
+rebuilds the video, the inline loop and the poster from it — check, then
+render three times. No other tool is involved.
 
 Turn an [asciinema](https://asciinema.org/) recording into a video, headlessly:
 
@@ -148,6 +151,7 @@ The output extension chooses the format.
 |---|---|
 | `.mp4` | anything longer than a few seconds — h264, ~28× smaller |
 | `.webp` | short loops embedded inline in markdown — 24-bit colour and real alpha |
+| `.png` | a single frame: a poster, a thumbnail, an `og:image` |
 
 Choose by length. Animated WebP has no inter-frame prediction, so every frame
 is essentially a standalone image: roughly **280 KB per second at 720p**. A few
