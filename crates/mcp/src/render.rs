@@ -32,6 +32,11 @@ pub struct RenderOutcome {
     pub frame_count: u64,
     pub duration_ticks: i64,
     pub duration_seconds: f64,
+    /// Size of the written file. Reported because the choice between .mp4 and
+    /// .webp is a size decision, and a caller cannot make it without the
+    /// number — a minute of WebP is ~17 MB.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u64>,
     /// Scene spans and the nominal-vs-actual length gap. Absent only where a
     /// caller had no document to measure.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,6 +176,7 @@ pub fn describe(engine: &Engine, fps: i64) -> RenderOutcome {
         frame_count: frame_count(engine, fps),
         duration_ticks: ticks,
         duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+        bytes: None,
         timeline: None,
     }
 }
@@ -394,13 +400,26 @@ pub fn encode_frames(
     Ok(out)
 }
 
-/// Render every frame and mux to `out`.
+/// Render every frame and encode to `out`, choosing the format from its
+/// extension: `.mp4` or `.webp`.
 ///
-/// Preflights ffmpeg *before* rendering a single frame: without this, a caller
-/// with no ffmpeg pays the full render cost and then fails.
-pub fn render_to_mp4(engine: &mut Engine, fps: i64, out: &str) -> Result<RenderOutcome, ToolError> {
+/// Preflights ffmpeg *and* the extension before rendering a single frame:
+/// without either check a caller pays the full render cost and then fails on
+/// something knowable up front.
+pub fn render_to_file(
+    engine: &mut Engine,
+    fps: i64,
+    out: &str,
+) -> Result<RenderOutcome, ToolError> {
     if !ffmpeg_available() {
         return Err(ToolError::FfmpegMissing);
+    }
+    if kineto_core::export::Format::from_path(Path::new(out)).is_none() {
+        return Err(ToolError::Invalid(format!(
+            "unsupported output extension for '{out}': use .mp4 (h264, universal) \
+             or .webp (animated, 24-bit colour and alpha — the one that keeps \
+             gradients and soft shadows intact)"
+        )));
     }
 
     let out_path = Path::new(out);
@@ -446,6 +465,7 @@ pub fn render_to_mp4(engine: &mut Engine, fps: i64, out: &str) -> Result<RenderO
         frame_count: count,
         duration_ticks: ticks,
         duration_seconds: ticks as f64 / kineto_core::doc::TIMEBASE as f64,
+        bytes: std::fs::metadata(out_path).ok().map(|m| m.len()),
         timeline: None,
     })
 }

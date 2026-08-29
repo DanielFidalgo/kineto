@@ -33,7 +33,10 @@ pub struct RenderDocumentParams {
     #[serde(default)]
     pub asset_base_dir: Option<String>,
 
-    /// Output `.mp4` path. Required unless `validateOnly` is true.
+    /// Output path. The extension chooses the format: `.mp4` for h264, or
+    /// `.webp` for an animated WebP — 24-bit colour and real alpha, which is
+    /// what keeps gradients and soft shadows intact, and what embeds inline
+    /// in markdown. Required unless `validateOnly` is true.
     #[serde(default)]
     pub out: Option<String>,
 
@@ -60,13 +63,17 @@ pub struct RenderDocumentParams {
 pub fn success(outcome: &RenderOutcome, previews: Vec<String>) -> CallToolResult {
     let summary = match &outcome.out {
         Some(path) => format!(
-            "wrote {} ({}x{}, {} frames at {} fps, {:.3}s)",
+            "wrote {} ({}x{}, {} frames at {} fps, {:.3}s{})",
             path,
             outcome.width,
             outcome.height,
             outcome.frame_count,
             outcome.fps,
-            outcome.duration_seconds
+            outcome.duration_seconds,
+            match outcome.bytes {
+                Some(b) => format!(", {:.1} MB", b as f64 / 1_048_576.0),
+                None => String::new(),
+            }
         ),
         None => format!(
             "document is valid: {}x{}, {} frames at {} fps ({:.3}s)",
@@ -361,7 +368,10 @@ pub struct RenderAsciicastParams {
     /// Path to an asciicast v2 `.cast` file.
     pub cast_path: String,
 
-    /// Output `.mp4` path. Required unless `validateOnly` is true.
+    /// Output path. The extension chooses the format: `.mp4` for h264, or
+    /// `.webp` for an animated WebP — 24-bit colour and real alpha, which is
+    /// what keeps gradients and soft shadows intact, and what embeds inline
+    /// in markdown. Required unless `validateOnly` is true.
     #[serde(default)]
     pub out: Option<String>,
 
@@ -435,7 +445,10 @@ pub struct RenderStoryboardParams {
     /// Ordered frames. Must not be empty, and at most 10000 long.
     pub frames: Vec<StoryboardFrameParams>,
 
-    /// Output `.mp4` path. Required unless `validateOnly` is true.
+    /// Output path. The extension chooses the format: `.mp4` for h264, or
+    /// `.webp` for an animated WebP — 24-bit colour and real alpha, which is
+    /// what keeps gradients and soft shadows intact, and what embeds inline
+    /// in markdown. Required unless `validateOnly` is true.
     #[serde(default)]
     pub out: Option<String>,
 

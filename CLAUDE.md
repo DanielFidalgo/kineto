@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **305 tests**.
+   output. Workspace suite is **308 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -100,6 +100,16 @@ carries `image`, `tempfile`, `base64`, and a `sha2` dev-dep).
   promise that OOMs at ~300. Eviction cannot affect pixels — decode is pure
   in the staged bytes — and the unchanged goldens plus 20/20 parity are the
   proof.
+- **Animated WebP output was added after v1** (2026-08-28): the output
+  extension chooses the format (`.mp4` h264 | `.webp` animated), validated
+  *before* rendering rather than after; anything else is an error rather than
+  a silent h264 stream in a mis-named container. **Choose by length**:
+  animated WebP has no inter-frame prediction, so it costs ~280 KB/s at 720p,
+  ~28x h264, and that is structural — q=55 still measured 1.1 MB against
+  1.5 MB at q=85, and the presets spanned 1462-1578 KB. Quality stays high
+  (`q:v 85`, `preset picture`) because banding gradients and shadows is
+  exactly what WebP was chosen over GIF to avoid. `render_to_mp4` is now
+  `render_to_file`, and `RenderOutcome` reports `bytes`.
 - **Gradients were added after v1** (2026-08-28): `fill` on `rect` and
   `path` is now `Paint` — an *untagged* union of a colour string and a
   gradient object, so every gradient-free document serialises byte-identically

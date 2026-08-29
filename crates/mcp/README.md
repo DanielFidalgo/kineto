@@ -12,6 +12,32 @@ is no HTTP transport). It exposes five tools — `render_document`,
 `render_storyboard` — plus read-only resources for the document JSON Schema
 and the golden example corpus.
 
+## Output formats
+
+The output path's extension chooses the format. An unrecognised extension is
+an error, checked *before* any frame is rendered rather than after.
+
+| extension | codec | when |
+|---|---|---|
+| `.mp4` | h264 | anything longer than a few seconds; universal, but needs a player or an upload to embed |
+| `.webp` | animated WebP | short loops embedded inline in markdown; 24-bit colour and real alpha |
+
+**Choose by length.** Animated WebP has no inter-frame prediction — every
+frame is essentially a standalone VP8 image — so its size is structural, not a
+tuning problem. Measured on a 5.5 s 720p clip: **~280 KB per second, about
+28x h264**, and quality barely moves it (q=55 still produced 1.1 MB against
+1.5 MB at q=85; the content presets spanned only 1462–1578 KB). A few seconds
+of WebP is a README loop. A minute of it is ~17 MB.
+
+Quality is therefore kept high (`q:v 85`, `preset picture`) rather than traded
+for a saving that is not available — gradients and soft shadows are exactly
+what a low setting bands, and they are the reason to pick WebP over GIF in the
+first place. `-loop 0` is set explicitly: ffmpeg's WebP muxer defaults to
+playing once and stopping on the last frame.
+
+The render result reports the file size, because choosing between the two is a
+size decision and a caller cannot make it without the number.
+
 ## Prerequisite: ffmpeg
 
 Every *render* tool shells out to `ffmpeg` to mux the rendered frame sequence

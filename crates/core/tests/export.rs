@@ -169,3 +169,70 @@ fn mux_with_ffmpeg_creates_mp4_when_available() {
         "MP4 file should have ftyp signature at offset 4"
     );
 }
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn format_is_chosen_from_the_output_extension() {
+    use kineto_core::export::Format;
+    use std::path::Path;
+    assert_eq!(Format::from_path(Path::new("a/b.mp4")), Some(Format::Mp4));
+    assert_eq!(Format::from_path(Path::new("a/b.webp")), Some(Format::WebP));
+    // Case-insensitive, because a caller naming a file will not think about it.
+    assert_eq!(Format::from_path(Path::new("A.WEBP")), Some(Format::WebP));
+    // Unknown is None rather than a default: silently writing an h264 stream
+    // into a container the name did not imply is worse than refusing.
+    assert_eq!(Format::from_path(Path::new("a/b.gif")), None);
+    assert_eq!(Format::from_path(Path::new("noext")), None);
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn an_unsupported_extension_is_an_error_not_a_silent_mp4() {
+    if !kineto_core::export::ffmpeg_available() {
+        eprintln!("skipping: ffmpeg not available");
+        return;
+    }
+    let tempdir = tempfile::tempdir().unwrap();
+    let frames_dir = tempdir.path().join("frames");
+    std::fs::create_dir(&frames_dir).unwrap();
+    let out = tempdir.path().join("out.gif");
+    assert!(kineto_core::export::mux_with_ffmpeg(&frames_dir, 30, &out).is_err());
+}
+
+#[test]
+#[cfg(not(target_arch = "wasm32"))]
+fn mux_with_ffmpeg_creates_an_animated_webp_when_available() {
+    if !kineto_core::export::ffmpeg_available() {
+        eprintln!("skipping webp mux test: ffmpeg not available");
+        return;
+    }
+
+    let doc = crossfade_doc();
+    let mut engine = Engine::new(doc, AssetStore::new()).unwrap();
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let frames_dir = tempdir.path().join("frames");
+    std::fs::create_dir(&frames_dir).unwrap();
+    let count = kineto_core::export::export_frames(&mut engine, 30, &frames_dir).unwrap();
+    assert!(count > 1, "an animation needs more than one frame");
+
+    let out_path = tempdir.path().join("out.webp");
+    let muxed = kineto_core::export::mux_with_ffmpeg(&frames_dir, 30, &out_path).unwrap();
+    assert!(muxed, "ffmpeg reported failure encoding webp");
+    assert!(out_path.exists(), "output WebP file should exist");
+
+    let data = std::fs::read(&out_path).expect("should be able to read WebP file");
+    assert!(data.len() >= 16, "WebP file should be at least 16 bytes");
+    // RIFF container with a WEBP fourcc.
+    assert_eq!(&data[0..4], b"RIFF", "missing RIFF header");
+    assert_eq!(&data[8..12], b"WEBP", "missing WEBP fourcc");
+    // ANIM/ANMF chunks are what make it an *animated* WebP rather than a
+    // still of the first frame — which is exactly what a wrong encoder or a
+    // single-frame input would silently produce.
+    let has_anim = data.windows(4).any(|w| w == b"ANIM");
+    let has_anmf = data.windows(4).any(|w| w == b"ANMF");
+    assert!(
+        has_anim && has_anmf,
+        "WebP is not animated: no ANIM/ANMF chunk"
+    );
+}
