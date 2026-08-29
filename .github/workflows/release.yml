@@ -317,11 +317,26 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          # A bare npm 403 does not say which of several very different things
+          # went wrong, and the preflight cannot tell them apart either -- a
+          # token can authenticate perfectly and still have no authority here.
+          publish() {
+            if ! npm publish "$1"; then
+              echo "::error::publish of $1 failed. A 403 'you may not perform \
+          that action with these credentials' means the token authenticated but \
+          cannot create this package. These names are UNSCOPED, so a token \
+          limited to an organisation does not cover them -- an org-scoped token \
+          only grants @org/*. It also cannot be limited to selected packages on \
+          a first release, because the packages do not exist yet. Use read+write \
+          on all packages once, then narrow it to the kineto-mcp* names."
+              exit 1
+            fi
+          }
           for d in dist/npm/*/; do
             echo "::group::$d"
-            npm publish "./$d"
+            publish "./$d"
             echo "::endgroup::"
           done
           # Last: a wrapper on the registry whose dependencies are not yet
           # there is an install that fails for whoever hits that window.
-          npm publish ./packages/mcp
+          publish ./packages/mcp
