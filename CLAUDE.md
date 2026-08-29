@@ -248,6 +248,16 @@ an installed std, so a four-wide matrix was exercising one path.
 - Node resolves a module's realpath, so under `npm link`, workspaces or pnpm
   the shim's `import.meta.url` points outside the install tree. It falls back
   to `process.argv[1]` then `cwd`. A registry install needs none of that.
+- **`packages/mcp` is deliberately NOT an npm workspace member** (the root
+  `workspaces` list names `packages/sdk` and `packages/demo-tape`
+  explicitly, not `packages/*`). Its `optionalDependencies` are its own
+  published platform packages, so as a member every version bump would pin
+  artifacts that do not exist until that release publishes, and `npm ci`
+  would fail on the release commit itself — a circular dependency between the
+  repo and its own release. It is a distribution artifact, not a development
+  package: no dependencies, no build step, nothing to install. CI runs its
+  tests directly with `node --test packages/mcp/test/*.test.mjs`. **Do not
+  "tidy" the workspaces list back to `packages/*`.**
 - **The npm token must be able to *create* packages, not just update them.**
   A granular token restricted to selected packages cannot publish a name that
   does not exist yet, which is every name on a first release — it fails with a

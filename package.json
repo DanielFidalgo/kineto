@@ -1,6 +1,11 @@
 {
   "name": "kineto-workspace",
   "private": true,
-  "workspaces": ["packages/*"],
-  "engines": { "node": ">=22" }
+  "workspaces": [
+    "packages/sdk",
+    "packages/demo-tape"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
 }

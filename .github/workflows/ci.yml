@@ -59,6 +59,12 @@ jobs:
       - run: npm ci
       - run: npm -ws run typecheck --if-present
       - run: npm -ws run test --if-present
+      # kineto-mcp is deliberately not a workspace member: its
+      # optionalDependencies are its own published platform packages, so as a
+      # member every version bump would pin artifacts that do not exist until
+      # that release publishes, and `npm ci` would fail on the release commit.
+      # It has no dependencies of its own, so it needs no install -- only this.
+      - run: node --test packages/mcp/test/*.test.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm -w @kineto/sdk run test:browser
       - run: npm -w @kineto/demo-tape run test:browser
