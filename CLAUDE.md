@@ -248,6 +248,16 @@ an installed std, so a four-wide matrix was exercising one path.
 - Node resolves a module's realpath, so under `npm link`, workspaces or pnpm
   the shim's `import.meta.url` points outside the install tree. It falls back
   to `process.argv[1]` then `cwd`. A registry install needs none of that.
+- **The npm token must be able to *create* packages, not just update them.**
+  A granular token restricted to selected packages cannot publish a name that
+  does not exist yet, which is every name on a first release — it fails with a
+  bare `403 ... you may not perform that action with these credentials`, and
+  `npm publish --dry-run` never catches it because a dry run does not
+  authenticate at all. Publish first with a token covering all packages (or a
+  classic **Automation** token, which also bypasses 2FA), then narrow it to
+  the six `kineto-mcp*` names afterwards. The job's `Check the token` step
+  prints the authenticating account, which is the thing worth knowing when
+  more than one npm identity exists.
 - **Provenance (`npm publish --provenance`) is not enabled yet** because it
   requires a `repository` field, which is being held until the repo's
   permanent home is settled. It is the strongest available answer to "prove

@@ -267,6 +267,25 @@ jobs:
           # NODE_AUTH_TOKEN, so no credential is ever committed or persisted.
           registry-url: "https://registry.npmjs.org"
 
+      # The dry run below never authenticates, so it cannot tell a good token
+      # from a useless one -- the first release failed with a bare 403 partway
+      # through publishing. This asks the registry who we are before building
+      # anything, and prints the account, which is the fact you actually need
+      # when more than one npm identity is in play.
+      - name: Check the token
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/whoami.json -w '%{http_code}' \
+            -H "Authorization: Bearer $NODE_AUTH_TOKEN" \
+            https://registry.npmjs.org/-/whoami)
+          if [ "$code" != "200" ]; then
+            echo "::error::NPM_TOKEN did not authenticate (HTTP $code)."
+            exit 1
+          fi
+          echo "publishing as: $(jq -r .username /tmp/whoami.json)"
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
