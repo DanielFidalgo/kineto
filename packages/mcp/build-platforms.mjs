@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the four @kineto/mcp-<platform>-<arch> packages from release archives.
+// Builds the four kineto-mcp-<platform>-<arch> packages from release archives.
 //
 // Deliberately repackages the *same* tarballs the release publishes rather
 // than compiling again. A second build could differ from the one users
@@ -47,7 +47,7 @@ for (const t of TARGETS) {
   mkdirSync(scratch, { recursive: true });
   execFileSync("tar", ["xzf", archive, "-C", scratch]);
 
-  const name = `@kineto/mcp-${t.npm}`;
+  const name = `kineto-mcp-${t.npm}`;
   const dir = join(out, `mcp-${t.npm}`);
   mkdirSync(join(dir, "bin"), { recursive: true });
 
@@ -77,7 +77,7 @@ for (const t of TARGETS) {
         cpu: [t.cpu],
         files: ["bin/kineto-mcp", "LICENSE-MIT", "LICENSE-APACHE"],
         scripts: { prepublishOnly: "node guard-publish.mjs" },
-        publishConfig: { access: "public", registry: "https://registry.npmjs.org/" },
+        publishConfig: { registry: "https://registry.npmjs.org/" },
       },
       null,
       2,
@@ -89,7 +89,7 @@ for (const t of TARGETS) {
     `# ${name}\n\n` +
       `The \`kineto-mcp\` binary for ${t.os} ${t.cpu}, built from \`${t.rust}\`.\n\n` +
       `You do not install this directly. It is an optional dependency of\n` +
-      `[\`@kineto/mcp\`](https://www.npmjs.com/package/@kineto/mcp), which npm\n` +
+      `[\`kineto-mcp\`](https://www.npmjs.com/package/kineto-mcp), which npm\n` +
       `selects by platform.\n`,
   );
 

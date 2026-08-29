@@ -1,4 +1,4 @@
-# @kineto/mcp
+# kineto-mcp
 
 **Give your coding agent a camera.**
 
@@ -12,7 +12,7 @@ correct video on its own.
 ## Use it
 
 ```sh
-claude mcp add --scope user kineto npx @kineto/mcp
+claude mcp add --scope user kineto npx kineto-mcp
 ```
 
 That is the whole install — `npx` fetches the binary for your platform on

@@ -1,6 +1,6 @@
 // Tests for the npm wrapper.
 //
-// The shim sits between `npx @kineto/mcp` and a binary, on the stdio channel
+// The shim sits between `npx kineto-mcp` and a binary, on the stdio channel
 // an MCP client speaks JSON-RPC over. Its failure modes are quiet ones: a
 // platform that resolves to nothing, or a stray byte on stdout that corrupts
 // the protocol for a client that never sees an error message.
@@ -42,7 +42,7 @@ test("the platforms npm ships are exactly the ones the release builds", () => {
 });
 
 test("a missing platform package fails loudly, and only on stderr", () => {
-  // Run from the repo, where no @kineto/mcp-* package is installed -- the
+  // Run from the repo, where no kineto-mcp-* package is installed -- the
   // same state a user reaches with `--omit=optional`.
   const r = spawnSync(process.execPath, [SHIM], { encoding: "utf8", input: "" });
 
@@ -53,6 +53,6 @@ test("a missing platform package fails loudly, and only on stderr", () => {
   assert.equal(r.stdout, "", `wrote to stdout: ${JSON.stringify(r.stdout)}`);
 
   // Naming the package is what makes the failure actionable.
-  assert.match(r.stderr, /@kineto\/mcp-/);
+  assert.match(r.stderr, /kineto-mcp-/);
   assert.match(r.stderr, /optional/i);
 });

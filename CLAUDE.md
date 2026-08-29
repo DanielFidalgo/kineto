@@ -12,7 +12,12 @@ Positioning: *"video as a build artifact."*
 **The name is Kineto** (from *kinetic* / Kinetoscope), settled 2026-08-27.
 It is no longer a codename — use it in code, docs, and package names.
 Availability was verified before the rename: `kineto` is free on crates.io,
-free as a bare npm package, and the `@kineto` npm scope is unclaimed. (The
+free as a bare npm package. **The `@kineto` npm scope was NOT available**
+when it was claimed on 2026-08-29 — the earlier note here said otherwise, and
+that check was wrong or went stale; npm returns 403 to scripted org lookups,
+so the only reliable test is trying to create it. npm packages are therefore
+**unscoped**: `kineto-mcp` plus `kineto-mcp-<platform>`, all verified free,
+which also matches the binary and the MCP serverInfo name. (The
 previous codename `zoetrope` was already taken on crates.io; `kinora` was
 rejected because the `@kinora` npm scope is owned by an active unrelated
 project. Re-verify all three namespaces before ever renaming again.)
@@ -217,7 +222,7 @@ an installed std, so a four-wide matrix was exercising one path.
   binary. `crates/mcp/tests/manifest.rs` fails if those versions drift from
   `workspace.package.version` — cargo catches a major/minor mismatch itself,
   but `^0.1.0` matches `0.1.1`, so a patch bump slips through unaided.
-- **npm distribution (2026-08-29, built; not yet published):** `@kineto/mcp`
+- **npm distribution (2026-08-29, built; not yet published):** `kineto-mcp`
   is a thin wrapper (`packages/mcp`) whose four `optionalDependencies` carry
   the prebuilt `kineto-mcp` binary; npm selects one via `os`/`cpu`. The
   esbuild pattern, chosen over a postinstall download because postinstall

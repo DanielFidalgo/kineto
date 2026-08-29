@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sets @kineto/mcp's version and its platform pins to the release version.
+// Sets kineto-mcp's version and its platform pins to the release version.
 //
 // Called by `just release`. The wrapper pins each platform package exactly, so
 // all five numbers move together or npm resolves a package that was never
@@ -20,8 +20,8 @@ pkg.version = version;
 for (const name of Object.keys(pkg.optionalDependencies ?? {})) {
   // Only our own platform packages are pinned to the release version; a
   // third-party dependency added later must not be rewritten.
-  if (name.startsWith("@kineto/")) pkg.optionalDependencies[name] = version;
+  if (name.startsWith("kineto-mcp-")) pkg.optionalDependencies[name] = version;
 }
 
 writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
-process.stdout.write(`@kineto/mcp -> ${version}\n`);
+process.stdout.write(`kineto-mcp -> ${version}\n`);

@@ -1,5 +1,9 @@
 // The supported platforms, in one place.
 //
+// Unscoped: the npm organisation `kineto` was not available, and every name
+// here is. It also lines the package up with the binary and the MCP
+// serverInfo identity, which are both already `kineto-mcp`.
+//
 // The shim maps a running process to a package name; the build script maps a
 // rust target to that same package. Those two lists silently disagreeing is a
 // real failure mode -- add a platform to the builder alone and npm publishes a
@@ -16,5 +20,5 @@ export const TARGETS = [
 
 /// `process.platform process.arch` -> package name, as the shim needs it.
 export const PACKAGES = Object.fromEntries(
-  TARGETS.map((t) => [`${t.os} ${t.cpu}`, `@kineto/mcp-${t.npm}`]),
+  TARGETS.map((t) => [`${t.os} ${t.cpu}`, `kineto-mcp-${t.npm}`]),
 );
