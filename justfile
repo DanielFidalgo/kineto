@@ -6,6 +6,7 @@
 # Honours CARGO_TARGET_DIR, which is easy to have set and easy to forget.
 cargo_target := env_var_or_default("CARGO_TARGET_DIR", justfile_directory() / "target")
 built_mcp := cargo_target / "release/kineto-mcp"
+kineto := cargo_target / "release/kineto"
 install_dir := env_var("HOME") / ".local/bin"
 
 default:
@@ -13,15 +14,18 @@ default:
 
 # ---------------------------------------------------------------- the MCP ---
 
-# Build the MCP server (release).
-build-mcp:
-    cargo build -p kineto-mcp --release
+# Build the release binaries: the MCP server and the `kineto` CLI.
+build:
+    cargo build -p kineto-mcp --release --bins
+
+# Alias kept because the README's manual install mentions it.
+build-mcp: build
 
 # Build it, copy it somewhere stable, and register it with Claude Code.
 #
 # Copied out of the cargo target directory on purpose: `cargo clean` would
 # otherwise delete a binary every other project's MCP config points at.
-install: build-mcp
+install: build
     mkdir -p "{{install_dir}}"
     cp "{{built_mcp}}" "{{install_dir}}/kineto-mcp"
     claude mcp add --scope user kineto "{{install_dir}}/kineto-mcp"
@@ -32,7 +36,7 @@ uninstall:
     claude mcp remove --scope user kineto
 
 # Print the path to give any other MCP client.
-mcp-path: build-mcp
+mcp-path: build
     @echo "{{built_mcp}}"
 
 # ------------------------------------------------------------------ checks ---
@@ -93,10 +97,24 @@ demo: wasm
 cast input dir:
     cargo run -q -p kineto-asciicast --bin kineto-cast -- {{input}} -o {{dir}}
 
-# Rebuild the README hero video and the inline loop from source.
-media: build-mcp
-    python3 docs/media/build-hero.py
-    python3 docs/media/build-hero.py --loop
+# Rebuild the README video and the inline loop from their documents.
+#
+# docs/media/hero.json IS the source — the thing this project claims you
+# author. Check it, then render it. That is the entire pipeline, and it is
+# the same one an agent drives through the MCP server.
+#
+# The two ffmpeg calls are honest workarounds rather than steps Kineto needs:
+# rendering happens at the document's own resolution, so scaling to the width
+# a README displays is external, and the engine can render any frame but
+# cannot write a single one to a file. Both are gaps worth closing.
+media: build
+    "{{kineto}}" docs/media/hero.json --check
+    "{{kineto}}" docs/media/hero.json -o docs/media/kineto-hero.mp4
+    "{{kineto}}" docs/media/hero-loop.json -o out/loop.mp4
+    ffmpeg -v error -y -i out/loop.mp4 -vf scale=960:-2 -c:v libwebp -lossless 0 \
+        -q:v 82 -compression_level 4 -preset picture -loop 0 docs/media/kineto-loop.webp
+    ffmpeg -v error -y -ss 1.6 -i docs/media/kineto-hero.mp4 -frames:v 1 \
+        -vf scale=960:-2 docs/media/kineto-poster.png
     @echo "wrote docs/media/"
 
 # --------------------------------------------------------------------- dev ---

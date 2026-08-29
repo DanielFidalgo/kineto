@@ -41,7 +41,7 @@ build depends on the directory name.
    read-only resources for the document JSON Schema and the six corpus
    examples. Render results carry the MP4 path, structured metadata, and
    sampled frames as inline images so a calling model can check its own
-   output. Workspace suite is **308 tests**.
+   output. Workspace suite is **314 tests**.
 4. **NEXT GATE (needs the user): no git remote exists.** Create the GitHub
    repo, push, and watch one full CI run (`rust`, `wasm-parity`, `web`).
    Parity has never executed on x86_64; if it diverges there, the
@@ -60,6 +60,12 @@ text bbox; canonical float byte-identity holds for integral |v|<2^53 or
 magnitude ~[1e-5, 1e15] (`scalar.rs`/`canonical.ts`); nothing in CI asserts
 the shipped wasm is SIMD-built (a stray `RUSTFLAGS` would silently drop it,
 costing ~4×).
+
+**Engine gaps the README video works around:** rendering happens at the
+document's own resolution — there is no output scale, so `just media`
+downscales the README loop with ffmpeg; and the engine can render any frame
+but cannot write a single one to a file, so the poster is extracted with
+ffmpeg too. Both are visible in the justfile rather than hidden.
 
 **MCP server:** the validate/render-mp4/preview tail is duplicated verbatim
 across the three *render* `_impl` functions. `preview_document` (added

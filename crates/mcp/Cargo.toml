@@ -9,6 +9,8 @@ name = "kineto-mcp"
 path = "src/main.rs"
 
 [dependencies]
+# For the  CLI bin only; the server itself takes no arguments.
+pico-args = "0.5.0"
 # For element_matrix: off-canvas detection has to account for rotation.
 tiny-skia = "0.12.0"
 # default-features off: upstream defaults would be acceptable, but pinning the

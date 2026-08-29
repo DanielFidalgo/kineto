@@ -1,0 +1,163 @@
+{
+  "v": 1,
+  "timebase": 705600000,
+  "defaultFps": 30,
+  "size": { "w": 1280, "h": 720 },
+  "bg": "#0B1116",
+  "assets": {
+    "inter": { "type": "font", "src": "kineto:inter" },
+    "mono": { "type": "font", "src": "kineto:jetbrains-mono" }
+  },
+  "scenes": [
+    {
+      "id": "open",
+      "duration": 2914128000,
+      "elements": [
+        {
+          "type": "path",
+          "closed": true,
+          "points": [[0, 0], [1280, 0], [1280, 720], [0, 720]],
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 1],
+            "stops": [
+              { "at": 0, "color": "#132433" },
+              { "at": 1, "color": "#0B1116" }
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "text": "Kineto",
+          "font": "inter",
+          "sizePx": 92,
+          "color": "#F4F7F9",
+          "pos": [110, 262],
+          "animations": [
+            {
+              "prop": "opacity",
+              "keys": [
+                { "t": 0, "v": 0.0 },
+                { "t": 268128000, "v": 1.0, "ease": "outCubic" },
+                { "t": 2462544000, "v": 1.0 },
+                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
+              ]
+            },
+            {
+              "prop": "translate",
+              "keys": [
+                { "t": 0, "v": [0, 26] },
+                { "t": 84672000, "v": [0, 26] },
+                { "t": 522144000, "v": [0, 0], "ease": "outBack" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "video as a build artifact",
+          "font": "mono",
+          "sizePx": 25,
+          "color": "#8FA3B0",
+          "pos": [116, 392],
+          "animations": [
+            {
+              "prop": "opacity",
+              "keys": [
+                { "t": 0, "v": 0.0 },
+                { "t": 536256000, "v": 1.0, "ease": "outCubic" },
+                { "t": 2462544000, "v": 1.0 },
+                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "path",
+          "points": [[112, 462], [352, 462]],
+          "stroke": "#FF9F45",
+          "strokeWidth": 6,
+          "cap": "round",
+          "animations": [
+            {
+              "prop": "translate",
+              "keys": [
+                { "t": 0, "v": [-300, 0] },
+                { "t": 578592000, "v": [0, 0], "ease": "outCubic" }
+              ]
+            },
+            {
+              "prop": "opacity",
+              "keys": [
+                { "t": 0, "v": 1.0 },
+                { "t": 2462544000, "v": 1.0 },
+                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "claim",
+      "duration": 2914128000,
+      "elements": [
+        {
+          "type": "path",
+          "closed": true,
+          "points": [[0, 0], [1280, 0], [1280, 720], [0, 720]],
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 1],
+            "stops": [
+              { "at": 0, "color": "#0B1116" },
+              { "at": 1, "color": "#101d27" }
+            ]
+          }
+        },
+        {
+          "type": "text",
+          "text": "You write a document.\nIt compiles to a video.",
+          "font": "inter",
+          "sizePx": 62,
+          "color": "#F4F7F9",
+          "pos": [110, 258],
+          "animations": [
+            {
+              "prop": "opacity",
+              "keys": [
+                { "t": 0, "v": 0.0 },
+                { "t": 296352000, "v": 1.0, "ease": "outCubic" },
+                { "t": 2462544000, "v": 1.0 },
+                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
+              ]
+            }
+          ],
+          "maxW": 1060
+        },
+        {
+          "type": "text",
+          "text": "the same way source compiles to a binary",
+          "font": "mono",
+          "sizePx": 21,
+          "color": "#FF9F45",
+          "pos": [116, 434],
+          "animations": [
+            {
+              "prop": "opacity",
+              "keys": [
+                { "t": 0, "v": 0.0 },
+                { "t": 635040000, "v": 1.0, "ease": "outCubic" },
+                { "t": 2462544000, "v": 1.0 },
+                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
+              ]
+            }
+          ]
+        }
+      ],
+      "transition": { "type": "crossfade", "duration": 183456000 }
+    }
+  ]
+}

@@ -105,6 +105,7 @@ via WebCodecs, at $0 server cost.
 
 ```sh
 just            # list every recipe
+just build      # the `kineto` CLI and the MCP server
 just check      # fmt, clippy, tests, and the parity gate
 just install    # build + register the MCP server
 just demo       # the browser demo on localhost:5200
@@ -112,13 +113,30 @@ just demo       # the browser demo on localhost:5200
 
 ### Without an agent
 
+There is a CLI. Write a document, compile it:
+
+```sh
+just build
+kineto scene.json --check              # report problems, render nothing
+kineto scene.json -o scene.mp4         # or scene.webp
+```
+
+`--check` is worth using before every render: it reports text invisible
+against its background, elements animated off the canvas, text past the edge,
+and scenes too short to read — and exits nonzero on anything that is actually
+wrong. It costs no pixels.
+
+The video at the top of this page is built exactly that way. Its document is
+committed at [`docs/media/hero.json`](docs/media/hero.json), and `just media`
+rebuilds it — check, then render. Nothing else.
+
 Turn an [asciinema](https://asciinema.org/) recording into a video, headlessly:
 
 ```sh
 just cast adapters/asciicast/tests/fixture.cast out/demo
 ```
 
-That writes a PNG frame per frame into `out/demo/`, then muxes them to
+That writes a PNG per frame into `out/demo/`, then muxes them to
 `out/demo/out.mp4` if ffmpeg is present — and leaves the frames behind if it
 isn't, which is the deterministic artifact anyway.
 
@@ -194,6 +212,8 @@ crates/core        the engine — document, timeline, raster, export
 crates/wasm        WebAssembly bindings
 crates/mcp         the MCP server
 adapters/asciicast .cast → document, and the kineto-cast CLI
+                   (the `kineto` CLI lives in crates/mcp, beside the document
+                   loading and encoding it reuses)
 packages/sdk       TypeScript authoring + browser export
 packages/demo-tape the flagship browser demo
 ```
