@@ -139,10 +139,24 @@ release version:
         echo "error: tag v{{version}} already exists" >&2; exit 1
     fi
     just check
-    sed -i.bak -E '0,/^version = ".*"$/s//version = "{{version}}"/' Cargo.toml && rm Cargo.toml.bak
+    # awk, not `sed -i -E '0,/re/'`: that address form is a GNU extension, and
+    # BSD sed on macOS exits 0 having changed nothing — which would tag a
+    # version the manifest does not carry. CI would refuse it, but only after
+    # a push.
+    awk -v v='{{version}}' 'BEGIN{d=0} /^version = "/ && !d {sub(/"[^"]*"/, "\"" v "\""); d=1} {print}' \
+        Cargo.toml > Cargo.toml.new
+    grep -q '^version = "{{version}}"' Cargo.toml.new || { rm -f Cargo.toml.new; echo "error: version rewrite did not take" >&2; exit 1; }
+    mv Cargo.toml.new Cargo.toml
     cargo update -w --quiet          # refresh Cargo.lock's own version entries
     git add Cargo.toml Cargo.lock
-    git commit -m "chore: release v{{version}}"
+    # Re-releasing the version already in the manifest is the normal case for
+    # the very first tag, and produces no diff. `git commit` would exit 1 and
+    # take the tag down with it.
+    if git diff --cached --quiet; then
+        echo "manifest already at {{version}} — tagging this commit"
+    else
+        git commit -m "chore: release v{{version}}"
+    fi
     git tag -a "v{{version}}" -m "v{{version}}"
     @echo "tagged v{{version}} — push with: git push && git push --tags"
 
