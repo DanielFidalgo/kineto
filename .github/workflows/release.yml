@@ -210,10 +210,38 @@ jobs:
       #
       # --exclude is belt-and-braces: `publish = false` already keeps
       # kineto-wasm out, but this is an irreversible operation.
+      # crates.io rejects republishing a version, so without this check a
+      # failure anywhere later in the release -- npm, say -- could only be
+      # retried by burning a new version number. Skipping lets the same tag be
+      # re-run until every registry has it.
+      - id: state
+        name: Already published?
+        run: |
+          set -euo pipefail
+          v="${{ needs.verify.outputs.version }}"
+          # crates.io answers 403 to a request without a descriptive
+          # User-Agent, which would read as "not published" and defeat the
+          # check entirely.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H 'User-Agent: kineto-release (github.com/DanielFidalgo/kineto)' \
+            "https://crates.io/api/v1/crates/kineto/$v")
+          if [ "$code" != "200" ] && [ "$code" != "404" ]; then
+            echo "::error::unexpected $code from crates.io; refusing to guess"
+            exit 1
+          fi
+          if [ "$code" = "200" ]; then
+            echo "kineto $v is already on crates.io; skipping"
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "done=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Dry run
+        if: steps.state.outputs.done == 'false'
         run: cargo publish --workspace --exclude kineto-wasm --dry-run
 
       - name: Publish
+        if: steps.state.outputs.done == 'false'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --workspace --exclude kineto-wasm
@@ -258,8 +286,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          for d in dist/npm/*/; do npm publish --dry-run "$d"; done
-          npm publish --dry-run packages/mcp
+          for d in dist/npm/*/; do npm publish --dry-run "./$d"; done
+          # ./ is load-bearing. `npm publish packages/mcp` reads a bare
+          # two-segment argument as a GitHub shorthand and tries to clone
+          # github.com/packages/mcp; the platform dirs escaped it only because
+          # they have three segments and a trailing slash.
+          npm publish --dry-run ./packages/mcp
 
       - name: Publish
         env:
@@ -268,9 +300,9 @@ jobs:
           set -euo pipefail
           for d in dist/npm/*/; do
             echo "::group::$d"
-            npm publish "$d"
+            npm publish "./$d"
             echo "::endgroup::"
           done
           # Last: a wrapper on the registry whose dependencies are not yet
           # there is an install that fails for whoever hits that window.
-          npm publish packages/mcp
+          npm publish ./packages/mcp
