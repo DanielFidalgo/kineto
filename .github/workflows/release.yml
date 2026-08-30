@@ -243,7 +243,10 @@ jobs:
           video="${base}/kineto-v${VERSION}-release.mp4"
           size=$(du -h "dist/kineto-v${VERSION}-release.mp4" | cut -f1 | tr -d ' ')
           # Pages can play it; a release asset can only be downloaded.
-          owner="${GITHUB_REPOSITORY%%/*}"
+          # Lowercased: hostnames are case-insensitive so either resolves,
+          # but GITHUB_REPOSITORY carries the owner's display casing and a
+          # mixed-case host in published notes reads like a typo.
+          owner="$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
           name="${GITHUB_REPOSITORY##*/}"
           watch="https://${owner}.github.io/${name}/releases/${TAG}/"
 

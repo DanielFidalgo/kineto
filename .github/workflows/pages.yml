@@ -49,20 +49,38 @@ jobs:
       - run: npm ci
       - run: npm -w @kineto/playground run build
 
-      # A watchable page per release. GitHub serves release assets as
-      # downloads, so a video can only be linked from a release page, never
-      # played on one; Pages serves the same bytes with real content types.
-      # Non-fatal by design — the playground is the point of the site.
-      - name: Build the release pages
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node packages/playground/scripts/build-release-pages.mjs
-
       # The same suite CI runs, against the built site rather than the dev
       # server — it exports a real MP4 and checks the ftyp header. Deploying a
       # demo whose one button does nothing would be worse than not deploying.
       - run: npx playwright install --with-deps chromium
       - run: npm -w @kineto/playground run test:browser:dist
+
+      # AFTER every build. `vite build` empties dist, and test:browser:dist
+      # runs one — so generating these earlier wrote them and then deleted
+      # them, uploading a site with no release pages at all. Nothing below
+      # this step may rebuild.
+      #
+      # GitHub serves release assets as downloads, so a video can only be
+      # linked from a release page, never played on one; Pages serves the same
+      # bytes with real content types.
+      - name: Build the release pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node packages/playground/scripts/build-release-pages.mjs
+
+      # The generator is deliberately non-fatal — a rate limit must not fail a
+      # deploy whose point is the playground — so nothing else would notice an
+      # empty upload. This says out loud what is about to be published.
+      - name: Show what is being deployed
+        run: |
+          set -euo pipefail
+          test -f packages/playground/dist/index.html \
+            || { echo "::error::the playground itself is missing from dist"; exit 1; }
+          if [ -d packages/playground/dist/releases ]; then
+            echo "release pages: $(ls packages/playground/dist/releases | tr '\n' ' ')"
+          else
+            echo "::warning::no release pages in this deploy"
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
