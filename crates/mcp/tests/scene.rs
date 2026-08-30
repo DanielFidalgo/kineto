@@ -185,3 +185,60 @@ fn a_kind_missing_its_content_says_what_it_needs() {
     let err = scene::build_document("midnight", 1920, 1080, &[empty]).expect_err("must fail");
     assert!(err.to_string().contains("text"), "{err}");
 }
+
+#[test]
+fn the_themed_example_shows_reveal_rather_than_the_keyframes_it_expands_to() {
+    // The whole reason this example is served as source. Every other example
+    // is a typed Document and can only show expanded tracks, which teaches a
+    // reader the expensive way to write motion.
+    let src =
+        kineto::resources::read(kineto::resources::THEMED_URI).expect("themed example is readable");
+    assert!(
+        src.contains("\"reveal\""),
+        "no reveal sugar in the themed example"
+    );
+    assert!(
+        !src.contains("\"animations\""),
+        "the themed example was expanded before being served"
+    );
+}
+
+#[test]
+fn the_themed_example_is_listed_first() {
+    // Whichever example a caller reads first sets the habit it keeps.
+    let uris: Vec<String> = kineto::resources::list()
+        .into_iter()
+        .map(|r| r.uri.to_string())
+        .collect();
+    let themed = uris
+        .iter()
+        .position(|u| u == kineto::resources::THEMED_URI)
+        .expect("themed is listed");
+    let other = uris
+        .iter()
+        .position(|u| u.starts_with("kineto://example/") && u != kineto::resources::THEMED_URI)
+        .expect("other examples are listed");
+    assert!(themed < other, "themed is not listed before the others");
+}
+
+#[test]
+fn the_themed_example_passes_our_own_linter() {
+    let src = kineto::resources::read(kineto::resources::THEMED_URI).expect("readable");
+    let doc = load(&src);
+    let mut assets = source::resolve_assets(&doc, std::path::Path::new(".")).expect("assets");
+    assets.prepare(&doc).expect("prepare");
+
+    let mut issues = check::analyze_document(&doc);
+    let starts = kineto_core::timeline::scene_starts(&doc);
+    for (i, sc) in doc.scenes.iter().enumerate() {
+        issues.extend(check::analyze(
+            &doc,
+            &mut assets,
+            starts[i] + sc.duration / 2,
+        ));
+    }
+    assert!(
+        issues.is_empty(),
+        "themed example is not clean: {issues:#?}"
+    );
+}

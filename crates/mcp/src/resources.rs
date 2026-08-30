@@ -12,6 +12,56 @@ const CORPUS_PREFIX: &str = "kineto://corpus/";
 /// URI prefix for the reference documents in `crate::examples`.
 pub const EXAMPLE_PREFIX: &str = "kineto://example/";
 
+/// The one example served as *source* rather than as a canonical document.
+///
+/// The others are typed `Document`s, so they can only ever show expanded
+/// keyframe tracks — which teaches a reader the expensive way to write
+/// motion, the very thing `reveal` exists to replace. This one is the
+/// unexpanded output of `build_scenes`, so `reveal` is visible in it.
+pub const THEMED_URI: &str = "kineto://example/themed";
+
+/// Generated rather than checked in, so it cannot drift from the builders.
+fn themed_source() -> Result<String, crate::error::ToolError> {
+    let scene = |kind: &str, heading: Option<&str>, text: Option<&str>, items: &[&str]| {
+        crate::scene::SceneSpec {
+            kind: kind.to_string(),
+            text: text.map(str::to_string),
+            subtitle: None,
+            heading: heading.map(str::to_string),
+            items: items.iter().map(|s| s.to_string()).collect(),
+            attribution: None,
+            seconds: None,
+        }
+    };
+    crate::scene::build_document(
+        "midnight",
+        1920,
+        1080,
+        &[
+            crate::scene::SceneSpec {
+                kind: "title".into(),
+                text: Some("Video as a build artifact".into()),
+                subtitle: Some("compiled from a document, not recorded".into()),
+                heading: None,
+                items: vec![],
+                attribution: None,
+                seconds: None,
+            },
+            scene(
+                "points",
+                Some("What a themed scene gives you"),
+                None,
+                &[
+                    "sizes and margins derived from the canvas",
+                    "entrances staggered so it reads as sequence",
+                    "a duration long enough to actually read",
+                ],
+            ),
+            scene("code", Some("Ask for it"), None, &["build_scenes"]),
+        ],
+    )
+}
+
 pub fn list() -> Vec<Resource> {
     let mut out = vec![Resource::new(SCHEMA_URI, "document-schema")
         .with_title("Kineto document JSON Schema")
@@ -20,6 +70,23 @@ pub fn list() -> Vec<Resource> {
                  render_document.",
         )
         .with_mime_type("application/json")];
+
+    // First of all: this is the only one showing `reveal` rather than the
+    // keyframes it expands to, and whichever a caller reads first sets the
+    // habit it keeps.
+    out.push(
+        Resource::new(THEMED_URI, "themed")
+            .with_title("Reference document: themed (build_scenes output)")
+            .with_description(
+                "What `build_scenes` produces, shown as source rather than as \
+                 canonical JSON — so the one-line `reveal` entrances are \
+                 visible instead of the keyframe tracks they expand to. Every \
+                 size, position and colour comes from the theme, derived from \
+                 the canvas. Prefer calling `build_scenes` to writing this by \
+                 hand; imitate this shape when you do write it by hand.",
+            )
+            .with_mime_type("application/json"),
+    );
 
     // Listed before the corpus: these are what a caller should imitate, and
     // whichever it reads first sets the habit.
@@ -50,6 +117,9 @@ pub fn list() -> Vec<Resource> {
 pub fn read(uri: &str) -> Option<String> {
     if uri == SCHEMA_URI {
         return Some(DOCUMENT_SCHEMA.to_string());
+    }
+    if uri == THEMED_URI {
+        return themed_source().ok();
     }
     if let Some(name) = uri.strip_prefix(EXAMPLE_PREFIX) {
         return crate::examples::examples()
@@ -363,12 +433,26 @@ mod tests {
             kineto_core::Document::from_json(&text)
                 .unwrap_or_else(|e| panic!("{uri} is not a valid document: {e}"));
         }
-        // Derived rather than a literal: the schema, every reference example
-        // and every corpus entry, so adding either kind cannot silently stop
-        // being advertised.
+        // The themed example is generated rather than being a member of any
+        // collection, so it needs checking by name or nothing would notice it
+        // going missing.
+        let themed = read(THEMED_URI).expect("themed example not readable");
+        kineto_core::Document::from_json(
+            &crate::motion::expand(&themed).expect("themed example expands"),
+        )
+        .expect("themed example is not a valid document");
+
+        // Derived rather than a literal: the schema, the themed example, every
+        // reference example and every corpus entry, so adding any kind cannot
+        // silently stop being advertised.
+        let schema = 1;
+        let themed = 1;
         assert_eq!(
             list().len(),
-            1 + crate::examples::examples().len() + kineto_core::corpus::corpus().len()
+            schema
+                + themed
+                + crate::examples::examples().len()
+                + kineto_core::corpus::corpus().len()
         );
     }
 }
