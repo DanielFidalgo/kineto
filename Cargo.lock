@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "kineto"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64",
  "image",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "kineto-asciicast"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "avt",
  "kineto-core",
@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "kineto-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "cosmic-text",
  "fontdb",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "kineto-wasm"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "kineto-core",
  "wasm-bindgen",
