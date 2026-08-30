@@ -235,6 +235,31 @@ text or no contrast fails the step rather than shipping.
 Kineto uses this on itself — every release page carries a video composed from
 that tag's own commits, rendered by the version being released.
 
+## Release videos from your own git history
+
+The commits already are the release notes, so read those instead of keeping a
+second list that drifts from the first:
+
+```sh
+scripts/changelog-spec.py --title "Acme 2.0" --install "npm i acme" -o spec.json
+kineto --scenes spec.json -o release.mp4
+```
+
+It prefers conventional-commit subjects where a repository uses them, and
+falls back to plain subjects where it doesn't — dropping merges, version bumps
+and reverts either way. In a workflow, after your release is published:
+
+```yaml
+- run: python3 scripts/changelog-spec.py --title "Acme ${{ github.ref_name }}" -o spec.json
+- uses: DanielFidalgo/kineto@v0.1.4
+  with:
+    scenes: spec.json
+    output: dist/release.mp4
+```
+
+Kineto's own release pages are made this way — the video on each one is
+composed from that tag's commits and rendered by the version being released.
+
 ## The document
 
 ```json

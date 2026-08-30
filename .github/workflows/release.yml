@@ -202,7 +202,14 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          python3 scripts/release-spec.py "$VERSION" | tee /tmp/release-spec.json
+          python3 scripts/changelog-spec.py \
+            --title "Kineto ${VERSION}" \
+            --subtitle "video as a build artifact" \
+            --range "$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo)..v${VERSION}" \
+            --install "cargo install kineto" \
+            --install "npx kineto-mcp" \
+            -o /tmp/release-spec.json
+          cat /tmp/release-spec.json
 
       - name: Render the release video
         id: video
