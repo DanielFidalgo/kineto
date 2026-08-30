@@ -350,6 +350,42 @@ pub struct CompileSessionParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BuildChangelogParams {
+    /// The headline, e.g. "Acme 2.0".
+    pub title: String,
+    /// A line under it.
+    #[serde(default)]
+    pub subtitle: Option<String>,
+    /// Heading over the list of changes. Default "What changed".
+    #[serde(default)]
+    pub heading: Option<String>,
+    /// A git range such as `v1.2.0..v1.3.0`. Defaults to everything since the
+    /// previous tag.
+    #[serde(default)]
+    pub range: Option<String>,
+    /// Which repository to read. Defaults to the working directory.
+    #[serde(default)]
+    pub repo: Option<String>,
+    /// Lines for a closing Install scene, e.g. ["npm i acme"].
+    #[serde(default)]
+    pub install: Vec<String>,
+    /// `midnight` (dark) or `paper` (light).
+    #[serde(default)]
+    pub theme: Option<String>,
+    /// Where to write the document JSON. Renders nothing.
+    pub out: String,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    /// How many changes to show. Default 4 — a release video is scanned, not
+    /// read.
+    #[serde(default)]
+    pub max_points: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SceneParams {
     /// `title`, `points`, `code` or `quote`.
     pub kind: String,

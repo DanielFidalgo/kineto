@@ -14,6 +14,28 @@ inputs:
       composed into a themed document before rendering. Mutually exclusive with
       `document`.
     required: false
+  changelog:
+    description: >-
+      Compose the document from this repository's git history instead: a title
+      card, what changed, and optionally how to install it. Requires `title`.
+      Needs full history — set `fetch-depth: 0` on your checkout.
+    required: false
+    default: "false"
+  title:
+    description: 'Headline for a changelog, e.g. "Acme 2.0".'
+    required: false
+  subtitle:
+    description: "A line under the changelog title."
+    required: false
+  range:
+    description: "Git range for a changelog. Defaults to everything since the previous tag."
+    required: false
+  install:
+    description: "Lines for a closing Install scene, one per line."
+    required: false
+  theme:
+    description: "midnight (dark) or paper (light). Changelogs only."
+    required: false
   output:
     description: "Where to write it. The extension picks the format: .mp4, .webp or .png."
     required: true
@@ -112,6 +134,12 @@ runs:
       env:
         DOCUMENT: ${{ inputs.document }}
         SCENES: ${{ inputs.scenes }}
+        CHANGELOG: ${{ inputs.changelog }}
+        TITLE: ${{ inputs.title }}
+        SUBTITLE: ${{ inputs.subtitle }}
+        RANGE: ${{ inputs.range }}
+        INSTALL: ${{ inputs.install }}
+        THEME: ${{ inputs.theme }}
         OUTPUT: ${{ inputs.output }}
         AT: ${{ inputs.at }}
         WIDTH: ${{ inputs.width }}
@@ -119,17 +147,35 @@ runs:
         CHECK: ${{ inputs.check }}
       run: |
         set -euo pipefail
-        if [ -n "$DOCUMENT" ] && [ -n "$SCENES" ]; then
-          echo "::error::give either document or scenes, not both"
+        modes=0
+        [ -n "$DOCUMENT" ] && modes=$((modes + 1))
+        [ -n "$SCENES" ] && modes=$((modes + 1))
+        [ "$CHANGELOG" = "true" ] && modes=$((modes + 1))
+        if [ "$modes" -ne 1 ]; then
+          echo "::error::give exactly one of document, scenes or changelog"
           exit 1
         fi
-        if [ -z "$DOCUMENT" ] && [ -z "$SCENES" ]; then
-          echo "::error::one of document or scenes is required"
+        if [ "$CHANGELOG" = "true" ] && [ -z "$TITLE" ]; then
+          echo "::error::changelog needs a title"
           exit 1
         fi
 
         args=()
-        if [ -n "$SCENES" ]; then args+=(--scenes "$SCENES"); else args+=("$DOCUMENT"); fi
+        if [ "$CHANGELOG" = "true" ]; then
+          args+=(--changelog --title "$TITLE")
+          [ -n "$SUBTITLE" ] && args+=(--subtitle "$SUBTITLE")
+          [ -n "$RANGE" ]    && args+=(--range "$RANGE")
+          [ -n "$THEME" ]    && args+=(--theme "$THEME")
+          # One install line per input line, so a multi-line YAML block reads
+          # naturally in a workflow.
+          while IFS= read -r line; do
+            [ -n "$line" ] && args+=(--install "$line")
+          done <<< "$INSTALL"
+        elif [ -n "$SCENES" ]; then
+          args+=(--scenes "$SCENES")
+        else
+          args+=("$DOCUMENT")
+        fi
         [ -n "$AT" ]    && args+=(--at "$AT")
         [ -n "$WIDTH" ] && args+=(--width "$WIDTH")
         [ -n "$FPS" ]   && args+=(--fps "$FPS")

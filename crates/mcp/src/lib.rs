@@ -1,5 +1,6 @@
 //! MCP server exposing the native kineto engine over stdio.
 
+pub mod changelog;
 pub mod chart;
 pub mod check;
 pub mod error;
@@ -380,6 +381,86 @@ impl KinetoServer {
                 params.out,
                 doc.scenes.len(),
                 total as f64 / 1000.0
+            )),
+        ]))
+    }
+
+    #[tool(
+        name = "build_changelog",
+        description = "Compose a release video from a repository's own commit \
+                       history: a title card, what changed, and optionally how \
+                       to install it. Reads `git log`, so the notes cannot \
+                       drift from the commits. Prefers conventional-commit \
+                       subjects where a project uses them and falls back to \
+                       plain subjects where it does not, dropping merges, \
+                       reverts and version bumps either way. Writes a document \
+                       and renders nothing — pass it to `render_document`."
+    )]
+    pub async fn build_changelog(
+        &self,
+        Parameters(params): Parameters<crate::tools::BuildChangelogParams>,
+    ) -> CallToolResult {
+        match Self::build_changelog_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn build_changelog_impl(
+        params: crate::tools::BuildChangelogParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let width = params.width.unwrap_or(1280);
+        let height = params.height.unwrap_or(720);
+        crate::source::check_canvas_size(width, height)?;
+
+        let repo = params.repo.as_ref().map(std::path::Path::new);
+        let mut opts = crate::changelog::Options {
+            title: params.title,
+            subtitle: params.subtitle,
+            width,
+            height,
+            install: params.install,
+            ..Default::default()
+        };
+        if let Some(h) = params.heading {
+            opts.heading = h;
+        }
+        if let Some(t) = params.theme {
+            opts.theme = t;
+        }
+        if let Some(n) = params.max_points {
+            opts.max_points = n;
+        }
+
+        let range = params
+            .range
+            .or_else(|| crate::changelog::default_range(repo));
+        let subjects = crate::changelog::subjects(repo, range.as_deref())?;
+        let items = crate::changelog::points(&subjects, opts.max_points, opts.max_length);
+        let json = crate::changelog::build(&items, &opts)?;
+
+        let out = std::path::Path::new(&params.out);
+        if let Some(parent) = out.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| ToolError::Io {
+                    context: "creating output directory",
+                    path: parent.display().to_string(),
+                    source: e,
+                })?;
+            }
+        }
+        std::fs::write(out, &json).map_err(|e| ToolError::Io {
+            context: "writing changelog document",
+            path: params.out.clone(),
+            source: e,
+        })?;
+
+        Ok(CallToolResult::success(vec![
+            rmcp::model::ContentBlock::text(format!(
+                "wrote {} — {} change(s) from {}",
+                params.out,
+                items.len(),
+                range.as_deref().unwrap_or("all history")
             )),
         ]))
     }

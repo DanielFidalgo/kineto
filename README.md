@@ -241,23 +241,29 @@ The commits already are the release notes, so read those instead of keeping a
 second list that drifts from the first:
 
 ```sh
-scripts/changelog-spec.py --title "Acme 2.0" --install "npm i acme" -o spec.json
-kineto --scenes spec.json -o release.mp4
+kineto --changelog --title "Acme 2.0" --install "npm i acme" -o release.mp4
 ```
 
 It prefers conventional-commit subjects where a repository uses them, and
-falls back to plain subjects where it doesn't — dropping merges, version bumps
-and reverts either way. In a workflow, after your release is published:
+falls back to plain subjects where it doesn't — dropping merges, reverts and
+version bumps either way. Add `--doc-out spec.json` to keep the composed
+document and edit it by hand.
+
+In a workflow, after your release is published:
 
 ```yaml
-- run: python3 scripts/changelog-spec.py --title "Acme ${{ github.ref_name }}" -o spec.json
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }        # needs history to see what changed
 - uses: DanielFidalgo/kineto@v0.1.4
   with:
-    scenes: spec.json
+    changelog: "true"
+    title: "Acme ${{ github.ref_name }}"
     output: dist/release.mp4
 ```
 
-Kineto's own release pages are made this way — the video on each one is
+Your agent can ask for one too — `build_changelog` is an MCP tool.
+
+Kineto's own release pages are made this way: the video on each one is
 composed from that tag's commits and rendered by the version being released.
 
 ## The document

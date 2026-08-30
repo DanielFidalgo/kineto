@@ -197,31 +197,24 @@ jobs:
           # Needs the previous tag to work out what changed.
           fetch-depth: 0
 
-      - name: Compose the scene spec
-        env:
-          VERSION: ${{ needs.verify.outputs.version }}
-        run: |
-          set -euo pipefail
-          python3 scripts/changelog-spec.py \
-            --title "Kineto ${VERSION}" \
-            --subtitle "video as a build artifact" \
-            --range "$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo)..v${VERSION}" \
-            --install "cargo install kineto" \
-            --install "npx kineto-mcp" \
-            -o /tmp/release-spec.json
-          cat /tmp/release-spec.json
-
       - name: Render the release video
         id: video
         uses: ./
         with:
-          scenes: /tmp/release-spec.json
+          changelog: "true"
+          title: "Kineto ${{ needs.verify.outputs.version }}"
+          subtitle: "video as a build artifact"
+          install: |
+            cargo install kineto
+            npx kineto-mcp
           output: dist/kineto-v${{ needs.verify.outputs.version }}-release.mp4
 
       - name: Render a poster
         uses: ./
         with:
-          scenes: /tmp/release-spec.json
+          changelog: "true"
+          title: "Kineto ${{ needs.verify.outputs.version }}"
+          subtitle: "video as a build artifact"
           output: dist/kineto-v${{ needs.verify.outputs.version }}-poster.png
           at: "1400"
           ffmpeg: "false"

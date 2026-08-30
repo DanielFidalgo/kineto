@@ -13,7 +13,20 @@ use std::process::Command;
 /// Listed here rather than scraped out of the YAML so the assertion runs both
 /// ways: each must exist in the CLI *and* still be used by the action. A flag
 /// silently dropped from the action is drift too.
-const USED_BY_ACTION: &[&str] = &["--scenes", "--at", "--width", "--fps", "--check", "-o"];
+const USED_BY_ACTION: &[&str] = &[
+    "--scenes",
+    "--at",
+    "--width",
+    "--fps",
+    "--check",
+    "-o",
+    "--changelog",
+    "--title",
+    "--subtitle",
+    "--range",
+    "--theme",
+    "--install",
+];
 
 fn bin() -> PathBuf {
     let mut p = std::env::current_exe().expect("test exe path");

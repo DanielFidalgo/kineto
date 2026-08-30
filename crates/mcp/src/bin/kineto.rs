@@ -13,6 +13,7 @@
 //! ```text
 //! kineto scene.json -o out.mp4              # or out.webp
 //! kineto --scenes spec.json -o out.mp4      # themed scenes, composed for you
+//! kineto --changelog --title "v2" -o out.mp4 # a release video from git log
 //! kineto scene.json -o poster.png --at 1500 # a single frame
 //! kineto scene.json -o small.mp4 --width 960
 //! kineto scene.json --check                 # report problems, render nothing
@@ -31,6 +32,7 @@ kineto — compile a scene document to a video
 USAGE:
     kineto <document.json> -o <output>   render (.mp4, .webp or .png)
     kineto --scenes <spec.json> -o <o>   compose themed scenes, then render
+    kineto --changelog --title <T> -o <o> a release video from this repo's log
     kineto <document.json> --check       report problems, render nothing
 
 OPTIONS:
@@ -43,6 +45,15 @@ OPTIONS:
                          { \"theme\": \"midnight\", \"scenes\": [ ... ] }
                          kinds: title, points, code, quote
         --doc-out <PATH> also write the composed document, to edit by hand
+
+  CHANGELOG (with --changelog):
+        --title <TEXT>   required; the headline, e.g. \"Acme 2.0\"
+        --subtitle <T>   a line under it
+        --range <RANGE>  git range; default is since the previous tag
+        --repo <DIR>     which repository; default is the current directory
+        --install <LINE> a line for a closing Install scene; repeatable
+        --theme <NAME>   midnight (default) or paper
+        --size <WxH>     default 1280x720
         --assets <DIR>   resolve image/font srcs against DIR
         --check          check and exit; nonzero if anything is wrong
     -h, --help           this text
@@ -74,14 +85,68 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let assets_dir: Option<PathBuf> = args.opt_value_from_str("--assets")?;
     let scenes: Option<PathBuf> = args.opt_value_from_str(["-s", "--scenes"])?;
     let doc_out: Option<PathBuf> = args.opt_value_from_str("--doc-out")?;
+    let changelog = args.contains("--changelog");
+    let title: Option<String> = args.opt_value_from_str("--title")?;
+    let subtitle: Option<String> = args.opt_value_from_str("--subtitle")?;
+    let range: Option<String> = args.opt_value_from_str("--range")?;
+    let repo: Option<PathBuf> = args.opt_value_from_str("--repo")?;
+    let theme: Option<String> = args.opt_value_from_str("--theme")?;
+    let size: Option<String> = args.opt_value_from_str("--size")?;
+    let mut install: Vec<String> = Vec::new();
+    while let Some(line) = args.opt_value_from_str::<_, String>("--install")? {
+        install.push(line);
+    }
 
     let rest = args.finish();
     if rest.len() > 1 {
         return Err(format!("unexpected argument: {:?}", rest[1]).into());
     }
 
-    // Either compose a document from a spec, or load one that already exists.
-    let (doc, default_base) = if let Some(spec_path) = &scenes {
+    // Compose from git, compose from a spec, or load a document that exists.
+    let (doc, default_base) = if changelog {
+        if scenes.is_some() || !rest.is_empty() {
+            return Err("--changelog composes the document, so it takes no other input".into());
+        }
+        let mut opts = kineto::changelog::Options {
+            title: title.unwrap_or_default(),
+            subtitle,
+            ..Default::default()
+        };
+        if let Some(t) = theme {
+            opts.theme = t;
+        }
+        if let Some(s) = &size {
+            let (w, h) = s
+                .split_once(['x', 'X'])
+                .ok_or_else(|| format!("--size wants WxH, got {s:?}"))?;
+            opts.width = w
+                .trim()
+                .parse()
+                .map_err(|_| format!("bad width in {s:?}"))?;
+            opts.height = h
+                .trim()
+                .parse()
+                .map_err(|_| format!("bad height in {s:?}"))?;
+        }
+        opts.install = install;
+
+        let repo_ref = repo.as_deref();
+        let range = range.or_else(|| kineto::changelog::default_range(repo_ref));
+        let subjects = kineto::changelog::subjects(repo_ref, range.as_deref())?;
+        let items = kineto::changelog::points(&subjects, opts.max_points, opts.max_length);
+        eprintln!(
+            "changelog: {} change(s) from {}",
+            items.len(),
+            range.as_deref().unwrap_or("all history")
+        );
+        let json = kineto::changelog::build(&items, &opts)?;
+        if let Some(path) = &doc_out {
+            std::fs::write(path, &json).map_err(|e| format!("writing {}: {e}", path.display()))?;
+            println!("wrote {}", path.display());
+        }
+        let base = repo.clone().unwrap_or_else(|| PathBuf::from("."));
+        (source::load_document(Some(&json), None)?.0, base)
+    } else if let Some(spec_path) = &scenes {
         if let Some(extra) = rest.first() {
             return Err(
                 format!("--scenes builds the document, so it cannot also take {extra:?}").into(),

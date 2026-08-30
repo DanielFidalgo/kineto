@@ -48,12 +48,8 @@ mcp-path: build
 # `typecheck` is here because it once was not: `vite build` never type-checks,
 # so a TypeScript error can pass a local build, pass the tests, and fail only
 # in CI's web job.
-check: fmt-check lint test typecheck scripts parity
+check: fmt-check lint test typecheck parity
     @echo "all green"
-
-# The changelog generator, which composes every release video.
-scripts:
-    python3 scripts/test_changelog_spec.py
 
 # tsc across the TypeScript packages.
 typecheck:
