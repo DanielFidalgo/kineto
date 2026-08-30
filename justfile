@@ -43,8 +43,17 @@ mcp-path: build
 # ------------------------------------------------------------------ checks ---
 
 # Everything CI runs, in the same order.
-check: fmt-check lint test parity
+# Everything CI runs, so a push is not the first place a failure shows up.
+#
+# `typecheck` is here because it once was not: `vite build` never type-checks,
+# so a TypeScript error can pass a local build, pass the tests, and fail only
+# in CI's web job.
+check: fmt-check lint test typecheck parity
     @echo "all green"
+
+# tsc across the TypeScript packages.
+typecheck:
+    npm -ws run typecheck --if-present
 
 test:
     cargo test --workspace
