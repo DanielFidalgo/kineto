@@ -124,6 +124,20 @@ read, edit, diff and reason about. Time is integer ticks at 705,600,000/s
 **One engine, two targets.** The same Rust renders natively and in the browser
 via WebCodecs, at $0 server cost.
 
+**Compared with Remotion and Motion Canvas.** Those describe a video as *code*
+— React components, or TypeScript generators — and render it by driving a
+browser. That buys an enormous amount: the whole component ecosystem, layout
+you already know, and effects Kineto has no answer to. Kineto trades it away
+deliberately. A scene is JSON with no execution model, so there is no browser
+to launch, no Node runtime at render time, and nothing to sandbox; a single
+binary renders it in a container. It also means a document can be *checked* —
+validated, diffed, linted for unreadable text, and reasoned about by a model —
+which is hard to do with a program whose output only exists once you run it.
+
+Pick those if you want the expressive ceiling of a UI framework. Pick this if
+you want video to behave like a build artifact: the same input producing the
+same bytes, in CI, without a display.
+
 > **Scope of the determinism claim:** the *frames* are byte-identical. The MP4
 > container is not — ffmpeg records its own version and thread count. Never
 > promise reproducible MP4 bytes; promise reproducible pixels.
