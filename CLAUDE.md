@@ -202,6 +202,25 @@ an installed std, so a four-wide matrix was exercising one path.
   prints and leaves PNGs behind. `crates/mcp` compensates by preflighting
   `ffmpeg_available()` before rendering a frame. **Do not "fix" the core
   contract** — the asymmetry is deliberate.
+- **`reveal` was added after v1 (2026-08-29):** `"reveal": {"kind":"fadeUp",
+  "at":300}` on any element, expanded into ordinary keyframe tracks by
+  `crates/mcp/src/motion.rs` inside `source::load_document` — the single choke
+  point every tool and the CLI pass through. **The engine never sees it**, and
+  `kineto-core` could not: this is authoring sugar in the tooling layer, which
+  is the line this project draws. Six kinds (`fadeIn`, `fadeUp`, `fadeDown`,
+  `slideLeft`, `slideRight`, `popIn`), timed in **milliseconds**.
+  The motivation is economic, not expressive. Everything `reveal` produces was
+  already expressible; fading five lines in sequence just cost ~600 tokens of
+  keyframes plus Flicks arithmetic, so a model on a budget wrote static text —
+  the "boring slide deck" complaint. It is ~20 tokens now and cannot be off by
+  a factor of 705,600.
+  Three properties matter and are each tested: a document without `reveal` is
+  returned **byte for byte** (so it cannot perturb anything, and no golden
+  moved); a reveal is **relative** to the element's existing transform,
+  opacity and scale, so adding one never moves the element; and a reveal that
+  would fight a hand-written track on the same property is **refused**, not
+  merged. Documented in the schema resource, because a feature an agent cannot
+  discover does not exist.
 - **Publishing (2026-08-29, decided but not yet executed):** the bare name
   `kineto` on crates.io belongs to the **CLI + MCP package** (`crates/mcp`,
   renamed from `kineto-mcp`), so `cargo install kineto` yields the `kineto`

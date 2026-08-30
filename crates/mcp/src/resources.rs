@@ -297,7 +297,23 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
         "animations": { "type": "array", "items": { "$ref": "#/$defs/track" } },
         "clip": { "$ref": "#/$defs/clip" },
-        "shadow": { "$ref": "#/$defs/shadow" }
+        "shadow": { "$ref": "#/$defs/shadow" },
+        "reveal": { "$ref": "#/$defs/reveal" }
+      }
+    },
+    "reveal": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "description": "An entrance, in one line. Expands to the equivalent keyframes before rendering, so it is shorthand rather than a new capability — but it is timed in MILLISECONDS, not ticks, and it composes with whatever transform the element already has. Prefer this to hand-written opacity and translate tracks: staggering several elements by 120-200ms is what separates a video from a slide deck. Rejected if the element already animates a property the reveal would drive.",
+      "properties": {
+        "kind": {
+          "enum": ["fadeIn", "fadeUp", "fadeDown", "slideLeft", "slideRight", "popIn"],
+          "description": "fadeUp rises into place and is the safe default for text. slideLeft/slideRight name the direction of travel. popIn overshoots slightly and suits badges and numbers."
+        },
+        "at": { "type": "integer", "minimum": 0, "description": "When the entrance starts, in milliseconds from the scene's own start. Stagger siblings by giving each a later `at`." },
+        "ms": { "type": "integer", "minimum": 1, "description": "How long it takes. Default 400." },
+        "distance": { "type": "number", "description": "How far a fade or slide travels, in canvas units. Default 24." }
       }
     },
     "track": {

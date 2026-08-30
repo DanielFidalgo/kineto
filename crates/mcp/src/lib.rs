@@ -4,6 +4,7 @@ pub mod chart;
 pub mod check;
 pub mod error;
 pub mod examples;
+pub mod motion;
 pub mod render;
 pub mod resources;
 pub mod session;

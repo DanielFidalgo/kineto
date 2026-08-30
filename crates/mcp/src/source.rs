@@ -12,6 +12,11 @@ use crate::error::ToolError;
 /// Load a document from exactly one of `document` (inline canonical JSON) or
 /// `document_path`. Returns the parsed document and the directory that asset
 /// `src` values resolve against.
+/// Loads a document, expanding `reveal` sugar first.
+///
+/// Every tool and the CLI come through here, so this is the one place the
+/// expansion has to happen — and the engine below never sees anything but
+/// canonical JSON.
 pub fn load_document(
     document: Option<&str>,
     document_path: Option<&str>,
@@ -26,7 +31,7 @@ pub fn load_document(
                 .into(),
         )),
         (Some(json), None) => {
-            let doc = Document::from_json(json)?;
+            let doc = Document::from_json(&crate::motion::expand(json)?)?;
             let base = std::env::current_dir().map_err(|e| ToolError::Io {
                 context: "reading current directory",
                 path: ".".into(),
@@ -41,7 +46,7 @@ pub fn load_document(
                 path: path.display().to_string(),
                 source: e,
             })?;
-            let doc = Document::from_json(&json)?;
+            let doc = Document::from_json(&crate::motion::expand(&json)?)?;
             let base = path
                 .parent()
                 .map(Path::to_path_buf)
