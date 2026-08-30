@@ -1,4 +1,8 @@
-name: "Kineto"
+# Not "Kineto": the Marketplace requires a name unique across actions, users
+# and organisations, and github.com/Kineto is a dormant personal account. The
+# listing name is display-only -- `uses: DanielFidalgo/kineto@vX` is unchanged,
+# as are the crates.io and npm names.
+name: "Kineto Video Compiler"
 description: "Compile a scene document to an MP4, animated WebP or PNG. Video as a build artifact."
 branding:
   icon: "film"
