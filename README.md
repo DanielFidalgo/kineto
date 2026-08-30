@@ -188,6 +188,24 @@ is WebP; the 27-second tour is MP4.)
 
 ---
 
+## In CI
+
+Video as a build artifact, literally:
+
+```yaml
+- uses: DanielFidalgo/kineto@v0.1.4
+  with:
+    scenes: release-spec.json     # or `document:` for one you wrote
+    output: dist/release.mp4      # .mp4, .webp or .png
+```
+
+No toolchain: it downloads the released binary for the runner, verifies its
+checksum, and renders. `check` defaults to on, so a document with unreadable
+text or no contrast fails the step rather than shipping.
+
+Kineto uses this on itself — every release page carries a video composed from
+that tag's own commits, rendered by the version being released.
+
 ## The document
 
 ```json

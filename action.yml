@@ -1,0 +1,150 @@
+name: "Kineto"
+description: "Compile a scene document to an MP4, animated WebP or PNG. Video as a build artifact."
+branding:
+  icon: "film"
+  color: "orange"
+
+inputs:
+  document:
+    description: "Path to a scene document (canonical JSON). Mutually exclusive with `scenes`."
+    required: false
+  scenes:
+    description: >-
+      Path to a scene spec — { "theme": ..., "scenes": [ { "kind": ... } ] } —
+      composed into a themed document before rendering. Mutually exclusive with
+      `document`.
+    required: false
+  output:
+    description: "Where to write it. The extension picks the format: .mp4, .webp or .png."
+    required: true
+  at:
+    description: "Which moment to write, in milliseconds. Only meaningful for a .png."
+    required: false
+  width:
+    description: "Scale the output to this width, keeping aspect."
+    required: false
+  fps:
+    description: "Override the document's own defaultFps."
+    required: false
+  check:
+    description: >-
+      Fail the step if the document has correctness problems — unreadable text,
+      colours without contrast, elements off canvas. Recommended: these are
+      invisible in JSON and obvious on screen.
+    required: false
+    default: "true"
+  version:
+    description: >-
+      Which Kineto release to use. Defaults to the ref this action was
+      referenced at, so `uses: DanielFidalgo/kineto@v0.1.4` renders with
+      0.1.4 and the two can never disagree.
+    required: false
+  ffmpeg:
+    description: "Install ffmpeg, which encoding needs. Frames render without it, so a .png does not."
+    required: false
+    default: "true"
+
+outputs:
+  path:
+    description: "The file that was written."
+    value: ${{ steps.render.outputs.path }}
+  bytes:
+    description: "Its size in bytes, for deciding whether it is small enough to embed."
+    value: ${{ steps.render.outputs.bytes }}
+
+runs:
+  using: composite
+  steps:
+    # Encoding shells out to ffmpeg. A .png never touches the muxer, so it is
+    # skippable — worth several seconds on every run that only wants a still.
+    - name: Install ffmpeg
+      if: inputs.ffmpeg == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v ffmpeg >/dev/null 2>&1; then
+          echo "ffmpeg already present"
+        elif [ "$RUNNER_OS" = "Linux" ]; then
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+        elif [ "$RUNNER_OS" = "macOS" ]; then
+          brew install ffmpeg
+        else
+          echo "::error::no ffmpeg install recipe for $RUNNER_OS"
+          exit 1
+        fi
+
+    - name: Install kineto
+      shell: bash
+      env:
+        # `github.action_ref` is the ref the caller wrote after the @. Falling
+        # back to the current tag matters when this repo runs the action on
+        # itself, where action_ref is empty.
+        VERSION: ${{ inputs.version || github.action_ref || github.ref_name }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)   target=x86_64-unknown-linux-gnu ;;
+          Linux-ARM64) target=aarch64-unknown-linux-gnu ;;
+          macOS-ARM64) target=aarch64-apple-darwin ;;
+          macOS-X64)   target=x86_64-apple-darwin ;;
+          *) echo "::error::no Kineto build for $RUNNER_OS-$RUNNER_ARCH"; exit 1 ;;
+        esac
+
+        version="${VERSION#v}"
+        base="https://github.com/DanielFidalgo/kineto/releases/download/v${version}"
+        stem="kineto-v${version}-${target}"
+        dir="${RUNNER_TEMP}/kineto"
+        mkdir -p "$dir"
+
+        curl -fsSL -o "$dir/$stem.tar.gz" "$base/$stem.tar.gz"
+        # Every release ships a checksum beside each archive. Verifying it is
+        # the difference between "downloaded something" and "downloaded this".
+        curl -fsSL -o "$dir/$stem.tar.gz.sha256" "$base/$stem.tar.gz.sha256"
+        (cd "$dir" && shasum -a 256 -c "$stem.tar.gz.sha256")
+
+        tar -C "$dir" -xzf "$dir/$stem.tar.gz"
+        echo "$dir/$stem" >> "$GITHUB_PATH"
+        "$dir/$stem/kineto" --help >/dev/null
+
+    - name: Render
+      id: render
+      shell: bash
+      env:
+        DOCUMENT: ${{ inputs.document }}
+        SCENES: ${{ inputs.scenes }}
+        OUTPUT: ${{ inputs.output }}
+        AT: ${{ inputs.at }}
+        WIDTH: ${{ inputs.width }}
+        FPS: ${{ inputs.fps }}
+        CHECK: ${{ inputs.check }}
+      run: |
+        set -euo pipefail
+        if [ -n "$DOCUMENT" ] && [ -n "$SCENES" ]; then
+          echo "::error::give either document or scenes, not both"
+          exit 1
+        fi
+        if [ -z "$DOCUMENT" ] && [ -z "$SCENES" ]; then
+          echo "::error::one of document or scenes is required"
+          exit 1
+        fi
+
+        args=()
+        if [ -n "$SCENES" ]; then args+=(--scenes "$SCENES"); else args+=("$DOCUMENT"); fi
+        [ -n "$AT" ]    && args+=(--at "$AT")
+        [ -n "$WIDTH" ] && args+=(--width "$WIDTH")
+        [ -n "$FPS" ]   && args+=(--fps "$FPS")
+
+        # Checked before rendering, so a defect costs a second rather than a
+        # full encode. Design findings are advice and do not fail the build;
+        # correctness findings do.
+        if [ "$CHECK" = "true" ]; then
+          kineto "${args[@]}" --check
+        fi
+
+        mkdir -p "$(dirname "$OUTPUT")"
+        kineto "${args[@]}" -o "$OUTPUT"
+
+        echo "path=$OUTPUT" >> "$GITHUB_OUTPUT"
+        echo "bytes=$(wc -c < "$OUTPUT" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+        echo "### Kineto" >> "$GITHUB_STEP_SUMMARY"
+        echo "Rendered \`$OUTPUT\` ($(du -h "$OUTPUT" | cut -f1))." >> "$GITHUB_STEP_SUMMARY"

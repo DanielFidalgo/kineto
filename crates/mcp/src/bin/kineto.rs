@@ -12,6 +12,7 @@
 //!
 //! ```text
 //! kineto scene.json -o out.mp4              # or out.webp
+//! kineto --scenes spec.json -o out.mp4      # themed scenes, composed for you
 //! kineto scene.json -o poster.png --at 1500 # a single frame
 //! kineto scene.json -o small.mp4 --width 960
 //! kineto scene.json --check                 # report problems, render nothing
@@ -29,6 +30,7 @@ kineto — compile a scene document to a video
 
 USAGE:
     kineto <document.json> -o <output>   render (.mp4, .webp or .png)
+    kineto --scenes <spec.json> -o <o>   compose themed scenes, then render
     kineto <document.json> --check       report problems, render nothing
 
 OPTIONS:
@@ -37,6 +39,10 @@ OPTIONS:
         --at <MS>        which moment to write, for a .png (default 0)
         --width <PX>     scale output to PX wide, keeping aspect
         --fps <N>        override the document's own defaultFps
+    -s, --scenes <PATH>  build the document from a scene spec instead:
+                         { \"theme\": \"midnight\", \"scenes\": [ ... ] }
+                         kinds: title, points, code, quote
+        --doc-out <PATH> also write the composed document, to edit by hand
         --assets <DIR>   resolve image/font srcs against DIR
         --check          check and exit; nonzero if anything is wrong
     -h, --help           this text
@@ -66,18 +72,43 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let at_ms: Option<i64> = args.opt_value_from_str("--at")?;
     let width: Option<u32> = args.opt_value_from_str("--width")?;
     let assets_dir: Option<PathBuf> = args.opt_value_from_str("--assets")?;
+    let scenes: Option<PathBuf> = args.opt_value_from_str(["-s", "--scenes"])?;
+    let doc_out: Option<PathBuf> = args.opt_value_from_str("--doc-out")?;
 
     let rest = args.finish();
-    let Some(input) = rest.first() else {
-        eprint!("{USAGE}");
-        return Err("no input document".into());
-    };
     if rest.len() > 1 {
         return Err(format!("unexpected argument: {:?}", rest[1]).into());
     }
-    let input = PathBuf::from(input);
 
-    let (doc, default_base) = source::load_document(None, input.to_str())?;
+    // Either compose a document from a spec, or load one that already exists.
+    let (doc, default_base) = if let Some(spec_path) = &scenes {
+        if let Some(extra) = rest.first() {
+            return Err(
+                format!("--scenes builds the document, so it cannot also take {extra:?}").into(),
+            );
+        }
+        let spec = std::fs::read_to_string(spec_path)
+            .map_err(|e| format!("reading {}: {e}", spec_path.display()))?;
+        let json = kineto::scene::build_from_spec(&spec)?;
+        if let Some(path) = &doc_out {
+            std::fs::write(path, &json).map_err(|e| format!("writing {}: {e}", path.display()))?;
+            println!("wrote {}", path.display());
+        }
+        // Assets resolve against the spec's directory, which is where a
+        // caller would keep anything it refers to.
+        let base = spec_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        (source::load_document(Some(&json), None)?.0, base)
+    } else {
+        let Some(input) = rest.first() else {
+            eprint!("{USAGE}");
+            return Err("no input document".into());
+        };
+        source::load_document(None, PathBuf::from(input).to_str())?
+    };
     let fps = source::resolve_fps(fps, &doc)?;
     source::check_canvas_size(doc.size.w, doc.size.h)?;
     let base = assets_dir.unwrap_or(default_base);

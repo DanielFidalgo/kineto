@@ -179,6 +179,55 @@ jobs:
           fail_on_unmatched_files: true
           generate_release_notes: true
 
+  # The release page gets a video made by the thing being released, using the
+  # action from this very checkout. If Kineto cannot render its own release
+  # notes, the claim on the tin is not true.
+  #
+  # After `publish` because the action installs a *released* binary, and the
+  # archives it downloads are the ones that job just uploaded.
+  showreel:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # Needs the previous tag to work out what changed.
+          fetch-depth: 0
+
+      - name: Compose the scene spec
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release-spec.py "$VERSION" | tee /tmp/release-spec.json
+
+      - name: Render the release video
+        id: video
+        uses: ./
+        with:
+          scenes: /tmp/release-spec.json
+          output: dist/kineto-v${{ needs.verify.outputs.version }}-release.mp4
+
+      - name: Render a poster
+        uses: ./
+        with:
+          scenes: /tmp/release-spec.json
+          output: dist/kineto-v${{ needs.verify.outputs.version }}-poster.png
+          at: "1400"
+          ffmpeg: "false"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" dist/* --clobber
+          echo "attached $(ls dist | tr '\n' ' ')"
+
   # crates.io publishing is irreversible: a name can never be freed and a
   # version can only be yanked, never replaced. So this runs last, only after
   # the binaries are built and the GitHub release exists -- if anything above

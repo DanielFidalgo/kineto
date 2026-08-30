@@ -449,6 +449,68 @@ fn quote(spec: &SceneSpec, t: &Theme) -> Result<Vec<Value>, ToolError> {
     Ok(out)
 }
 
+/// A scene spec as written in a file, for `kineto --scenes`.
+///
+/// The MCP tool takes the same shape through its own parameter structs; this
+/// exists so a scene spec is usable from a shell and from CI, without an MCP
+/// client. A capability only reachable through an agent cannot render a
+/// project's own release video, and a project whose own pipeline reaches past
+/// its tools for a script has admitted the tools are incomplete.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpecFile {
+    #[serde(default)]
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+    pub scenes: Vec<SceneEntry>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SceneEntry {
+    pub kind: String,
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub subtitle: Option<String>,
+    #[serde(default)]
+    pub heading: Option<String>,
+    #[serde(default)]
+    pub items: Vec<String>,
+    #[serde(default)]
+    pub attribution: Option<String>,
+    #[serde(default)]
+    pub seconds: Option<f64>,
+}
+
+/// Reads a spec file and returns the document JSON it describes.
+pub fn build_from_spec(json: &str) -> Result<String, ToolError> {
+    let spec: SpecFile = serde_json::from_str(json)
+        .map_err(|e| ToolError::DocumentSource(format!("scene spec is not valid: {e}")))?;
+    let specs: Vec<SceneSpec> = spec
+        .scenes
+        .into_iter()
+        .map(|s| SceneSpec {
+            kind: s.kind,
+            text: s.text,
+            subtitle: s.subtitle,
+            heading: s.heading,
+            items: s.items,
+            attribution: s.attribution,
+            seconds: s.seconds,
+        })
+        .collect();
+    build_document(
+        spec.theme.as_deref().unwrap_or("midnight"),
+        spec.width.unwrap_or(1920),
+        spec.height.unwrap_or(1080),
+        &specs,
+    )
+}
+
 /// Assembles a whole document from a theme and a list of scene specs.
 pub fn build_document(
     theme_name: &str,
