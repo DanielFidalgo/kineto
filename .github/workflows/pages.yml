@@ -1,0 +1,68 @@
+name: pages
+
+# The browser half of Kineto was unverifiable by anyone who had not cloned the
+# repo and built wasm by hand. The parity gate spends 27 golden hashes proving
+# the wasm engine is byte-identical to the native one; nobody could see it run.
+# This deploys the tape demo so the claim is a click rather than a paragraph.
+
+on:
+  push:
+    branches: [main]
+    # The demo is the SDK plus the wasm engine plus its own source. Anything
+    # else changing cannot alter what is deployed, and rebuilding wasm on a
+    # README edit wastes several minutes for an identical artifact.
+    paths:
+      - "crates/**"
+      - "packages/sdk/**"
+      - "packages/demo-tape/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# A deploy in flight is never worth cancelling half-done, but queued ones are
+# superseded by whatever landed after them.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - run: cargo install wasm-pack
+      # The SDK imports crates/wasm/pkg by relative path, so this has to exist
+      # before anything touching @kineto/sdk is built.
+      - run: wasm-pack build crates/wasm --target web --release
+
+      - run: npm ci
+      - run: npm -w @kineto/demo-tape run build
+
+      # The same suite CI runs, against the built site rather than the dev
+      # server — it exports a real MP4 and checks the ftyp header. Deploying a
+      # demo whose one button does nothing would be worse than not deploying.
+      - run: npx playwright install --with-deps chromium
+      - run: npm -w @kineto/demo-tape run test:browser:dist
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/demo-tape/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

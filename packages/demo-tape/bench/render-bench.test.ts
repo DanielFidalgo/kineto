@@ -33,7 +33,7 @@ import { build, loadEngine } from "@kineto/sdk";
 import { parseTape } from "../src/adapter";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE_DIR = path.resolve(__dirname, "../fixtures/tape-fixture");
+const FIXTURE_DIR = path.resolve(__dirname, "../public/fixtures/tape-fixture");
 
 const FPS = 30;
 const FRAME_COUNT = 90;

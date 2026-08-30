@@ -16,7 +16,10 @@ declare global {
   }
 }
 
-const FIXTURE_DIR = "/fixtures/tape-fixture";
+// BASE_URL rather than a leading slash: deployed under a project path
+// (github.io/kineto/) a root-absolute fetch would miss. Vite rewrites this to
+// "/" in dev and to the configured base in a build.
+const FIXTURE_DIR = `${import.meta.env.BASE_URL}fixtures/tape-fixture`;
 const FIXTURE_FILES = ["actions.jsonl", "step-01.jpg", "step-02.jpg", "step-03.jpg"];
 
 function requireEl<T extends Element>(selector: string): T {

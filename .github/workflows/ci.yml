@@ -68,6 +68,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm -w @kineto/sdk run test:browser
       - run: npm -w @kineto/demo-tape run test:browser
+      # And against the built site, which is what Pages serves and what a
+      # visitor meets. A base path or a public-directory file can be right in
+      # dev and wrong in dist.
+      - run: npm -w @kineto/demo-tape run test:browser:dist
       # Perf diagnostic (spec §6, Task 26): render-only ms/frame and
       # realtime ratio for the fixture tape, logged for regression
       # visibility. Measured, not asserted — never fails the job on a

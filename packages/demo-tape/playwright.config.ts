@@ -16,12 +16,18 @@ export default defineConfig({
     baseURL: "http://localhost:5200",
     trace: "retain-on-failure",
   },
+  // DEMO_PREVIEW runs the suite against the *built* site rather than the dev
+  // server. They are not the same artifact: a base path, an asset URL or a
+  // public-directory file can be right in dev and wrong in dist, and the
+  // deployed demo is the one users meet.
   webServer: {
-    command: "npx vite dev --port 5200 --strictPort",
+    command: process.env.DEMO_PREVIEW
+      ? "npx vite build && npx vite preview --port 5200 --strictPort"
+      : "npx vite dev --port 5200 --strictPort",
     url: "http://localhost:5200/index.html",
     cwd: ".",
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: 90_000,
   },
   projects: [
     {

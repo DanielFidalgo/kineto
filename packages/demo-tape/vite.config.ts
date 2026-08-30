@@ -9,6 +9,15 @@ import { defineConfig } from "vite";
 // is inside this package's root, so it needs no extra allow-listing —
 // it's fetched straight off the dev server (see src/main.ts).
 export default defineConfig({
+  // Relative, not "/kineto/": the built demo then works from any path — a
+  // project Pages site, a subdirectory, or opened from `vite preview` — and
+  // nothing hard-codes the repository name.
+  base: "./",
+  build: {
+    // The wasm engine is one large chunk; splitting it buys nothing and the
+    // warning is noise on every build.
+    chunkSizeWarningLimit: 1500,
+  },
   server: {
     port: 5200,
     strictPort: true,

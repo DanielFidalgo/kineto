@@ -7,6 +7,7 @@ the same way source compiles to a binary.
 
 ![Kineto](docs/media/kineto-loop.webp)
 
+[**Try it in your browser**](https://danielfidalgo.github.io/kineto/) ·
 [Watch the 35-second tour](docs/media/kineto-hero.mp4) ·
 [Quick start](#quick-start) · [Why](#why-this-is-different) ·
 [Document format](#the-document) · [License](#license)
@@ -187,6 +188,16 @@ seconds is a README loop; a minute is 17 MB. (The loop at the top of this page
 is WebP; the 35-second tour is MP4.)
 
 ---
+
+## Try it without installing anything
+
+[**danielfidalgo.github.io/kineto**](https://danielfidalgo.github.io/kineto/) —
+a mysteryshopper tape compiled to a captioned, crossfaded MP4 **in your tab**.
+The same Rust engine, on WebAssembly, encoding through WebCodecs. Nothing is
+uploaded and no server renders anything; the tape never leaves your machine.
+
+Needs WebCodecs, so a recent Chrome or Edge. The demo says so rather than
+failing quietly if your browser cannot encode.
 
 ## In CI
 
