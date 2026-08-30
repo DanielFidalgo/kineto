@@ -7,7 +7,7 @@ the same way source compiles to a binary.
 
 ![Kineto](docs/media/kineto-loop.webp)
 
-[Watch the 30-second tour](docs/media/kineto-hero.mp4) ·
+[Watch the 35-second tour](docs/media/kineto-hero.mp4) ·
 [Quick start](#quick-start) · [Why](#why-this-is-different) ·
 [Document format](#the-document) · [License](#license)
 
@@ -184,7 +184,7 @@ The output extension chooses the format.
 Choose by length. Animated WebP has no inter-frame prediction, so every frame
 is essentially a standalone image: roughly **280 KB per second at 720p**. A few
 seconds is a README loop; a minute is 17 MB. (The loop at the top of this page
-is WebP; the 30-second tour is MP4.)
+is WebP; the 35-second tour is MP4.)
 
 ---
 
