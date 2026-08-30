@@ -223,10 +223,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ needs.verify.outputs.version }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
           gh release upload "$TAG" dist/* --clobber
-          echo "attached $(ls dist | tr '\n' ' ')"
+
+          # Uploading is not showing. An .mp4 among nine tarballs is invisible
+          # unless the notes lead with it.
+          #
+          # A link and not an embed: release assets are served with
+          # `content-disposition: attachment`, `content-type:
+          # application/octet-stream` and `x-content-type-options: nosniff`, so
+          # an <img> or a <video> pointing at one renders as nothing at all.
+          # Checked rather than assumed -- the first version of this shipped a
+          # broken image.
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          video="${base}/kineto-v${VERSION}-release.mp4"
+          poster="${base}/kineto-v${VERSION}-poster.png"
+          size=$(du -h "dist/kineto-v${VERSION}-release.mp4" | cut -f1 | tr -d ' ')
+
+          # Prepended to whatever `publish` wrote, rather than replacing it --
+          # that body carries GitHub's generated changelog.
+          gh release view "$TAG" --json body -q .body > /tmp/body.md
+          {
+            echo "### Release video"
+            echo
+            echo "**[kineto-v${VERSION}-release.mp4](${video})** (${size}) —"
+            echo "composed from this tag's own commits and rendered by Kineto"
+            echo "${VERSION} itself, through the action this release ships."
+            echo "A [still](${poster}) is attached too."
+            echo
+            cat /tmp/body.md
+          } > /tmp/notes.md
+          gh release edit "$TAG" --notes-file /tmp/notes.md
+          echo "attached and linked: $(ls dist | tr '\n' ' ')"
 
   # crates.io publishing is irreversible: a name can never be freed and a
   # version can only be yanked, never replaced. So this runs last, only after
