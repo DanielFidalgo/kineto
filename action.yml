@@ -122,7 +122,16 @@ runs:
         dir="${RUNNER_TEMP}/kineto"
         mkdir -p "$dir"
 
-        curl -fsSL -o "$dir/$stem.tar.gz" "$base/$stem.tar.gz"
+        # A 404 here almost always means the ref is not a released version.
+        # Release archives live on `v*` tags, so `@0.1.6` or `@main` resolves
+        # to a download that does not exist; a bare curl error sends people
+        # looking in the wrong place entirely.
+        if ! curl -fsSL -o "$dir/$stem.tar.gz" "$base/$stem.tar.gz"; then
+          echo "::error::no Kineto release archive at $base/$stem.tar.gz."
+          echo "::error::Use a released version tag, e.g. uses: DanielFidalgo/kineto@v${version}"
+          echo "::error::or pin one explicitly with the `version` input."
+          exit 1
+        fi
         # Every release ships a checksum beside each archive. Verifying it is
         # the difference between "downloaded something" and "downloaded this".
         curl -fsSL -o "$dir/$stem.tar.gz.sha256" "$base/$stem.tar.gz.sha256"
