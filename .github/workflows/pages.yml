@@ -3,7 +3,9 @@ name: pages
 # The browser half of Kineto was unverifiable by anyone who had not cloned the
 # repo and built wasm by hand. The parity gate spends 27 golden hashes proving
 # the wasm engine is byte-identical to the native one; nobody could see it run.
-# This deploys the tape demo so the claim is a click rather than a paragraph.
+#
+# This deploys the playground: the pitch is "you write a document; it compiles
+# to a video", so the demo lets you write one.
 
 on:
   push:
@@ -14,7 +16,7 @@ on:
     paths:
       - "crates/**"
       - "packages/sdk/**"
-      - "packages/demo-tape/**"
+      - "packages/playground/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -45,17 +47,17 @@ jobs:
       - run: wasm-pack build crates/wasm --target web --release
 
       - run: npm ci
-      - run: npm -w @kineto/demo-tape run build
+      - run: npm -w @kineto/playground run build
 
       # The same suite CI runs, against the built site rather than the dev
       # server — it exports a real MP4 and checks the ftyp header. Deploying a
       # demo whose one button does nothing would be worse than not deploying.
       - run: npx playwright install --with-deps chromium
-      - run: npm -w @kineto/demo-tape run test:browser:dist
+      - run: npm -w @kineto/playground run test:browser:dist
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: packages/demo-tape/dist
+          path: packages/playground/dist
 
   deploy:
     needs: build

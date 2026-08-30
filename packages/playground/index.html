@@ -1,0 +1,169 @@
+<!doctype html>
+<!--
+  The public playground. The project's claim is "you write a document; it
+  compiles to a video", so the demo lets you write one: edit the JSON, watch
+  it recompile, export a real MP4. Nothing is uploaded.
+
+  Plain DOM and a textarea rather than an editor component — the bundle
+  already carries a 2.7 MB wasm engine, and a syntax highlighter would add
+  weight to a page whose whole job is to load fast enough to be tried.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kineto — write a document, get a video</title>
+    <meta
+      name="description"
+      content="Edit a scene document and watch it compile to an MP4 in your browser. Deterministic, no server."
+    />
+    <style>
+      :root {
+        --bg: #0b1116;
+        --surface: #16232f;
+        --line: #22323f;
+        --fg: #f4f7f9;
+        --muted: #8fa3b0;
+        --accent: #ff9f45;
+        --ok: #4ecdc4;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      header {
+        padding: 1.5rem 1.5rem 0.75rem;
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 { font-size: 1.5rem; margin: 0 0 0.25rem; letter-spacing: -0.01em; }
+      header p { margin: 0; color: var(--muted); }
+      header a { color: var(--ok); }
+      main {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1rem 1.5rem 3rem;
+        display: grid;
+        gap: 1.25rem;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      }
+      @media (max-width: 900px) {
+        main { grid-template-columns: minmax(0, 1fr); }
+      }
+      .pane { min-width: 0; }
+      .bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 0.6rem;
+      }
+      label { color: var(--muted); font-size: 0.85rem; }
+      select, button {
+        background: var(--surface);
+        color: var(--fg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.45rem 0.7rem;
+        font: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      button:hover:not(:disabled), select:hover { border-color: var(--accent); }
+      button:disabled { opacity: 0.45; cursor: default; }
+      button.primary { background: var(--accent); color: #14181c; border-color: var(--accent); font-weight: 600; }
+      textarea {
+        width: 100%;
+        height: 62vh;
+        min-height: 340px;
+        resize: vertical;
+        background: #0d1620;
+        color: #c8d6e0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.9rem;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        tab-size: 2;
+      }
+      textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #000;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0.6rem 0 0.2rem; }
+      #status { color: var(--muted); font-size: 0.85rem; min-height: 1.4em; margin: 0.4rem 0 0; }
+      #error {
+        background: #2a1416;
+        border: 1px solid #5c2a2f;
+        color: #ffb4b4;
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        margin: 0.6rem 0 0;
+        font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+      #capability {
+        background: #2a2214;
+        border: 1px solid #5c4a2a;
+        color: #ffd9a0;
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        margin: 0 1.5rem;
+        max-width: 1400px;
+      }
+      progress { width: 100%; height: 6px; }
+      footer { max-width: 1400px; margin: 0 auto; padding: 0 1.5rem 3rem; color: var(--muted); font-size: 0.85rem; }
+      footer a { color: var(--ok); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Kineto</h1>
+      <p>
+        You write a document; it compiles to a video — here, in this tab.
+        <a href="https://github.com/DanielFidalgo/kineto">Source</a>
+      </p>
+    </header>
+
+    <div id="capability" role="alert" hidden></div>
+
+    <main>
+      <section class="pane">
+        <div class="bar">
+          <label for="preset">Example</label>
+          <select id="preset"></select>
+          <button id="format" type="button" title="Reformat the JSON">Tidy</button>
+        </div>
+        <textarea id="doc" spellcheck="false" aria-label="Scene document JSON"></textarea>
+        <p id="error" role="alert" hidden></p>
+      </section>
+
+      <section class="pane">
+        <div class="bar">
+          <button id="play" type="button">Play</button>
+          <button id="export" class="primary" type="button">Export MP4</button>
+          <a id="download" hidden download="kineto.mp4">Download</a>
+        </div>
+        <canvas id="preview" width="960" height="540"></canvas>
+        <input id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Timeline" />
+        <progress id="progress" value="0" max="1" hidden></progress>
+        <p id="status"></p>
+      </section>
+    </main>
+
+    <footer>
+      Rendered by the same Rust engine that runs headless in CI, compiled to
+      WebAssembly. Frames are byte-identical between the two — checked on every
+      build. Nothing is uploaded; the export happens on your machine.
+    </footer>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

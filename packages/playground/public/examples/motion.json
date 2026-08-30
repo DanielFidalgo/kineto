@@ -1,0 +1,141 @@
+{
+  "v": 1,
+  "timebase": 705600000,
+  "defaultFps": 30,
+  "size": {
+    "w": 960,
+    "h": 540
+  },
+  "bg": "#0B1116",
+  "assets": {
+    "inter": {
+      "type": "font",
+      "src": "kineto:inter"
+    },
+    "mono": {
+      "type": "font",
+      "src": "kineto:jetbrains-mono"
+    }
+  },
+  "scenes": [
+    {
+      "id": "shapes",
+      "duration": 5997600000,
+      "elements": [
+        {
+          "type": "text",
+          "text": "Six entrances, one line each",
+          "font": "inter",
+          "sizePx": 34,
+          "color": "#F4F7F9",
+          "pos": [72, 84],
+          "reveal": {
+            "at": 0,
+            "kind": "fadeUp"
+          }
+        },
+        {
+          "type": "rect",
+          "rect": [72, 168, 180, 120],
+          "radius": 14,
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 1],
+            "stops": [
+              {
+                "at": 0,
+                "color": "#FF9F45"
+              },
+              {
+                "at": 1,
+                "color": "#C77DFF"
+              }
+            ]
+          },
+          "shadow": {
+            "color": "#00000080",
+            "blur": 24,
+            "dy": 10
+          },
+          "reveal": {
+            "at": 120,
+            "kind": "popIn"
+          }
+        },
+        {
+          "type": "text",
+          "text": "popIn",
+          "font": "mono",
+          "sizePx": 18,
+          "color": "#8FA3B0",
+          "pos": [72, 300],
+          "reveal": {
+            "at": 120,
+            "kind": "fadeIn"
+          }
+        },
+        {
+          "type": "rect",
+          "rect": [288, 168, 180, 120],
+          "radius": 14,
+          "fill": "#16232F",
+          "reveal": {
+            "at": 260,
+            "kind": "fadeUp"
+          }
+        },
+        {
+          "type": "text",
+          "text": "fadeUp",
+          "font": "mono",
+          "sizePx": 18,
+          "color": "#8FA3B0",
+          "pos": [288, 300],
+          "reveal": {
+            "at": 260,
+            "kind": "fadeIn"
+          }
+        },
+        {
+          "type": "path",
+          "points": [[520, 280], [568, 200], [616, 244], [664, 176], [712, 208]],
+          "stroke": "#4ECDC4",
+          "strokeWidth": 4,
+          "cap": "round",
+          "join": "round",
+          "reveal": {
+            "at": 400,
+            "kind": "slideRight",
+            "distance": 60
+          }
+        },
+        {
+          "type": "text",
+          "text": "a path is points and a stroke",
+          "font": "mono",
+          "sizePx": 18,
+          "color": "#8FA3B0",
+          "pos": [520, 300],
+          "reveal": {
+            "at": 400,
+            "kind": "fadeIn"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Only translate, scale, rotation and opacity animate. Everything else is static geometry \u2014 which is why the same document always renders the same pixels.",
+          "font": "inter",
+          "sizePx": 21,
+          "color": "#7C93A3",
+          "pos": [72, 388],
+          "maxW": 800,
+          "reveal": {
+            "at": 560,
+            "kind": "fadeUp"
+          }
+        }
+      ]
+    }
+  ]
+}

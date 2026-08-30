@@ -72,6 +72,8 @@ jobs:
       # visitor meets. A base path or a public-directory file can be right in
       # dev and wrong in dist.
       - run: npm -w @kineto/demo-tape run test:browser:dist
+      - run: npm -w @kineto/playground run test:browser
+      - run: npm -w @kineto/playground run test:browser:dist
       # Perf diagnostic (spec §6, Task 26): render-only ms/frame and
       # realtime ratio for the fixture tape, logged for regression
       # visibility. Measured, not asserted — never fails the job on a

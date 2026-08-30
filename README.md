@@ -192,12 +192,16 @@ is WebP; the 35-second tour is MP4.)
 ## Try it without installing anything
 
 [**danielfidalgo.github.io/kineto**](https://danielfidalgo.github.io/kineto/) —
-a mysteryshopper tape compiled to a captioned, crossfaded MP4 **in your tab**.
-The same Rust engine, on WebAssembly, encoding through WebCodecs. Nothing is
-uploaded and no server renders anything; the tape never leaves your machine.
+edit a scene document and watch it recompile, then export a real MP4 **in your
+tab**. The same Rust engine that runs headless in CI, on WebAssembly, encoding
+through WebCodecs. Nothing is uploaded; no server renders anything.
 
-Needs WebCodecs, so a recent Chrome or Edge. The demo says so rather than
-failing quietly if your browser cannot encode.
+Four examples to start from: a minimal document, entrances and paths and
+gradients, `build_scenes` output, and a chart. Change any of them and the
+preview follows.
+
+Export needs WebCodecs, so a recent Chrome or Edge — the page says so rather
+than failing quietly. The preview works anywhere.
 
 ## In CI
 

@@ -1,0 +1,205 @@
+{
+  "assets": {
+    "display": {
+      "src": "kineto:inter",
+      "type": "font"
+    },
+    "mono": {
+      "src": "kineto:jetbrains-mono",
+      "type": "font"
+    }
+  },
+  "bg": "#0B1116",
+  "defaultFps": 30,
+  "scenes": [
+    {
+      "duration": 2002492800,
+      "elements": [
+        {
+          "fill": {
+            "from": [
+              0,
+              0
+            ],
+            "stops": [
+              {
+                "at": 0,
+                "color": "#FF9F45"
+              },
+              {
+                "at": 1,
+                "color": "#C77DFF"
+              }
+            ],
+            "to": [
+              1,
+              0
+            ],
+            "type": "linear"
+          },
+          "radius": 2.16,
+          "rect": [
+            65.0,
+            162.42499999999998,
+            86.39999999999999,
+            4.32
+          ],
+          "reveal": {
+            "at": 60,
+            "distance": 28.799999999999997,
+            "kind": "slideRight"
+          },
+          "type": "rect"
+        },
+        {
+          "color": "#F4F7F9",
+          "font": "display",
+          "pos": [
+            61.82,
+            208.42499999999998
+          ],
+          "reveal": {
+            "at": 170,
+            "kind": "fadeUp"
+          },
+          "sizePx": 53.0,
+          "text": "You write a document.",
+          "type": "text"
+        },
+        {
+          "color": "#8FA3B0",
+          "font": "display",
+          "pos": [
+            65.0,
+            291.47499999999997
+          ],
+          "reveal": {
+            "at": 280,
+            "kind": "fadeUp"
+          },
+          "sizePx": 30.0,
+          "text": "It compiles to a video.",
+          "type": "text"
+        }
+      ],
+      "id": "title-0"
+    },
+    {
+      "duration": 3966177600,
+      "elements": [
+        {
+          "color": "#F4F7F9",
+          "font": "display",
+          "pos": [
+            65.0,
+            150.14999999999998
+          ],
+          "reveal": {
+            "at": 60,
+            "kind": "fadeUp"
+          },
+          "sizePx": 30.0,
+          "text": "Try changing something",
+          "type": "text"
+        },
+        {
+          "fill": "#FF9F45",
+          "radius": 2.52,
+          "rect": [
+            65.0,
+            224.06999999999996,
+            5.04,
+            5.04
+          ],
+          "reveal": {
+            "at": 170,
+            "kind": "popIn"
+          },
+          "type": "rect"
+        },
+        {
+          "color": "#F4F7F9",
+          "font": "display",
+          "pos": [
+            80.12,
+            215.24999999999997
+          ],
+          "reveal": {
+            "at": 170,
+            "kind": "fadeUp"
+          },
+          "sizePx": 21.0,
+          "text": "edit the JSON on the left",
+          "type": "text"
+        },
+        {
+          "fill": "#FF9F45",
+          "radius": 2.52,
+          "rect": [
+            65.0,
+            266.07,
+            5.04,
+            5.04
+          ],
+          "reveal": {
+            "at": 280,
+            "kind": "popIn"
+          },
+          "type": "rect"
+        },
+        {
+          "color": "#F4F7F9",
+          "font": "display",
+          "pos": [
+            80.12,
+            257.25
+          ],
+          "reveal": {
+            "at": 280,
+            "kind": "fadeUp"
+          },
+          "sizePx": 21.0,
+          "text": "the preview recompiles as you type",
+          "type": "text"
+        },
+        {
+          "fill": "#FF9F45",
+          "radius": 2.52,
+          "rect": [
+            65.0,
+            308.07,
+            5.04,
+            5.04
+          ],
+          "reveal": {
+            "at": 390,
+            "kind": "popIn"
+          },
+          "type": "rect"
+        },
+        {
+          "color": "#F4F7F9",
+          "font": "display",
+          "pos": [
+            80.12,
+            299.25
+          ],
+          "reveal": {
+            "at": 390,
+            "kind": "fadeUp"
+          },
+          "sizePx": 21.0,
+          "text": "then export a real MP4",
+          "type": "text"
+        }
+      ],
+      "id": "points-1"
+    }
+  ],
+  "size": {
+    "h": 540,
+    "w": 960
+  },
+  "timebase": 705600000,
+  "v": 1
+}

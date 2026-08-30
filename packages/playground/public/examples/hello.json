@@ -1,0 +1,51 @@
+{
+  "v": 1,
+  "timebase": 705600000,
+  "defaultFps": 30,
+  "size": { "w": 960, "h": 540 },
+  "bg": "#0B1116",
+  "assets": {
+    "inter": { "type": "font", "src": "kineto:inter" }
+  },
+  "scenes": [
+    {
+      "id": "hello",
+      "duration": 2116800000,
+      "elements": [
+        {
+          "type": "rect",
+          "rect": [80, 210, 120, 6],
+          "radius": 3,
+          "fill": {
+            "type": "linear",
+            "from": [0, 0],
+            "to": [1, 0],
+            "stops": [
+              { "at": 0, "color": "#FF9F45" },
+              { "at": 1, "color": "#C77DFF" }
+            ]
+          },
+          "reveal": { "at": 0, "kind": "slideRight", "distance": 40 }
+        },
+        {
+          "type": "text",
+          "text": "Hello",
+          "font": "inter",
+          "sizePx": 88,
+          "color": "#F4F7F9",
+          "pos": [76, 244],
+          "reveal": { "at": 120, "kind": "fadeUp" }
+        },
+        {
+          "type": "text",
+          "text": "change this text, or the colour, or the reveal",
+          "font": "inter",
+          "sizePx": 24,
+          "color": "#8FA3B0",
+          "pos": [80, 356],
+          "reveal": { "at": 300, "kind": "fadeUp" }
+        }
+      ]
+    }
+  ]
+}

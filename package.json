@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/sdk",
-    "packages/demo-tape"
+    "packages/demo-tape",
+    "packages/playground"
   ],
   "engines": {
     "node": ">=22"

@@ -111,6 +111,17 @@ demo: wasm
 cast input dir:
     cargo run -q -p kineto-asciicast --bin kineto-cast -- {{input}} -o {{dir}}
 
+# Regenerate the playground's generated examples.
+#
+# themed-scenes and chart come from the real builders rather than being
+# hand-written, so an example a visitor copies cannot drift from what the
+# tools actually emit. hello.json and motion.json are hand-authored on
+# purpose: they are the ones people read and edit, and generated output is
+# too verbose to learn from.
+examples: build
+    KINETO_MCP="{{cargo_target}}/release/kineto-mcp" node scripts/playground-examples.mjs
+    for f in packages/playground/public/examples/*.json; do "{{kineto}}" "$f" --check; done
+
 # Rebuild the README video, the inline loop and the poster.
 #
 # docs/media/hero.json IS the source — the thing this project claims you
