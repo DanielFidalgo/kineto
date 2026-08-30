@@ -10,154 +10,66 @@
   },
   "scenes": [
     {
-      "id": "open",
-      "duration": 2914128000,
+      "id": "compile",
+      "duration": 3528000000,
       "elements": [
         {
+          "type": "text",
+          "text": "THE DOCUMENT",
+          "font": "mono", "sizePx": 19, "color": "#7C93A3", "pos": [88, 150],
+          "reveal": { "at": 40, "kind": "fadeUp" }
+        },
+        {
+          "type": "rect",
+          "rect": [88, 196, 560, 356],
+          "radius": 16,
+          "fill": "#16232F",
+          "shadow": { "color": "#00000066", "blur": 26, "dy": 12 },
+          "reveal": { "at": 80, "kind": "fadeUp" }
+        },
+        {
+          "type": "text",
+          "text": "{\n  \"scenes\": [{\n    \"elements\": [{\n      \"type\": \"text\",\n      \"text\": \"Hello\",\n      \"reveal\": {\n        \"kind\": \"fadeUp\"\n      }\n    }]\n  }]\n}",
+          "font": "mono", "sizePx": 21, "color": "#C8D6E0", "pos": [120, 226],
+          "reveal": { "at": 180, "kind": "fadeUp" }
+        },
+        {
           "type": "path",
-          "closed": true,
-          "points": [[0, 0], [1280, 0], [1280, 720], [0, 720]],
+          "points": [[676, 374], [744, 374]],
+          "stroke": "#FF9F45", "strokeWidth": 3, "cap": "round",
+          "reveal": { "at": 620, "kind": "slideRight", "distance": 40 }
+        },
+        {
+          "type": "path",
+          "points": [[734, 364], [746, 374], [734, 384]],
+          "closed": true, "fill": "#FF9F45",
+          "reveal": { "at": 700, "kind": "fadeIn" }
+        },
+        {
+          "type": "rect",
+          "rect": [776, 244, 416, 260],
+          "radius": 16,
           "fill": {
-            "type": "linear",
-            "from": [0, 0],
-            "to": [1, 1],
+            "type": "linear", "from": [0, 0], "to": [1, 1],
             "stops": [
-              { "at": 0, "color": "#132433" },
-              { "at": 1, "color": "#0B1116" }
+              { "at": 0, "color": "#1D3040" },
+              { "at": 1, "color": "#131F2A" }
             ]
-          }
+          },
+          "shadow": { "color": "#00000073", "blur": 30, "dy": 14 },
+          "reveal": { "at": 780, "kind": "popIn" }
         },
         {
-          "type": "text",
-          "text": "Kineto",
-          "font": "inter",
-          "sizePx": 92,
-          "color": "#F4F7F9",
-          "pos": [110, 262],
-          "animations": [
-            {
-              "prop": "opacity",
-              "keys": [
-                { "t": 0, "v": 0.0 },
-                { "t": 268128000, "v": 1.0, "ease": "outCubic" },
-                { "t": 2462544000, "v": 1.0 },
-                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
-              ]
-            },
-            {
-              "prop": "translate",
-              "keys": [
-                { "t": 0, "v": [0, 26] },
-                { "t": 84672000, "v": [0, 26] },
-                { "t": 522144000, "v": [0, 0], "ease": "outBack" }
-              ]
-            }
-          ]
+          "type": "text", "text": "Hello", "font": "inter",
+          "sizePx": 54, "color": "#F4F7F9", "pos": [816, 336],
+          "reveal": { "at": 1000, "kind": "fadeUp" }
         },
         {
-          "type": "text",
-          "text": "video as a build artifact",
-          "font": "mono",
-          "sizePx": 25,
-          "color": "#8FA3B0",
-          "pos": [116, 392],
-          "animations": [
-            {
-              "prop": "opacity",
-              "keys": [
-                { "t": 0, "v": 0.0 },
-                { "t": 536256000, "v": 1.0, "ease": "outCubic" },
-                { "t": 2462544000, "v": 1.0 },
-                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "path",
-          "points": [[112, 462], [352, 462]],
-          "stroke": "#FF9F45",
-          "strokeWidth": 6,
-          "cap": "round",
-          "animations": [
-            {
-              "prop": "translate",
-              "keys": [
-                { "t": 0, "v": [-300, 0] },
-                { "t": 578592000, "v": [0, 0], "ease": "outCubic" }
-              ]
-            },
-            {
-              "prop": "opacity",
-              "keys": [
-                { "t": 0, "v": 1.0 },
-                { "t": 2462544000, "v": 1.0 },
-                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
-              ]
-            }
-          ]
+          "type": "text", "text": "out.mp4", "font": "mono",
+          "sizePx": 18, "color": "#7C93A3", "pos": [816, 440],
+          "reveal": { "at": 1120, "kind": "fadeUp" }
         }
       ]
-    },
-    {
-      "id": "claim",
-      "duration": 2914128000,
-      "elements": [
-        {
-          "type": "path",
-          "closed": true,
-          "points": [[0, 0], [1280, 0], [1280, 720], [0, 720]],
-          "fill": {
-            "type": "linear",
-            "from": [0, 0],
-            "to": [1, 1],
-            "stops": [
-              { "at": 0, "color": "#0B1116" },
-              { "at": 1, "color": "#101d27" }
-            ]
-          }
-        },
-        {
-          "type": "text",
-          "text": "You write a document.\nIt compiles to a video.",
-          "font": "inter",
-          "sizePx": 62,
-          "color": "#F4F7F9",
-          "pos": [110, 258],
-          "animations": [
-            {
-              "prop": "opacity",
-              "keys": [
-                { "t": 0, "v": 0.0 },
-                { "t": 296352000, "v": 1.0, "ease": "outCubic" },
-                { "t": 2462544000, "v": 1.0 },
-                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
-              ]
-            }
-          ],
-          "maxW": 1060
-        },
-        {
-          "type": "text",
-          "text": "the same way source compiles to a binary",
-          "font": "mono",
-          "sizePx": 21,
-          "color": "#FF9F45",
-          "pos": [116, 434],
-          "animations": [
-            {
-              "prop": "opacity",
-              "keys": [
-                { "t": 0, "v": 0.0 },
-                { "t": 635040000, "v": 1.0, "ease": "outCubic" },
-                { "t": 2462544000, "v": 1.0 },
-                { "t": 2730672000, "v": 0.0, "ease": "outCubic" }
-              ]
-            }
-          ]
-        }
-      ],
-      "transition": { "type": "crossfade", "duration": 183456000 }
     }
   ]
 }
