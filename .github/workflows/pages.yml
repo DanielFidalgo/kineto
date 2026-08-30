@@ -49,6 +49,15 @@ jobs:
       - run: npm ci
       - run: npm -w @kineto/playground run build
 
+      # A watchable page per release. GitHub serves release assets as
+      # downloads, so a video can only be linked from a release page, never
+      # played on one; Pages serves the same bytes with real content types.
+      # Non-fatal by design — the playground is the point of the site.
+      - name: Build the release pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node packages/playground/scripts/build-release-pages.mjs
+
       # The same suite CI runs, against the built site rather than the dev
       # server — it exports a real MP4 and checks the ftyp header. Deploying a
       # demo whose one button does nothing would be worse than not deploying.

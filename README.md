@@ -263,8 +263,10 @@ In a workflow, after your release is published:
 
 Your agent can ask for one too — `build_changelog` is an MCP tool.
 
-Kineto's own release pages are made this way: the video on each one is
-composed from that tag's commits and rendered by the version being released.
+Kineto's own releases are made this way — each one links to a
+[watchable page](https://danielfidalgo.github.io/kineto/releases/) whose video
+was composed from that tag's commits and rendered by the version being
+released.
 
 ## The document
 

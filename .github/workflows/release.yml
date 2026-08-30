@@ -190,6 +190,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # To ask Pages to rebuild once the video exists.
+      actions: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -239,8 +241,11 @@ jobs:
           # broken image.
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
           video="${base}/kineto-v${VERSION}-release.mp4"
-          poster="${base}/kineto-v${VERSION}-poster.png"
           size=$(du -h "dist/kineto-v${VERSION}-release.mp4" | cut -f1 | tr -d ' ')
+          # Pages can play it; a release asset can only be downloaded.
+          owner="${GITHUB_REPOSITORY%%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          watch="https://${owner}.github.io/${name}/releases/${TAG}/"
 
           # Prepended to whatever `publish` wrote, rather than replacing it --
           # that body carries GitHub's generated changelog.
@@ -248,14 +253,22 @@ jobs:
           {
             echo "### Release video"
             echo
-            echo "**[kineto-v${VERSION}-release.mp4](${video})** (${size}) —"
-            echo "composed from this tag's own commits and rendered by Kineto"
-            echo "${VERSION} itself, through the action this release ships."
-            echo "A [still](${poster}) is attached too."
+            echo "**[▶ Watch it](${watch})** — composed from this tag's own"
+            echo "commits and rendered by Kineto ${VERSION} itself, through the"
+            echo "action this release ships."
+            echo
+            echo "GitHub serves release assets as downloads rather than playing"
+            echo "them, so the video lives on the project site; the file is"
+            echo "[attached here](${video}) too (${size})."
             echo
             cat /tmp/body.md
           } > /tmp/notes.md
           gh release edit "$TAG" --notes-file /tmp/notes.md
+
+          # The site builds its release pages from published assets, so it can
+          # only pick this one up now that the upload above has happened.
+          gh workflow run pages.yml --ref main || \
+            echo "::warning::could not trigger the Pages rebuild; run it by hand"
           echo "attached and linked: $(ls dist | tr '\n' ' ')"
 
   # crates.io publishing is irreversible: a name can never be freed and a
