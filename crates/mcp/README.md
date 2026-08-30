@@ -259,6 +259,34 @@ about whether a composition is good or the pacing works — that is what
 `preview_document` is for. Contrast is measured against the document
 background, not against elements layered beneath the text.
 
+### `build_scenes`
+
+Composes a document from themed scenes, so you supply content and nothing
+else. Every position, size, colour and entrance comes from the theme, derived
+from the canvas — which is the part worth not doing by hand, and the reason
+generated video usually looks assembled rather than composed.
+
+| field | |
+|---|---|
+| `scenes[]` | each `{ kind, ... }` — `title`, `points`, `code`, `quote` |
+| `theme` | `midnight` (dark) or `paper` (light). Default `midnight` |
+| `out` | where to write the document. Renders nothing |
+| `width`, `height` | default 1920x1080 |
+
+Per scene: `text` and `subtitle` for a `title`; `heading` and `items` for
+`points` and `code`; `text` and `attribution` for a `quote`. `seconds` is
+optional — omitted, each scene is sized to be readable at 300 wpm plus its
+entrance, which is the same rule `check_document` enforces.
+
+```json
+{ "kind": "points", "heading": "What changed",
+  "items": ["reveal", "provenance", "npx kineto-mcp"] }
+```
+
+The result is ordinary text and rects with `reveal` entrances: edit it, check
+it, preview it or render it like any other document. It chooses no narrative —
+the sequence, the durations and what the video says stay yours.
+
 ### `build_chart`
 
 Turns data into a chart document — `line`, `area` or `bar` — and renders

@@ -93,10 +93,10 @@ pub struct Issue {
 /// Faster than prose reading (~250) because captions and labels are scanned,
 /// not read. Deliberately generous: the rule exists to catch text that flashes
 /// past, not to grade pacing.
-const SCAN_WPM: f64 = 300.0;
+pub const SCAN_WPM: f64 = 300.0;
 
 /// Extra time a viewer needs to notice a scene changed at all.
-const SCENE_BEAT_MS: f64 = 500.0;
+pub const SCENE_BEAT_MS: f64 = 500.0;
 
 /// Smallest text height, as a fraction of canvas height, that survives being
 /// watched on a phone. 1.6% is ~17px at 1080p and ~11.5px at 720p.

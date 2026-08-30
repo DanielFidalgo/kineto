@@ -350,6 +350,48 @@ pub struct CompileSessionParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SceneParams {
+    /// `title`, `points`, `code` or `quote`.
+    pub kind: String,
+    /// The headline for `title`, the quotation for `quote`.
+    #[serde(default)]
+    pub text: Option<String>,
+    /// Supporting line under a `title`.
+    #[serde(default)]
+    pub subtitle: Option<String>,
+    /// Heading above a `points` or `code` scene.
+    #[serde(default)]
+    pub heading: Option<String>,
+    /// The bullets of a `points` scene, or the lines of a `code` scene. One
+    /// entry per line; they are staggered in the order given.
+    #[serde(default)]
+    pub items: Vec<String>,
+    /// Who said it, for a `quote`.
+    #[serde(default)]
+    pub attribution: Option<String>,
+    /// How long this scene holds, in seconds. Default 4.
+    #[serde(default)]
+    pub seconds: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BuildScenesParams {
+    /// `midnight` (dark) or `paper` (light).
+    #[serde(default)]
+    pub theme: Option<String>,
+    pub scenes: Vec<SceneParams>,
+    /// Where to write the document JSON. Renders nothing — pass the result to
+    /// `check_document`, `preview_document` or `render_document`.
+    pub out: String,
+    #[serde(default)]
+    pub width: Option<u32>,
+    #[serde(default)]
+    pub height: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BuildChartParams {
     /// `line`, `area` or `bar`.
     pub kind: String,

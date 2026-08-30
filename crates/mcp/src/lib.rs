@@ -7,9 +7,11 @@ pub mod examples;
 pub mod motion;
 pub mod render;
 pub mod resources;
+pub mod scene;
 pub mod session;
 pub mod source;
 pub mod storyboard;
+pub mod theme;
 pub mod timeline;
 pub mod tools;
 
@@ -378,6 +380,85 @@ impl KinetoServer {
                 params.out,
                 doc.scenes.len(),
                 total as f64 / 1000.0
+            )),
+        ]))
+    }
+
+    #[tool(
+        name = "build_scenes",
+        description = "Compose a document from themed scenes: title, points, \
+                       code, quote. Every position, size, colour and entrance \
+                       comes from the theme, derived from the canvas — which \
+                       is what makes output look composed rather than \
+                       assembled, and is the part worth not doing by hand. \
+                       Supply content only. Prefer this to writing elements \
+                       yourself for anything text-led; the result is an \
+                       ordinary document you can then edit, check, preview or \
+                       render. It chooses no narrative: the sequence, the \
+                       durations and what the video says are yours."
+    )]
+    pub async fn build_scenes(
+        &self,
+        Parameters(params): Parameters<crate::tools::BuildScenesParams>,
+    ) -> CallToolResult {
+        match Self::build_scenes_impl(params) {
+            Ok(result) => result,
+            Err(e) => e.into_result(),
+        }
+    }
+
+    fn build_scenes_impl(
+        params: crate::tools::BuildScenesParams,
+    ) -> Result<CallToolResult, ToolError> {
+        let width = params.width.unwrap_or(1920);
+        let height = params.height.unwrap_or(1080);
+        crate::source::check_canvas_size(width, height)?;
+
+        let specs: Vec<crate::scene::SceneSpec> = params
+            .scenes
+            .iter()
+            .map(|s| crate::scene::SceneSpec {
+                kind: s.kind.clone(),
+                text: s.text.clone(),
+                subtitle: s.subtitle.clone(),
+                heading: s.heading.clone(),
+                items: s.items.clone(),
+                attribution: s.attribution.clone(),
+                seconds: s.seconds,
+            })
+            .collect();
+
+        let theme = params.theme.as_deref().unwrap_or("midnight");
+        let json = crate::scene::build_document(theme, width, height, &specs)?;
+
+        let out = std::path::Path::new(&params.out);
+        if let Some(parent) = out.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|e| ToolError::Io {
+                    context: "creating output directory",
+                    path: parent.display().to_string(),
+                    source: e,
+                })?;
+            }
+        }
+        std::fs::write(out, &json).map_err(|e| ToolError::Io {
+            context: "writing scene document",
+            path: params.out.clone(),
+            source: e,
+        })?;
+
+        let total: f64 = specs
+            .iter()
+            .map(|s| {
+                s.seconds
+                    .unwrap_or_else(|| crate::scene::default_seconds(s))
+            })
+            .sum();
+        Ok(CallToolResult::success(vec![
+            rmcp::model::ContentBlock::text(format!(
+                "wrote {} — {} scenes, {total:.1}s, theme '{theme}', {width}x{height}",
+                params.out,
+                specs.len(),
             )),
         ]))
     }
