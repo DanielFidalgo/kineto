@@ -304,16 +304,18 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
         },
         {
           "type": "object",
-          "required": ["type", "points"],
-          "description": "Open or closed polyline; straight segments only. Requires at least two points and at least one of stroke/fill.",
+          "required": ["type"],
+          "oneOf": [{ "required": ["points"] }, { "required": ["d"] }],
+          "description": "Open or closed path, from straight `points` or SVG path data `d` (which adds curves and arcs). Give exactly one of points/d. Requires at least one of stroke/fill; a polyline needs at least two points.",
           "properties": {
             "type": { "const": "path" },
+            "d": { "type": "string", "description": "SVG path data: M L H V C S Q T A Z, absolute or relative. Use instead of points for curves; close with Z." },
             "points": {
               "type": "array",
               "minItems": 2,
               "items": { "$ref": "#/$defs/vec2" }
             },
-            "closed": { "type": "boolean", "description": "Draw the segment from the last point back to the first. Defaults to false." },
+            "closed": { "type": "boolean", "description": "Draw the segment from the last point back to the first. Defaults to false. Rejected alongside `d`: close SVG path data with Z." },
             "stroke": { "$ref": "#/$defs/color" },
             "strokeWidth": { "type": "number", "exclusiveMinimum": 0, "description": "Defaults to 1 when omitted." },
             "cap": { "enum": ["butt", "round", "square"], "description": "Stroke terminator. Defaults to butt." },
@@ -359,7 +361,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
       }
     },
     "commonProps": {
-      "description": "Every element accepts these. Base geometry is static; only these four properties animate.",
+      "description": "Every element accepts these. Base geometry is static; only these properties animate: the four transform properties, and `draw` (via `animations`), which changes how much of a path's stroke is visible rather than a transform.",
       "properties": {
         "translate": { "$ref": "#/$defs/vec2" },
         "scale": { "type": "number" },
@@ -378,8 +380,8 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
       "description": "An entrance, in one line. Expands to the equivalent keyframes before rendering, so it is shorthand rather than a new capability — but it is timed in MILLISECONDS, not ticks, and it composes with whatever transform the element already has. Prefer this to hand-written opacity and translate tracks: staggering several elements by 120-200ms is what separates a video from a slide deck. Rejected if the element already animates a property the reveal would drive.",
       "properties": {
         "kind": {
-          "enum": ["fadeIn", "fadeUp", "fadeDown", "slideLeft", "slideRight", "popIn"],
-          "description": "fadeUp rises into place and is the safe default for text. slideLeft/slideRight name the direction of travel. popIn overshoots slightly and suits badges and numbers."
+          "enum": ["fadeIn", "fadeUp", "fadeDown", "slideLeft", "slideRight", "popIn", "drawOn"],
+          "description": "fadeUp rises into place and is the safe default for text. slideLeft/slideRight name the direction of travel. popIn overshoots slightly and suits badges and numbers. drawOn draws a stroked path in along its length."
         },
         "at": { "type": "integer", "minimum": 0, "description": "When the entrance starts, in milliseconds from the scene's own start. Stagger siblings by giving each a later `at`." },
         "ms": { "type": "integer", "minimum": 1, "description": "How long it takes. Default 400." },
@@ -391,7 +393,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
       "required": ["prop", "keys"],
       "additionalProperties": false,
       "properties": {
-        "prop": { "enum": ["translate", "scale", "rotation", "opacity"] },
+        "prop": { "enum": ["translate", "scale", "rotation", "opacity", "draw"], "description": "draw (0..1) is the fraction of a stroked path's length that is visible; valid only on a path with a stroke. It trims the stroke only: `fill` and `shadow` render in full at any draw value." },
         "keys": {
           "type": "array",
           "minItems": 1,
