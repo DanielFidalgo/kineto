@@ -649,6 +649,7 @@ fn path_stroke_width_defaults_to_one() {
     let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
     let el = Element::Path {
         points: vec![[8.0.into(), 32.0.into()], [56.0.into(), 32.0.into()]],
+        d: None,
         closed: false,
         stroke: Some("#FF0000".into()),
         stroke_width: None,

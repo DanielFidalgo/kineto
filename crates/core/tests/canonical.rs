@@ -204,6 +204,40 @@ fn a_path_element_round_trips_through_canonical_json() {
 }
 
 #[test]
+fn a_d_path_round_trips_through_canonical_json() {
+    let mut d = Document::new(200, 100);
+    d.push_scene(
+        Scene::new("s", seconds(1.0)).with_element(
+            Element::path_data("M0 0 C 10 20 30 20 40 0").with_stroke("#FF9900", 3.0),
+        ),
+    );
+
+    let json = d.canonical_json();
+    assert!(
+        json.contains(r#""type":"path","d":"M0 0 C 10 20 30 20 40 0""#),
+        "{json}"
+    );
+    let back = Document::from_json(&json).expect("d path document parses");
+    assert_eq!(
+        back.canonical_json(),
+        json,
+        "canonical form must be a fixed point"
+    );
+}
+
+#[test]
+fn a_points_path_still_serialises_without_d() {
+    let mut d = Document::new(50, 50);
+    d.push_scene(
+        Scene::new("s", seconds(1.0)).with_element(
+            Element::path(vec![[0.0, 0.0], [10.0, 10.0]]).with_stroke("#FFFFFF", 1.0),
+        ),
+    );
+    let json = d.canonical_json();
+    assert!(!json.contains(r#""d":"#), "{json}");
+}
+
+#[test]
 fn path_defaults_are_omitted_from_canonical_json() {
     // `closed`, `cap` and `join` at their defaults must not be written, for
     // the same reason `ease` is skipped when Linear: the canonical form is
