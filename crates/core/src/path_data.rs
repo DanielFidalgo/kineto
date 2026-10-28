@@ -29,8 +29,9 @@ pub enum Segment {
     Close,
 }
 
-/// A parse failure. `offset` is always the index of a byte that exists in
-/// the input, so a caller can point at it.
+/// A parse failure. `offset` is the index of the offending byte, except for
+/// input that draws nothing (including empty input), where it is 0 and may
+/// index no byte at all.
 #[derive(Clone, Debug, PartialEq, Error)]
 #[error("at byte {offset}: {reason}")]
 pub struct PathDataError {
@@ -134,13 +135,23 @@ fn measure(segments: &[Segment]) -> Vec<Span> {
             Close => (subpath_start, distance(from, subpath_start)),
         };
         cursor = to;
-        spans.push(Span { segment, from, to, length });
+        spans.push(Span {
+            segment,
+            from,
+            to,
+            length,
+        });
     }
     spans
 }
 
 /// Cumulative chord length at `t = i / CUBIC_LENGTH_PIECES`; entry 0 is 0.
-fn cubic_length_table(p0: [f64; 2], c1: [f64; 2], c2: [f64; 2], p1: [f64; 2]) -> [f64; CUBIC_LENGTH_PIECES + 1] {
+fn cubic_length_table(
+    p0: [f64; 2],
+    c1: [f64; 2],
+    c2: [f64; 2],
+    p1: [f64; 2],
+) -> [f64; CUBIC_LENGTH_PIECES + 1] {
     let mut table = [0.0; CUBIC_LENGTH_PIECES + 1];
     let mut previous = p0;
     for (i, entry) in table.iter_mut().enumerate().skip(1) {
@@ -157,13 +168,23 @@ fn cubic_length_table(p0: [f64; 2], c1: [f64; 2], c2: [f64; 2], p1: [f64; 2]) ->
 
 /// The curve parameter `distance` along the cubic, interpolating within the
 /// flattened piece it falls in.
-fn cubic_parameter_at(p0: [f64; 2], c1: [f64; 2], c2: [f64; 2], p1: [f64; 2], distance: f64) -> f64 {
+fn cubic_parameter_at(
+    p0: [f64; 2],
+    c1: [f64; 2],
+    c2: [f64; 2],
+    p1: [f64; 2],
+    distance: f64,
+) -> f64 {
     let table = cubic_length_table(p0, c1, c2, p1);
     let piece = (0..CUBIC_LENGTH_PIECES)
         .find(|&i| distance <= table[i + 1])
         .unwrap_or(CUBIC_LENGTH_PIECES - 1);
     let piece_length = table[piece + 1] - table[piece];
-    let within_piece = if piece_length > 0.0 { (distance - table[piece]) / piece_length } else { 0.0 };
+    let within_piece = if piece_length > 0.0 {
+        (distance - table[piece]) / piece_length
+    } else {
+        0.0
+    };
     (piece as f64 + within_piece.clamp(0.0, 1.0)) / CUBIC_LENGTH_PIECES as f64
 }
 
@@ -242,9 +263,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn finish(self) -> Result<Vec<Segment>, PathDataError> {
+    fn finish(mut self) -> Result<Vec<Segment>, PathDataError> {
         if self.segments.iter().all(|s| matches!(s, MoveTo(_))) {
             return Err(self.error_at(0, "path draws nothing"));
+        }
+        // A move with nothing after it draws nothing, but tiny-skia keeps it
+        // and its tight bounds would count the point, shifting the pivot.
+        while matches!(self.segments.last(), Some(MoveTo(_))) {
+            self.segments.pop();
         }
         Ok(self.segments)
     }
@@ -270,7 +296,11 @@ impl<'a> Parser<'a> {
     fn apply(&mut self, command: u8) -> Result<(), PathDataError> {
         let previous_cubic = self.previous_cubic_control.take();
         let previous_quadratic = self.previous_quadratic_control.take();
-        let origin = if command.is_ascii_lowercase() { self.current } else { [0.0, 0.0] };
+        let origin = if command.is_ascii_lowercase() {
+            self.current
+        } else {
+            [0.0, 0.0]
+        };
 
         match command.to_ascii_uppercase() {
             b'M' => {
@@ -327,9 +357,16 @@ impl<'a> Parser<'a> {
         let large_arc = self.read_flag()?;
         let sweep = self.read_flag()?;
         let end = self.read_point(origin)?;
-        let arc = Arc { radius_x, radius_y, rotation_degrees, large_arc, sweep };
+        let arc = Arc {
+            radius_x,
+            radius_y,
+            rotation_degrees,
+            large_arc,
+            sweep,
+        };
         self.begin_drawing();
-        self.segments.extend(arc_to_segments(self.current, arc, end));
+        self.segments
+            .extend(arc_to_segments(self.current, arc, end));
         self.current = end;
         Ok(())
     }
@@ -393,7 +430,10 @@ impl<'a> Parser<'a> {
 
     fn number_follows(&mut self) -> bool {
         self.skip_separators();
-        matches!(self.bytes().get(self.position), Some(b'0'..=b'9' | b'.' | b'+' | b'-'))
+        matches!(
+            self.bytes().get(self.position),
+            Some(b'0'..=b'9' | b'.' | b'+' | b'-')
+        )
     }
 
     fn read_point(&mut self, origin: [f64; 2]) -> Result<[f64; 2], PathDataError> {
@@ -408,7 +448,11 @@ impl<'a> Parser<'a> {
         let start = self.position;
         self.skip_sign();
         let integer_digits = self.skip_digits();
-        let fraction_digits = if self.eat(b'.') { self.skip_digits() } else { 0 };
+        let fraction_digits = if self.eat(b'.') {
+            self.skip_digits()
+        } else {
+            0
+        };
         if integer_digits + fraction_digits == 0 {
             return Err(self.error_at(start, "expected a number"));
         }
@@ -476,7 +520,10 @@ impl<'a> Parser<'a> {
 
     fn error_at(&self, offset: usize, reason: impl Into<String>) -> PathDataError {
         let last_byte = self.bytes().len().saturating_sub(1);
-        PathDataError { offset: offset.min(last_byte), reason: reason.into() }
+        PathDataError {
+            offset: offset.min(last_byte),
+            reason: reason.into(),
+        }
     }
 }
 
@@ -536,7 +583,11 @@ fn arc_to_segments(from: [f64; 2], arc: Arc, to: [f64; 2]) -> Vec<Segment> {
     let ry2 = ry * ry;
     let numerator = rx2 * ry2 - rx2 * y1 * y1 - ry2 * x1 * x1;
     let denominator = rx2 * y1 * y1 + ry2 * x1 * x1;
-    let sign = if arc.large_arc == arc.sweep { -1.0 } else { 1.0 };
+    let sign = if arc.large_arc == arc.sweep {
+        -1.0
+    } else {
+        1.0
+    };
     let coefficient = sign * (numerator / denominator).max(0.0).sqrt();
     let center_x1 = coefficient * rx * y1 / ry;
     let center_y1 = -coefficient * ry * x1 / rx;
@@ -559,7 +610,13 @@ fn arc_to_segments(from: [f64; 2], arc: Arc, to: [f64; 2]) -> Vec<Segment> {
         sweep_angle += 2.0 * PI;
     }
 
-    let ellipse = Ellipse { center, rx, ry, cos_phi, sin_phi };
+    let ellipse = Ellipse {
+        center,
+        rx,
+        ry,
+        cos_phi,
+        sin_phi,
+    };
     let pieces = ((sweep_angle.abs() / FRAC_PI_2 - ARC_SPLIT_EPSILON).ceil() as usize).max(1);
     let step = sweep_angle / pieces as f64;
     let handle = 4.0 / 3.0 * libm::tan(step / 4.0);
@@ -574,8 +631,14 @@ fn arc_to_segments(from: [f64; 2], arc: Arc, to: [f64; 2]) -> Vec<Segment> {
         // reconstruction of it, so rounding cannot leave a gap.
         let end_point = if piece + 1 == pieces { to } else { end };
         segments.push(CubicTo(
-            [start[0] + handle * start_tangent[0], start[1] + handle * start_tangent[1]],
-            [end[0] - handle * end_tangent[0], end[1] - handle * end_tangent[1]],
+            [
+                start[0] + handle * start_tangent[0],
+                start[1] + handle * start_tangent[1],
+            ],
+            [
+                end[0] - handle * end_tangent[0],
+                end[1] - handle * end_tangent[1],
+            ],
             end_point,
         ));
     }
@@ -594,9 +657,17 @@ impl Ellipse {
     /// The point at angle `theta` and the derivative with respect to it.
     fn point_and_tangent(&self, theta: f64) -> ([f64; 2], [f64; 2]) {
         let (sin, cos) = (libm::sin(theta), libm::cos(theta));
-        let rotate = |x: f64, y: f64| [self.cos_phi * x - self.sin_phi * y, self.sin_phi * x + self.cos_phi * y];
+        let rotate = |x: f64, y: f64| {
+            [
+                self.cos_phi * x - self.sin_phi * y,
+                self.sin_phi * x + self.cos_phi * y,
+            ]
+        };
         let offset = rotate(self.rx * cos, self.ry * sin);
         let tangent = rotate(-self.rx * sin, self.ry * cos);
-        ([self.center[0] + offset[0], self.center[1] + offset[1]], tangent)
+        (
+            [self.center[0] + offset[0], self.center[1] + offset[1]],
+            tangent,
+        )
     }
 }

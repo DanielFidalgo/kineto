@@ -12,6 +12,7 @@
 use crate::anim::{resolve_common, Resolved};
 use crate::assets::AssetStore;
 use crate::doc::{Align, Cap, Element, Gradient, Join, Paint};
+use crate::path_data::{self, Segment};
 use crate::text::{layout_text, TextLayout};
 use cosmic_text::SwashContent;
 use std::collections::HashMap;
@@ -20,6 +21,52 @@ use tiny_skia::{
     Mask, Paint as SkPaint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Point, RadialGradient,
     Rect as SkRect, Shader, SpreadMode, Stroke, Transform,
 };
+
+/// Build a tiny-skia path from absolute segments, shifted by `offset`.
+/// `None` when tiny-skia rejects the result (no drawable segments).
+fn path_from_segments(segments: &[Segment], offset: (f32, f32)) -> Option<tiny_skia::Path> {
+    let at = |p: &[f64; 2]| (p[0] as f32 + offset.0, p[1] as f32 + offset.1);
+    let mut pb = PathBuilder::new();
+    for segment in segments {
+        match segment {
+            Segment::MoveTo(p) => {
+                let (x, y) = at(p);
+                pb.move_to(x, y);
+            }
+            Segment::LineTo(p) => {
+                let (x, y) = at(p);
+                pb.line_to(x, y);
+            }
+            Segment::CubicTo(c1, c2, p) => {
+                let (x1, y1) = at(c1);
+                let (x2, y2) = at(c2);
+                let (x, y) = at(p);
+                pb.cubic_to(x1, y1, x2, y2, x, y);
+            }
+            Segment::Close => pb.close(),
+        }
+    }
+    pb.finish()
+}
+
+/// The leading `fraction` of a path element's outline, as a tiny-skia path.
+/// `None` when nothing drawable is left, so the caller skips the stroke.
+fn trimmed_stroke_path(
+    d: Option<&str>,
+    points: &[[crate::Scalar; 2]],
+    closed: bool,
+    fraction: f64,
+    offset: (f32, f32),
+) -> Option<tiny_skia::Path> {
+    let segments = match d {
+        Some(d) => path_data::parse(d).ok()?,
+        None => {
+            let points: Vec<[f64; 2]> = points.iter().map(|p| [p[0].0, p[1].0]).collect();
+            path_data::from_points(&points, closed)
+        }
+    };
+    path_from_segments(&path_data::trim(&segments, fraction), offset)
+}
 
 /// Axis-aligned base bounding box, in the element's parent-local coordinate
 /// space (i.e. before that element's own `translate/scale/rotation`, but
@@ -34,8 +81,9 @@ pub struct BBox {
 
 /// Build the transform for one element's animated properties, rotating and
 /// scaling about the box's own center (spec §3.3: base geometry is static;
-/// only translate/scale/rotation/opacity animate, and rotation/scale pivot
-/// on the element's center, not its origin corner).
+/// only translate/scale/rotation/opacity and, on a stroked path, `draw`
+/// animate — `draw` trims the stroke and is not part of this transform — and
+/// rotation/scale pivot on the element's center, not its origin corner).
 ///
 /// Intended math: `M = T(translate) · T(center) · R(rotation) · S(scale) ·
 /// T(−center)`, read right-to-left as it applies to a point: shift the box
@@ -73,6 +121,29 @@ pub fn base_bbox(el: &Element) -> BBox {
             w: rect[2].0 as f32,
             h: rect[3].0 as f32,
         },
+        Element::Path { d: Some(d), .. } => {
+            // Tight bounds, not control-point bounds: a curve's handles can
+            // sit far outside the ink, which would put the rotation pivot
+            // off the visible shape.
+            let tight = path_data::parse(d)
+                .ok()
+                .and_then(|segments| path_from_segments(&segments, (0.0, 0.0)))
+                .and_then(|path| path.compute_tight_bounds());
+            match tight {
+                Some(r) => BBox {
+                    x: r.left(),
+                    y: r.top(),
+                    w: r.width(),
+                    h: r.height(),
+                },
+                None => BBox {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 0.0,
+                    h: 0.0,
+                },
+            }
+        }
         Element::Path { points, .. } => {
             let mut it = points.iter();
             let Some(first) = it.next() else {
@@ -390,8 +461,8 @@ struct LayoutKey {
 /// - `swash`: the glyph raster cache (Task 10).
 /// - `layouts`: shaped text layouts (Task 27). Text is re-shaped from
 ///   scratch on every frame otherwise, even though a v1 document's text is
-///   static (spec §3.3: only translate/scale/rotation/opacity animate, and
-///   none of those feed `layout_text`) — so per-run shaping is pure waste.
+///   static (spec §3.3: only translate/scale/rotation/opacity and `draw`
+///   animate, and none of those feed `layout_text`) — so per-run shaping is pure waste.
 ///   The cache is deliberately unbounded and never evicted: a document has a
 ///   finite, small set of distinct (family, text, size, wrap, align) tuples
 ///   (one per Text element at most, and the tape demo's captions repeat
@@ -553,7 +624,7 @@ impl Renderer {
                 }
                 Element::Path {
                     points,
-                    d: _,
+                    d,
                     closed,
                     stroke,
                     stroke_width,
@@ -563,8 +634,8 @@ impl Renderer {
                     common,
                 } => {
                     let resolved = resolve_common(common, t);
-                    // Pivot off the point bounds, so `rotation`/`scale` turn a
-                    // path about its own centre like every other element.
+                    // Pivot off the path's own bounds, so `rotation`/`scale` turn
+                    // it about its centre like every other element.
                     let base = base_bbox(el);
                     let bbox = BBox {
                         x: base.x + offset.0,
@@ -574,20 +645,33 @@ impl Renderer {
                     };
                     let matrix = element_matrix(&bbox, &resolved);
 
-                    let mut pb = PathBuilder::new();
-                    let mut pts = points.iter();
-                    let Some(first) = pts.next() else {
-                        continue; // validation rejects this; the renderer stays total
-                    };
-                    pb.move_to(first[0].0 as f32 + offset.0, first[1].0 as f32 + offset.1);
-                    for p in pts {
-                        pb.line_to(p[0].0 as f32 + offset.0, p[1].0 as f32 + offset.1);
-                    }
-                    if *closed {
-                        pb.close();
-                    }
-                    let Some(path) = pb.finish() else {
-                        continue; // degenerate (e.g. every point identical)
+                    let path = if let Some(d) = d {
+                        // Validation already rejected unparseable data; the
+                        // renderer stays total rather than trusting that.
+                        let Ok(segments) = path_data::parse(d) else {
+                            continue;
+                        };
+                        let Some(path) = path_from_segments(&segments, offset) else {
+                            continue; // degenerate (e.g. a lone moveto)
+                        };
+                        path
+                    } else {
+                        let mut pb = PathBuilder::new();
+                        let mut pts = points.iter();
+                        let Some(first) = pts.next() else {
+                            continue; // validation rejects this; the renderer stays total
+                        };
+                        pb.move_to(first[0].0 as f32 + offset.0, first[1].0 as f32 + offset.1);
+                        for p in pts {
+                            pb.line_to(p[0].0 as f32 + offset.0, p[1].0 as f32 + offset.1);
+                        }
+                        if *closed {
+                            pb.close();
+                        }
+                        let Some(path) = pb.finish() else {
+                            continue; // degenerate (e.g. every point identical)
+                        };
+                        path
                     };
 
                     let paint_for = |p: &Paint| SkPaint {
@@ -617,7 +701,26 @@ impl Renderer {
                             mask.as_ref(),
                         );
                     }
-                    if let Some(s) = stroke {
+                    // Only the stroke is trimmed: a fill that grew with `draw`
+                    // would reveal a shape the outline had not reached, and a
+                    // finished draw must take the untrimmed path so documents
+                    // that never animate `draw` keep their pixels.
+                    let trimmed;
+                    let stroke_target = if resolved.draw >= 1.0 {
+                        Some(&path)
+                    } else if resolved.draw <= 0.0 {
+                        None
+                    } else {
+                        trimmed = trimmed_stroke_path(
+                            d.as_deref(),
+                            points,
+                            *closed,
+                            resolved.draw,
+                            offset,
+                        );
+                        trimmed.as_ref()
+                    };
+                    if let (Some(s), Some(stroke_path)) = (stroke, stroke_target) {
                         let sk_stroke = Stroke {
                             // Absent width means 1.0, not 0.0 — a zero-width
                             // stroke paints nothing at all.
@@ -635,7 +738,7 @@ impl Renderer {
                             ..Default::default()
                         };
                         canvas.stroke_path(
-                            &path,
+                            stroke_path,
                             &stroke_paint(s),
                             &sk_stroke,
                             matrix,
