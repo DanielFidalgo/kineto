@@ -352,7 +352,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
       "type": "object",
       "required": ["color", "blur"],
       "additionalProperties": false,
-      "description": "A soft silhouette beneath the element. Supported on rect, path and image only — text and group render through isolated layers and are rejected rather than silently ignored.",
+      "description": "A soft silhouette beneath the element. Supported on rect, path and image only — text and group render through isolated layers and are rejected rather than silently ignored. A path with a fill casts the shadow of its filled shape; a line-only path casts the shadow of its stroked line.",
       "properties": {
         "color": { "$ref": "#/$defs/color" },
         "blur": { "type": "integer", "minimum": 0, "maximum": 128, "description": "Blur radius in pixels. 0 is a hard offset silhouette." },
@@ -393,7 +393,7 @@ pub const DOCUMENT_SCHEMA: &str = r##"{
       "required": ["prop", "keys"],
       "additionalProperties": false,
       "properties": {
-        "prop": { "enum": ["translate", "scale", "rotation", "opacity", "draw"], "description": "draw (0..1) is the fraction of a stroked path's length that is visible; valid only on a path with a stroke. It trims the stroke only: `fill` and `shadow` render in full at any draw value." },
+        "prop": { "enum": ["translate", "scale", "rotation", "opacity", "draw"], "description": "draw (0..1) is the fraction of a stroked path's length that is visible; valid only on a path with a stroke. It trims the stroke only: `fill` renders in full at any draw value, and so does the shadow of a filled path. A line-only path's shadow is cast by its line, so it follows draw." },
         "keys": {
           "type": "array",
           "minItems": 1,
