@@ -389,6 +389,8 @@ pub enum Prop {
     Scale,
     Rotation,
     Opacity,
+    /// Fraction of a stroked path's length that is visible, 0..1.
+    Draw,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

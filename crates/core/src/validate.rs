@@ -67,6 +67,10 @@ pub enum DocError {
     EmptyTrack(String),
     #[error("opacity out of range [0,1]: {0}")]
     OpacityRange(String),
+    #[error("`draw` animates only a path with a `stroke`")]
+    DrawUnsupported,
+    #[error("draw out of range [0,1]: {0}")]
+    DrawRange(String),
     #[error("{0}")]
     Json(String),
 }
@@ -101,7 +105,7 @@ const SCENE_KEYS: &[&str] = &["id", "transition", "duration", "elements"];
 const TRANSITION_KEYS: &[&str] = &["type", "duration"];
 const TRACK_KEYS: &[&str] = &["prop", "keys"];
 const KEY_KEYS: &[&str] = &["t", "v", "ease"];
-const PROP_VALUES: &[&str] = &["translate", "scale", "rotation", "opacity"];
+const PROP_VALUES: &[&str] = &["translate", "scale", "rotation", "opacity", "draw"];
 
 const COMMON_KEYS: &[&str] = &[
     "translate",
@@ -320,6 +324,7 @@ fn prop_name(p: Prop) -> &'static str {
         Prop::Scale => "scale",
         Prop::Rotation => "rotation",
         Prop::Opacity => "opacity",
+        Prop::Draw => "draw",
     }
 }
 
@@ -377,6 +382,7 @@ fn validate_elements(elements: &[Element], doc: &Document) -> Result<(), DocErro
 
 fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
     validate_shadow(el)?;
+    validate_draw(el)?;
     match el {
         Element::Image { asset, common, .. } => {
             check_asset(doc, asset, "image")?;
@@ -454,6 +460,27 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             validate_common(common)?;
             validate_elements(children, doc)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_draw(el: &Element) -> Result<(), DocError> {
+    let animates_draw = el
+        .common()
+        .animations
+        .iter()
+        .any(|track| track.prop == Prop::Draw);
+    // Rejected rather than ignored: only a stroke has a length to reveal, so
+    // a fill-only path or any other element would silently never change.
+    let strokable = matches!(
+        el,
+        Element::Path {
+            stroke: Some(_),
+            ..
+        }
+    );
+    if animates_draw && !strokable {
+        return Err(DocError::DrawUnsupported);
     }
     Ok(())
 }
@@ -565,6 +592,9 @@ fn validate_track(track: &Track) -> Result<(), DocError> {
             (_, KeyValue::Num(v)) => {
                 if track.prop == Prop::Opacity && !(0.0..=1.0).contains(&v.0) {
                     return Err(DocError::OpacityRange(v.0.to_string()));
+                }
+                if track.prop == Prop::Draw && !(0.0..=1.0).contains(&v.0) {
+                    return Err(DocError::DrawRange(v.0.to_string()));
                 }
             }
             (_, KeyValue::Vec2(_)) => return Err(DocError::KeyArity(name.to_string())),
