@@ -141,6 +141,17 @@ fn example_full_doc() -> Document {
                     .with_path_fill("#00FF00")
                     .with_cap(Cap::Round)
                     .with_join(Join::Bevel),
+            )
+            .with_element(
+                Element::path_data("M0 0 C 10 20 30 20 40 0")
+                    .with_stroke("#4ECDC4", 3.0)
+                    .with_animation(Track::new(
+                        Prop::Draw,
+                        vec![
+                            Key::num(0, 0.0),
+                            Key::num(ms(500), 1.0).with_ease(Ease::OutCubic),
+                        ],
+                    )),
             ),
     );
     d
