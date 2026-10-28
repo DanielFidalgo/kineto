@@ -384,6 +384,76 @@ fn points_path_still_needs_two_points() {
     assert!(matches!(err, DocError::PathTooFewPoints(1)), "got {err:?}");
 }
 
+// ---- draw ----
+
+fn draw_track(keys: serde_json::Value) -> serde_json::Value {
+    serde_json::json!([{ "prop": "draw", "keys": keys }])
+}
+
+fn draw_0_to_1() -> serde_json::Value {
+    draw_track(serde_json::json!([{ "t": 0, "v": 0 }, { "t": 705600000, "v": 1 }]))
+}
+
+#[test]
+fn draw_on_a_stroked_path_validates() {
+    assert!(path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_0_to_1()
+    }))
+    .is_ok());
+}
+
+#[test]
+fn draw_on_anything_but_a_stroked_path_is_refused() {
+    let unsupported = [
+        serde_json::json!({
+            "type": "rect", "rect": [0, 0, 10, 10], "fill": "#FFFFFF",
+            "animations": draw_0_to_1()
+        }),
+        serde_json::json!({
+            "type": "group", "origin": [0, 0], "children": [],
+            "animations": draw_0_to_1()
+        }),
+        serde_json::json!({
+            "type": "path", "points": [[0, 0], [10, 0], [10, 10]], "fill": "#FFFFFF",
+            "animations": draw_0_to_1()
+        }),
+    ];
+    for element in unsupported {
+        let err = path_doc(element.clone()).expect_err("expected rejection");
+        assert!(
+            matches!(err, DocError::DrawUnsupported),
+            "{element}: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn draw_key_out_of_range_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_track(serde_json::json!([{ "t": 0, "v": 0 }, { "t": 1, "v": 1.5 }]))
+    }))
+    .expect_err("expected rejection");
+    assert!(
+        matches!(err, DocError::DrawRange(ref v) if v == "1.5"),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn draw_with_a_vector_value_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_track(serde_json::json!([{ "t": 0, "v": [0, 0] }]))
+    }))
+    .expect_err("expected rejection");
+    assert!(
+        matches!(err, DocError::KeyArity(ref n) if n == "draw"),
+        "got {err:?}"
+    );
+}
+
 // ---- gradients ----
 
 fn grad_doc(fill: serde_json::Value) -> Result<Document, DocError> {

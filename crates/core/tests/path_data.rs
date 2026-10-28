@@ -3,7 +3,8 @@ use Segment::{Close, CubicTo, LineTo, MoveTo};
 
 fn assert_point_near(actual: [f64; 2], expected: [f64; 2], tolerance: f64) {
     assert!(
-        (actual[0] - expected[0]).abs() <= tolerance && (actual[1] - expected[1]).abs() <= tolerance,
+        (actual[0] - expected[0]).abs() <= tolerance
+            && (actual[1] - expected[1]).abs() <= tolerance,
         "expected {expected:?}, got {actual:?} (tolerance {tolerance})"
     );
 }
@@ -41,7 +42,13 @@ fn expect_error(d: &str) -> PathDataError {
 fn absolute_commands_parse_to_segments() {
     assert_eq!(
         parse_ok("M0 0 L10 0 H20 V5 Z"),
-        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0]), LineTo([20.0, 0.0]), LineTo([20.0, 5.0]), Close]
+        vec![
+            MoveTo([0.0, 0.0]),
+            LineTo([10.0, 0.0]),
+            LineTo([20.0, 0.0]),
+            LineTo([20.0, 5.0]),
+            Close
+        ]
     );
 }
 
@@ -49,7 +56,12 @@ fn absolute_commands_parse_to_segments() {
 fn relative_commands_are_resolved_against_the_current_point() {
     assert_eq!(
         parse_ok("m10 10 l5 0 h5 v5"),
-        vec![MoveTo([10.0, 10.0]), LineTo([15.0, 10.0]), LineTo([20.0, 10.0]), LineTo([20.0, 15.0])]
+        vec![
+            MoveTo([10.0, 10.0]),
+            LineTo([15.0, 10.0]),
+            LineTo([20.0, 10.0]),
+            LineTo([20.0, 15.0])
+        ]
     );
 }
 
@@ -57,7 +69,11 @@ fn relative_commands_are_resolved_against_the_current_point() {
 fn pairs_after_move_are_line_tos() {
     assert_eq!(
         parse_ok("M0 0 10 0 10 10"),
-        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0]), LineTo([10.0, 10.0])]
+        vec![
+            MoveTo([0.0, 0.0]),
+            LineTo([10.0, 0.0]),
+            LineTo([10.0, 10.0])
+        ]
     );
 }
 
@@ -66,6 +82,12 @@ fn relative_move_after_close_starts_from_the_subpath_start() {
     let segments = parse_ok("M10 10 l10 0 z m5 5 l1 0");
     let second_move = segments.iter().filter(|s| matches!(s, MoveTo(_))).nth(1);
     assert_eq!(second_move, Some(&MoveTo([15.0, 15.0])));
+}
+
+#[test]
+fn a_trailing_move_is_dropped() {
+    let segments = parse_ok("M0 0 L10 10 M500 500");
+    assert_eq!(segments.last(), Some(&LineTo([10.0, 10.0])));
 }
 
 #[test]
@@ -86,7 +108,9 @@ fn drawing_after_close_without_a_move_restarts_at_the_subpath_start() {
 fn quadratic_becomes_the_exact_cubic() {
     let segments = parse_ok("M0 0 Q 10 20 20 0");
     assert_eq!(segments.len(), 2);
-    let CubicTo(c1, c2, end) = segments[1] else { panic!("expected a cubic, got {:?}", segments[1]) };
+    let CubicTo(c1, c2, end) = segments[1] else {
+        panic!("expected a cubic, got {:?}", segments[1])
+    };
     assert_point_near(c1, [20.0 / 3.0, 40.0 / 3.0], 1e-12);
     assert_point_near(c2, [40.0 / 3.0, 40.0 / 3.0], 1e-12);
     assert_point_near(end, [20.0, 0.0], 1e-12);
@@ -96,7 +120,9 @@ fn quadratic_becomes_the_exact_cubic() {
 fn smooth_quadratic_reflects_the_previous_quadratic_control() {
     // Reflection of (10, 20) about (20, 0) is (30, -20).
     let segments = parse_ok("M0 0 Q 10 20 20 0 T 40 0");
-    let CubicTo(c1, _, end) = segments[2] else { panic!("expected a cubic, got {:?}", segments[2]) };
+    let CubicTo(c1, _, end) = segments[2] else {
+        panic!("expected a cubic, got {:?}", segments[2])
+    };
     assert_point_near(c1, [20.0 + 2.0 / 3.0 * 10.0, 2.0 / 3.0 * -20.0], 1e-12);
     assert_point_near(end, [40.0, 0.0], 1e-12);
 }
@@ -104,20 +130,27 @@ fn smooth_quadratic_reflects_the_previous_quadratic_control() {
 #[test]
 fn smooth_cubic_reflects_the_previous_control() {
     let segments = parse_ok("M0 0 C 0 10 10 10 10 0 S 20 -10 20 0");
-    let CubicTo(c1, _, _) = segments[2] else { panic!("expected a cubic, got {:?}", segments[2]) };
+    let CubicTo(c1, _, _) = segments[2] else {
+        panic!("expected a cubic, got {:?}", segments[2])
+    };
     assert_eq!(c1, [10.0, -10.0]);
 }
 
 #[test]
 fn smooth_without_a_previous_curve_uses_the_current_point() {
     let segments = parse_ok("M0 0 S 10 10 20 0");
-    let CubicTo(c1, _, _) = segments[1] else { panic!("expected a cubic, got {:?}", segments[1]) };
+    let CubicTo(c1, _, _) = segments[1] else {
+        panic!("expected a cubic, got {:?}", segments[1])
+    };
     assert_eq!(c1, [0.0, 0.0]);
 }
 
 #[test]
 fn number_grammar_edge_cases() {
-    assert_eq!(parse_ok("M10-5L.5.5"), vec![MoveTo([10.0, -5.0]), LineTo([0.5, 0.5])]);
+    assert_eq!(
+        parse_ok("M10-5L.5.5"),
+        vec![MoveTo([10.0, -5.0]), LineTo([0.5, 0.5])]
+    );
     assert_eq!(parse_ok("M1e1 0L0 0")[0], MoveTo([10.0, 0.0]));
 }
 
@@ -130,9 +163,14 @@ fn arc_flags_may_run_together() {
 #[test]
 fn a_quarter_arc_is_one_cubic_on_the_circle() {
     let segments = parse_ok("M10 0 A10 10 0 0 1 0 10");
-    let cubics: Vec<_> = segments.iter().filter(|s| matches!(s, CubicTo(..))).collect();
+    let cubics: Vec<_> = segments
+        .iter()
+        .filter(|s| matches!(s, CubicTo(..)))
+        .collect();
     assert_eq!(cubics.len(), 1);
-    let CubicTo(c1, c2, end) = *cubics[0] else { unreachable!() };
+    let CubicTo(c1, c2, end) = *cubics[0] else {
+        unreachable!()
+    };
     assert_point_near(end, [0.0, 10.0], 1e-9);
     let midpoint = cubic_at([10.0, 0.0], c1, c2, end, 0.5);
     let radius = midpoint[0].hypot(midpoint[1]);
@@ -142,17 +180,26 @@ fn a_quarter_arc_is_one_cubic_on_the_circle() {
 #[test]
 fn a_half_arc_splits_into_quarter_segments() {
     let segments = parse_ok("M10 0 A10 10 0 0 1 -10 0");
-    assert_eq!(segments.iter().filter(|s| matches!(s, CubicTo(..))).count(), 2);
+    assert_eq!(
+        segments.iter().filter(|s| matches!(s, CubicTo(..))).count(),
+        2
+    );
 }
 
 #[test]
 fn a_zero_radius_arc_is_a_straight_line() {
-    assert_eq!(parse_ok("M0 0 A0 5 0 0 1 10 10"), vec![MoveTo([0.0, 0.0]), LineTo([10.0, 10.0])]);
+    assert_eq!(
+        parse_ok("M0 0 A0 5 0 0 1 10 10"),
+        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 10.0])]
+    );
 }
 
 #[test]
 fn an_arc_with_equal_endpoints_draws_nothing() {
-    assert_eq!(parse_ok("M0 0 L5 5 A10 10 0 0 1 5 5"), vec![MoveTo([0.0, 0.0]), LineTo([5.0, 5.0])]);
+    assert_eq!(
+        parse_ok("M0 0 L5 5 A10 10 0 0 1 5 5"),
+        vec![MoveTo([0.0, 0.0]), LineTo([5.0, 5.0])]
+    );
 }
 
 #[test]
@@ -161,9 +208,14 @@ fn too_small_radii_are_scaled_up_to_reach_the_endpoint() {
     assert_point_near(end_point(segments.last().unwrap()), [20.0, 0.0], 1e-9);
     // Scaled radius is 10: every control point stays within a circle of that radius about (10, 0).
     for segment in &segments[1..] {
-        let CubicTo(c1, c2, end) = *segment else { panic!("expected cubics, got {segment:?}") };
+        let CubicTo(c1, c2, end) = *segment else {
+            panic!("expected cubics, got {segment:?}")
+        };
         for point in [c1, c2, end] {
-            assert!((point[0] - 10.0).hypot(point[1]) < 15.0, "{point:?} is far outside the scaled circle");
+            assert!(
+                (point[0] - 10.0).hypot(point[1]) < 15.0,
+                "{point:?} is far outside the scaled circle"
+            );
         }
     }
 }
@@ -172,7 +224,11 @@ fn too_small_radii_are_scaled_up_to_reach_the_endpoint() {
 fn malformed_input_is_an_error_not_a_panic() {
     for d in ["L10 10", "M0 0 X", "M0", "M0 0 A10 10 0 2 0 5 5"] {
         let error = expect_error(d);
-        assert!(error.offset < d.len(), "{d:?}: offset {} is outside the string", error.offset);
+        assert!(
+            error.offset < d.len(),
+            "{d:?}: offset {} is outside the string",
+            error.offset
+        );
     }
 }
 
@@ -196,7 +252,11 @@ fn a_number_too_large_for_a_float_is_an_error() {
 fn a_string_with_no_drawing_command_is_an_error() {
     for d in ["", "M5 5"] {
         let error = expect_error(d);
-        assert!(error.reason.contains("draws nothing"), "{d:?}: {}", error.reason);
+        assert!(
+            error.reason.contains("draws nothing"),
+            "{d:?}: {}",
+            error.reason
+        );
     }
 }
 
@@ -205,7 +265,11 @@ fn from_points_emits_move_lines_and_an_optional_close() {
     let points = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]];
     assert_eq!(
         from_points(&points, false),
-        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0]), LineTo([10.0, 10.0])]
+        vec![
+            MoveTo([0.0, 0.0]),
+            LineTo([10.0, 0.0]),
+            LineTo([10.0, 10.0])
+        ]
     );
     assert_eq!(from_points(&points, true).last(), Some(&Close));
     assert!(from_points(&[], true).is_empty());
@@ -242,7 +306,10 @@ fn trim_of_nan_is_empty() {
 #[test]
 fn trim_halves_a_straight_line() {
     let line = from_points(&[[0.0, 0.0], [10.0, 0.0]], false);
-    assert_eq!(trim(&line, 0.5), vec![MoveTo([0.0, 0.0]), LineTo([5.0, 0.0])]);
+    assert_eq!(
+        trim(&line, 0.5),
+        vec![MoveTo([0.0, 0.0]), LineTo([5.0, 0.0])]
+    );
 }
 
 #[test]
@@ -250,21 +317,33 @@ fn subpaths_draw_in_order_as_one_pen() {
     let path = parse_ok("M0 0 L10 0 M0 5 L10 5");
     assert_eq!(
         trim(&path, 0.75),
-        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0]), MoveTo([0.0, 5.0]), LineTo([5.0, 5.0])]
+        vec![
+            MoveTo([0.0, 0.0]),
+            LineTo([10.0, 0.0]),
+            MoveTo([0.0, 5.0]),
+            LineTo([5.0, 5.0])
+        ]
     );
 }
 
 #[test]
 fn a_subpath_is_not_started_once_the_pen_has_run_out() {
     let path = parse_ok("M0 0 L10 0 M0 5 L10 5");
-    assert_eq!(trim(&path, 0.5), vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0])]);
+    assert_eq!(
+        trim(&path, 0.5),
+        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0])]
+    );
 }
 
 #[test]
 fn a_partial_closed_contour_has_no_closing_edge() {
     assert_eq!(
         trim(&closed_square(), 0.5),
-        vec![MoveTo([0.0, 0.0]), LineTo([10.0, 0.0]), LineTo([10.0, 10.0])]
+        vec![
+            MoveTo([0.0, 0.0]),
+            LineTo([10.0, 0.0]),
+            LineTo([10.0, 10.0])
+        ]
     );
     assert_eq!(trim(&closed_square(), 1.0).last(), Some(&Close));
 }
@@ -284,7 +363,9 @@ fn a_trimmed_cubic_stays_on_the_original_curve() {
     let curve = vec![MoveTo(p0), CubicTo(c1, c2, p1)];
     let trimmed = trim(&curve, 0.5);
     assert_eq!(trimmed.len(), 2);
-    let CubicTo(_, _, end) = trimmed[1] else { panic!("expected a cubic, got {:?}", trimmed[1]) };
+    let CubicTo(_, _, end) = trimmed[1] else {
+        panic!("expected a cubic, got {:?}", trimmed[1])
+    };
 
     // Dense-sample the original: the endpoint must lie on it, and half its length must lie behind it.
     let samples = 20_000;
@@ -313,9 +394,17 @@ fn a_trimmed_cubic_stays_on_the_original_curve() {
 
 #[test]
 fn a_trimmed_cubic_keeps_its_start_and_tangent() {
-    let curve = vec![MoveTo([0.0, 0.0]), CubicTo([0.0, 30.0], [40.0, 30.0], [40.0, 0.0])];
+    let curve = vec![
+        MoveTo([0.0, 0.0]),
+        CubicTo([0.0, 30.0], [40.0, 30.0], [40.0, 0.0]),
+    ];
     let trimmed = trim(&curve, 0.25);
     assert_eq!(trimmed[0], MoveTo([0.0, 0.0]));
-    let CubicTo(c1, _, _) = trimmed[1] else { panic!("expected a cubic") };
-    assert_eq!(c1[0], 0.0, "left half of a curve that leaves vertically still leaves vertically");
+    let CubicTo(c1, _, _) = trimmed[1] else {
+        panic!("expected a cubic")
+    };
+    assert_eq!(
+        c1[0], 0.0,
+        "left half of a curve that leaves vertically still leaves vertically"
+    );
 }

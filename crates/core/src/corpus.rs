@@ -31,6 +31,9 @@ pub fn corpus() -> Vec<CorpusDoc> {
     vec![
         rects_easings(),
         paths_strokes(),
+        curves(),
+        curves_edge(),
+        draw_on(),
         gradients(),
         radius_easings(),
         clip_fit(),
@@ -327,6 +330,142 @@ fn paths_strokes() -> CorpusDoc {
         name: "paths-strokes",
         doc,
         ticks: vec![0, dur / 2],
+    }
+}
+
+/// Curved paths from SVG path data: the shapes whose flattening and arc
+/// conversion could differ between native and wasm.
+///
+/// Covers cubic `C`/`S`, quadratic `Q`/`T`, a circle drawn as two `A`
+/// commands (gradient filled, so the shader follows an arc-built silhouette),
+/// and an arc with a non-zero x-axis rotation and unequal radii, rotated as
+/// an element so the pivot comes from the curve's tight bounds.
+fn curves() -> CorpusDoc {
+    let dur = ms(600);
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", dur)
+        .with_element(
+            Element::path_data("M 12 90 C 40 10 90 10 110 60 S 170 110 200 40")
+                .with_stroke("#FF9900", 6.5)
+                .with_cap(Cap::Round)
+                .with_join(Join::Round),
+        )
+        .with_element(
+            Element::path_data("M 20 180 Q 60 120 100 160 T 180 150 L 150 192 Z")
+                .with_path_fill("#4ECDC4")
+                .with_stroke("#F2F5F7", 3.0)
+                .with_join(Join::Miter),
+        )
+        .with_element(
+            Element::path_data("M 210 140 A 40 40 0 1 0 290 140 A 40 40 0 1 0 210 140 Z")
+                .with_path_fill(Gradient::linear(
+                    [0.0, 0.0],
+                    [1.0, 1.0],
+                    vec![Stop::new(0.0, "#FF9900"), Stop::new(1.0, "#C77DFF")],
+                )),
+        )
+        // Unequal radii and a tilted axis: the awkward-angle arc.
+        .with_element(
+            Element::path_data("M 215 30 A 37 23 31 1 0 262 60")
+                .with_stroke("#F2F5F7", 2.5)
+                .with_cap(Cap::Round)
+                .with_rotation(17.0),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "curves",
+        doc,
+        ticks: vec![0, dur / 2],
+    }
+}
+
+/// Curves that reach tiny-skia's platform-trig paths, which `curves` does not.
+///
+/// Stroking a cubic whose control points are collinear calls `acos`/`cos`/
+/// `powf`, and clipping a cubic that crosses the canvas edge calls f64
+/// `acos`/`cos`. Both differ by platform libm, so native and wasm only agree
+/// here if the parser's output keeps clear of them or tiny-skia's results
+/// happen to match — the parity gate has to see these shapes to say which.
+fn curves_edge() -> CorpusDoc {
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", ms(600))
+        // A `T` with no preceding `Q` degenerates to an exactly collinear cubic.
+        .with_element(
+            Element::path_data("M 10 10 T 100 100")
+                .with_stroke("#FF9900", 5.0)
+                .with_cap(Cap::Round),
+        )
+        // A cubic written as a straight line.
+        .with_element(
+            Element::path_data("M 20 150 C 40 150 60 150 80 150")
+                .with_stroke("#C77DFF", 6.0)
+                .with_cap(Cap::Butt),
+        )
+        // Leaves the canvas past the right and bottom edges, filled and stroked.
+        .with_element(
+            Element::path_data("M 230 110 C 360 90 360 260 240 230 Z")
+                .with_path_fill("#4ECDC4")
+                .with_stroke("#F2F5F7", 4.0)
+                .with_join(Join::Round),
+        )
+        // The same crossing on the open-arc side: an arc past the top-left.
+        .with_element(
+            Element::path_data("M 90 60 A 70 70 0 1 1 20 -10")
+                .with_stroke("#FF4040", 3.0)
+                .with_cap(Cap::Round),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "curves-edge",
+        doc,
+        ticks: vec![0],
+    }
+}
+
+/// `draw` partway through its range: the trimmed-stroke geometry whose
+/// cut points native and wasm must agree on.
+///
+/// A curved arrow (the cut lands inside a cubic), a filled closed square
+/// (the fill must stay whole while the outline grows, and a partial contour
+/// loses its close), and a two-subpath shape (the cut lands in the second
+/// contour, so the first must be complete by then).
+fn draw_on() -> CorpusDoc {
+    let draw_in = || {
+        Track::new(
+            Prop::Draw,
+            vec![
+                Key::num(0, 0.0),
+                Key::num(ms(1000), 1.0).with_ease(Ease::InOutCubic),
+            ],
+        )
+    };
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", ms(1200))
+        .with_element(
+            Element::path_data("M 14 150 C 50 60 120 60 170 110 L 150 100 M 170 110 L 160 132")
+                .with_stroke("#FF9900", 5.5)
+                .with_cap(Cap::Round)
+                .with_join(Join::Round)
+                .with_animation(draw_in()),
+        )
+        .with_element(
+            Element::path(vec![[20.0, 30.0], [90.0, 24.0], [96.0, 80.0], [26.0, 86.0]])
+                .with_closed(true)
+                .with_path_fill("#4ECDC4")
+                .with_stroke("#F2F5F7", 3.0)
+                .with_animation(draw_in()),
+        )
+        .with_element(
+            Element::path_data("M 200 30 L 300 30 M 200 70 C 230 120 270 20 300 90")
+                .with_stroke("#C77DFF", 4.0)
+                .with_cap(Cap::Butt)
+                .with_animation(draw_in()),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "draw-on",
+        doc,
+        ticks: vec![0, ms(250), ms(500), ms(1000)],
     }
 }
 
