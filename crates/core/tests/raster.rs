@@ -123,6 +123,7 @@ fn element_matrix_rotates_about_center() {
         scale: 1.0,
         rotation: 90.0,
         opacity: 1.0,
+        draw: 1.0,
     };
     let m = element_matrix(&b, &r);
     let mut p = [tiny_skia::Point::from_xy(10.0, 5.0)];
@@ -649,6 +650,7 @@ fn path_stroke_width_defaults_to_one() {
     let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
     let el = Element::Path {
         points: vec![[8.0.into(), 32.0.into()], [56.0.into(), 32.0.into()]],
+        d: None,
         closed: false,
         stroke: Some("#FF0000".into()),
         stroke_width: None,
@@ -1146,4 +1148,52 @@ fn a_zero_blur_shadow_is_a_hard_offset_silhouette() {
         "hard silhouette missing"
     );
     assert!(pm.pixel(20, 20).unwrap().red() > 200, "shape missing");
+}
+
+// ---- draw-on strokes ----
+
+/// A stroked square whose `draw` runs 0 to 1 over 500 ms, or with no track.
+fn drawn_square(animated: bool) -> Element {
+    use kineto_core::doc::{ms, Key, Prop, Track};
+    let square =
+        Element::path_data("M 10 10 L 54 10 L 54 54 L 10 54 Z").with_stroke("#FF0000", 4.0);
+    if !animated {
+        return square;
+    }
+    square.with_animation(Track::new(
+        Prop::Draw,
+        vec![Key::num(0, 0.0), Key::num(ms(500), 1.0)],
+    ))
+}
+
+fn render_at(el: Element, tick: i64) -> tiny_skia::Pixmap {
+    let mut pm = blank_pixmap(64, 64, (0, 0, 0, 255));
+    let mut renderer = Renderer::new();
+    let mut assets = AssetStore::new();
+    renderer.draw_elements(&mut pm.as_mut(), &[el], &mut assets, tick, (0.0, 0.0));
+    pm
+}
+
+/// The finished state must be the existing stroke code path, or every
+/// document that animates `draw` would end on a different image than one that
+/// does not. The 250 ms assertion keeps the test from passing with `draw`
+/// ignored.
+#[test]
+fn a_finished_draw_renders_exactly_like_no_draw() {
+    use kineto_core::doc::ms;
+    let plain = render_at(drawn_square(false), ms(1000));
+    let finished = render_at(drawn_square(true), ms(1000));
+    assert_eq!(plain.data(), finished.data());
+
+    let halfway = render_at(drawn_square(true), ms(250));
+    assert_ne!(plain.data(), halfway.data(), "draw was ignored");
+}
+
+#[test]
+fn a_draw_of_zero_paints_no_stroke() {
+    let nothing = render_at(drawn_square(true), 0);
+    assert!(
+        nothing.pixels().iter().all(|p| p.red() == 0),
+        "a stroke was painted at draw 0"
+    );
 }

@@ -6,6 +6,7 @@ pub mod corpus;
 pub mod doc;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod export;
+pub mod path_data;
 pub mod raster;
 pub mod render;
 pub mod scalar;

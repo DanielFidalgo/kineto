@@ -269,14 +269,13 @@ fn a_valid_path_is_accepted() {
 #[test]
 fn a_path_needs_at_least_two_points() {
     // One point has no segment to stroke and no area to fill; it would
-    // render nothing at all.
-    for pts in [serde_json::json!([]), serde_json::json!([[10, 10]])] {
-        let err = path_doc(serde_json::json!({
-            "type": "path", "points": pts, "stroke": "#FFFFFF", "strokeWidth": 1
-        }))
-        .expect_err("expected rejection");
-        assert!(matches!(err, DocError::PathTooFewPoints(_)), "got {err:?}");
-    }
+    // render nothing at all. An empty list is no geometry at all, which is
+    // `PathGeometry` (see the path data tests below).
+    let err = path_doc(serde_json::json!({
+        "type": "path", "points": [[10, 10]], "stroke": "#FFFFFF", "strokeWidth": 1
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathTooFewPoints(_)), "got {err:?}");
 }
 
 #[test]
@@ -326,6 +325,133 @@ fn a_path_may_be_fill_only() {
         "fill": "#FF9900"
     }))
     .is_ok());
+}
+
+// ---- path data ----
+
+#[test]
+fn a_path_with_d_validates() {
+    assert!(path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 C 10 20 30 20 40 0", "stroke": "#FFFFFF"
+    }))
+    .is_ok());
+}
+
+#[test]
+fn a_path_with_both_points_and_d_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "points": [[0, 0], [10, 10]], "d": "M0 0 L 10 10",
+        "stroke": "#FFFFFF"
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathGeometry), "got {err:?}");
+}
+
+#[test]
+fn a_path_with_neither_points_nor_d_is_refused() {
+    let err = path_doc(serde_json::json!({ "type": "path", "stroke": "#FFFFFF" }))
+        .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathGeometry), "got {err:?}");
+}
+
+#[test]
+fn closed_with_d_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "closed": true, "stroke": "#FFFFFF"
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathClosedWithData), "got {err:?}");
+}
+
+#[test]
+fn malformed_d_is_refused_with_its_position() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 X", "stroke": "#FFFFFF"
+    }))
+    .expect_err("expected rejection");
+    match err {
+        DocError::PathData(msg) => assert!(msg.contains("at byte"), "got {msg:?}"),
+        other => panic!("expected PathData, got {other:?}"),
+    }
+}
+
+#[test]
+fn points_path_still_needs_two_points() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "points": [[10, 10]], "stroke": "#FFFFFF"
+    }))
+    .expect_err("expected rejection");
+    assert!(matches!(err, DocError::PathTooFewPoints(1)), "got {err:?}");
+}
+
+// ---- draw ----
+
+fn draw_track(keys: serde_json::Value) -> serde_json::Value {
+    serde_json::json!([{ "prop": "draw", "keys": keys }])
+}
+
+fn draw_0_to_1() -> serde_json::Value {
+    draw_track(serde_json::json!([{ "t": 0, "v": 0 }, { "t": 705600000, "v": 1 }]))
+}
+
+#[test]
+fn draw_on_a_stroked_path_validates() {
+    assert!(path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_0_to_1()
+    }))
+    .is_ok());
+}
+
+#[test]
+fn draw_on_anything_but_a_stroked_path_is_refused() {
+    let unsupported = [
+        serde_json::json!({
+            "type": "rect", "rect": [0, 0, 10, 10], "fill": "#FFFFFF",
+            "animations": draw_0_to_1()
+        }),
+        serde_json::json!({
+            "type": "group", "origin": [0, 0], "children": [],
+            "animations": draw_0_to_1()
+        }),
+        serde_json::json!({
+            "type": "path", "points": [[0, 0], [10, 0], [10, 10]], "fill": "#FFFFFF",
+            "animations": draw_0_to_1()
+        }),
+    ];
+    for element in unsupported {
+        let err = path_doc(element.clone()).expect_err("expected rejection");
+        assert!(
+            matches!(err, DocError::DrawUnsupported),
+            "{element}: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn draw_key_out_of_range_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_track(serde_json::json!([{ "t": 0, "v": 0 }, { "t": 1, "v": 1.5 }]))
+    }))
+    .expect_err("expected rejection");
+    assert!(
+        matches!(err, DocError::DrawRange(ref v) if v == "1.5"),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn draw_with_a_vector_value_is_refused() {
+    let err = path_doc(serde_json::json!({
+        "type": "path", "d": "M0 0 L 10 10", "stroke": "#FFFFFF",
+        "animations": draw_track(serde_json::json!([{ "t": 0, "v": [0, 0] }]))
+    }))
+    .expect_err("expected rejection");
+    assert!(
+        matches!(err, DocError::KeyArity(ref n) if n == "draw"),
+        "got {err:?}"
+    );
 }
 
 // ---- gradients ----

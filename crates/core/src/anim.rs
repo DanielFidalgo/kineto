@@ -68,6 +68,7 @@ pub struct Resolved {
     pub scale: f64,
     pub rotation: f64,
     pub opacity: f64,
+    pub draw: f64,
 }
 
 /// Sample a keyframe track at time t, returning an owned KeyValue.
@@ -132,6 +133,7 @@ pub fn resolve_common(c: &Common, t: i64) -> Resolved {
         scale: 1.0,
         rotation: 0.0,
         opacity: 1.0,
+        draw: 1.0,
     };
 
     // Override with static values
@@ -173,6 +175,14 @@ pub fn resolve_common(c: &Common, t: i64) -> Resolved {
                     // alpha handed straight to tiny-skia, and the `back`
                     // easings deliberately overshoot 0..1.
                     result.opacity = v.0.clamp(0.0, 1.0);
+                }
+            }
+            Prop::Draw => {
+                if let KeyValue::Num(v) = sampled {
+                    // Clamped for the same reason as opacity: a fraction of
+                    // a length has no meaning past 0..1, and the `back`
+                    // easings overshoot it.
+                    result.draw = v.0.clamp(0.0, 1.0);
                 }
             }
         }

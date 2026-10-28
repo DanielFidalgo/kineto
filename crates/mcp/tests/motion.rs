@@ -147,6 +147,94 @@ fn a_reveal_fighting_a_hand_written_track_is_refused() {
     assert!(err.to_string().contains("opacity"), "{}", err);
 }
 
+/// A document whose only element is `element`, for kinds other than text.
+fn doc_with_element(element: &str) -> String {
+    format!(
+        r##"{{
+      "v": 1, "timebase": 705600000, "defaultFps": 30,
+      "size": {{ "w": 200, "h": 100 }}, "bg": "#101820",
+      "assets": {{}},
+      "scenes": [{{ "id": "s", "duration": 705600000, "elements": [{element}] }}]
+    }}"##
+    )
+}
+
+fn expanded_element(element: &str) -> Value {
+    let src = doc_with_element(element);
+    let out = expand(&src).expect("expansion succeeds");
+    let doc: Value = serde_json::from_str(&out).expect("valid JSON");
+    doc["scenes"][0]["elements"][0].clone()
+}
+
+const STROKED_PATH: &str = r##""type": "path", "d": "M0 0 C 10 0 10 10 20 10",
+                                "stroke": "#ffffff", "strokeWidth": 2"##;
+
+#[test]
+fn draw_on_adds_only_a_draw_track_from_zero_to_one() {
+    let element = expanded_element(&format!(
+        r##"{{ {STROKED_PATH}, "reveal": {{ "at": 300, "kind": "drawOn" }} }}"##
+    ));
+    let tracks = element["animations"].as_array().expect("animations array");
+    assert_eq!(tracks.len(), 1, "drawOn must not add an opacity track");
+    assert_eq!(tracks[0]["prop"], "draw");
+    assert_eq!(
+        tracks[0]["keys"],
+        serde_json::json!([
+            { "t": 300 * 705_600i64, "v": 0.0 },
+            { "t": 700 * 705_600i64, "v": 1.0, "ease": "outCubic" },
+        ])
+    );
+}
+
+/// The refusal must come from drawOn's own check, not from the kind being
+/// unknown, and must tell the author what would make it work.
+fn assert_refusal_explains_drawon(msg: &str, remedy: &str) {
+    assert!(msg.contains("drawOn"), "{msg}");
+    assert!(!msg.contains("unknown reveal kind"), "{msg}");
+    assert!(msg.contains(remedy), "{msg}");
+}
+
+#[test]
+fn draw_on_is_refused_on_a_path_without_a_stroke() {
+    let err = expand(&doc_with_element(
+        r##"{ "type": "path", "d": "M0 0 L10 10 L0 10 Z", "fill": "#ffffff",
+             "reveal": { "kind": "drawOn" } }"##,
+    ))
+    .expect_err("a fill-only path has nothing to draw");
+    assert_refusal_explains_drawon(&err.to_string(), "stroke");
+}
+
+#[test]
+fn draw_on_is_refused_on_a_rect() {
+    let err = expand(&doc_with_element(
+        r##"{ "type": "rect", "rect": [0,0,10,10], "fill": "#ffffff",
+             "reveal": { "kind": "drawOn" } }"##,
+    ))
+    .expect_err("a rect has no length to draw along");
+    assert_refusal_explains_drawon(&err.to_string(), "path");
+}
+
+#[test]
+fn draw_on_is_refused_on_a_group() {
+    let err = expand(&doc_with_element(
+        r##"{ "type": "group", "origin": [0, 0], "children": [],
+             "reveal": { "kind": "drawOn" } }"##,
+    ))
+    .expect_err("a group has no length to draw along");
+    assert_refusal_explains_drawon(&err.to_string(), "path");
+}
+
+#[test]
+fn draw_on_fighting_a_hand_written_draw_track_is_refused() {
+    let err = expand(&doc_with_element(&format!(
+        r##"{{ {STROKED_PATH}, "reveal": {{ "kind": "drawOn" }},
+             "animations": [{{ "prop": "draw",
+                              "keys": [{{"t":0,"v":0}},{{"t":100,"v":1}}] }}] }}"##
+    )))
+    .expect_err("conflicting draw track must fail");
+    assert!(err.to_string().contains("draw"), "{err}");
+}
+
 #[test]
 fn a_mistyped_field_is_an_error_rather_than_a_silent_default() {
     let err = expand(&doc_with(

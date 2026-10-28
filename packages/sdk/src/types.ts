@@ -77,7 +77,9 @@ export type Ease =
   | "inExpo"
   | "outExpo"
   | "inOutExpo";
-export type Prop = "translate" | "scale" | "rotation" | "opacity";
+/** `draw` is the fraction (0..1) of a path's length that is stroked; it is
+ * valid only on a `path` element that has a `stroke`. */
+export type Prop = "translate" | "scale" | "rotation" | "opacity" | "draw";
 
 /** A single track's value: a scalar for `scale`/`rotation`/`opacity`, or
  * an `[x, y]` pair for `translate`. */
@@ -135,11 +137,13 @@ export type ZoeElement =
       radius?: number;
     } & Common)
   | ({
-      /** Open or closed polyline; straight segments only (no beziers in v1).
-       * At least one of `stroke`/`fill` is required, and `points` needs at
-       * least two entries. */
+      /** Either a polyline given as `points` (straight segments, at least two
+       * entries) or SVG path data in `d` (curves allowed) — exactly one of
+       * the two. At least one of `stroke`/`fill` is required. */
       type: "path";
-      points: [number, number][];
+      points?: [number, number][];
+      /** SVG path data, carried as the plain string the engine parses. */
+      d?: string;
       /** Defaults to `false`; draws the segment from the last point back to
        * the first. */
       closed?: boolean;

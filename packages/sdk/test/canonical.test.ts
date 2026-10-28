@@ -12,6 +12,7 @@ import {
   image,
   imageAsset,
   path as pathEl,
+  pathData,
   key,
   rect,
   scene,
@@ -141,7 +142,10 @@ function buildExampleFullDoc(): ZoeDocument {
       join: "bevel",
     },
   );
-  d.scenes.push(scene("scene-1", seconds(1.0), [grp, chip, framed, band, arrow]));
+  const curve = withCommon(pathData("M0 0 C 10 20 30 20 40 0", { stroke: "#4ECDC4", strokeWidth: 3 }), {
+    animations: [anim("draw", [key(0, 0), key(ms(500), 1, "outCubic")])],
+  });
+  d.scenes.push(scene("scene-1", seconds(1.0), [grp, chip, framed, band, arrow, curve]));
   return d;
 }
 

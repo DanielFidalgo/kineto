@@ -101,17 +101,22 @@ pub enum Element {
         #[serde(flatten)]
         common: Common,
     },
-    /// An open or closed polyline: straight segments only.
+    /// A polyline (`points`) or a curve (`d`, SVG path data): exactly one of
+    /// the two.
     ///
-    /// No curves in v1, deliberately. Curve flattening carries a tolerance
-    /// parameter and is the most parity-fragile part of a path renderer,
-    /// while straight segments already cover connectors, arrows, axes and
-    /// boxes-and-lines diagrams. Add béziers when a document needs one.
+    /// Curves were first left out as the most parity-fragile part of a path
+    /// renderer. That fear did not survive the evidence: rounded rects already
+    /// draw cubic béziers through tiny-skia, are in the parity corpus, and
+    /// matched byte for byte on aarch64, wasm and x86_64. `d` is parsed in
+    /// Rust (`path_data`) so both targets share one parser.
     ///
     /// Arrow *heads* are not a field here — a filled closed path expresses
     /// one, and orienting it is the authoring layer's job.
     Path {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         points: Vec<[Scalar; 2]>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        d: Option<String>,
         #[serde(default, skip_serializing_if = "is_false")]
         closed: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -384,6 +389,8 @@ pub enum Prop {
     Scale,
     Rotation,
     Opacity,
+    /// Fraction of a stroked path's length that is visible, 0..1.
+    Draw,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -593,6 +600,20 @@ impl Element {
     pub fn path(points: Vec<[f64; 2]>) -> Self {
         Element::Path {
             points: points.into_iter().map(scalars2).collect(),
+            d: None,
+            closed: false,
+            stroke: None,
+            stroke_width: None,
+            cap: Cap::default(),
+            join: Join::default(),
+            fill: None,
+            common: Common::default(),
+        }
+    }
+    pub fn path_data(d: &str) -> Self {
+        Element::Path {
+            points: Vec::new(),
+            d: Some(d.to_string()),
             closed: false,
             stroke: None,
             stroke_width: None,

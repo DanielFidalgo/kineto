@@ -8,6 +8,7 @@ use crate::color::Color;
 use crate::doc::{
     Asset, Common, Document, Element, Gradient, KeyValue, Paint, Prop, Scene, Track, Transition,
 };
+use crate::path_data;
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use thiserror::Error;
@@ -38,6 +39,12 @@ pub enum DocError {
     BadColor(String),
     #[error("path needs at least 2 points, got {0}")]
     PathTooFewPoints(usize),
+    #[error("path needs exactly one of `points` or `d`")]
+    PathGeometry,
+    #[error("invalid path data {0}")]
+    PathData(String),
+    #[error("`closed` applies to `points`; close a `d` path with Z")]
+    PathClosedWithData,
     #[error("path has neither `stroke` nor `fill`: it would render nothing")]
     PathNotPainted,
     #[error("path `strokeWidth` must be positive, got {0}")]
@@ -60,6 +67,10 @@ pub enum DocError {
     EmptyTrack(String),
     #[error("opacity out of range [0,1]: {0}")]
     OpacityRange(String),
+    #[error("`draw` animates only a path with a `stroke`")]
+    DrawUnsupported,
+    #[error("draw out of range [0,1]: {0}")]
+    DrawRange(String),
     #[error("{0}")]
     Json(String),
 }
@@ -94,7 +105,7 @@ const SCENE_KEYS: &[&str] = &["id", "transition", "duration", "elements"];
 const TRANSITION_KEYS: &[&str] = &["type", "duration"];
 const TRACK_KEYS: &[&str] = &["prop", "keys"];
 const KEY_KEYS: &[&str] = &["t", "v", "ease"];
-const PROP_VALUES: &[&str] = &["translate", "scale", "rotation", "opacity"];
+const PROP_VALUES: &[&str] = &["translate", "scale", "rotation", "opacity", "draw"];
 
 const COMMON_KEYS: &[&str] = &[
     "translate",
@@ -123,6 +134,7 @@ const STOP_KEYS: &[&str] = &["at", "color"];
 const PATH_KEYS: &[&str] = &[
     "type",
     "points",
+    "d",
     "closed",
     "stroke",
     "strokeWidth",
@@ -312,6 +324,7 @@ fn prop_name(p: Prop) -> &'static str {
         Prop::Scale => "scale",
         Prop::Rotation => "rotation",
         Prop::Opacity => "opacity",
+        Prop::Draw => "draw",
     }
 }
 
@@ -369,6 +382,7 @@ fn validate_elements(elements: &[Element], doc: &Document) -> Result<(), DocErro
 
 fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
     validate_shadow(el)?;
+    validate_draw(el)?;
     match el {
         Element::Image { asset, common, .. } => {
             check_asset(doc, asset, "image")?;
@@ -392,14 +406,30 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
         }
         Element::Path {
             points,
+            d,
+            closed,
             stroke,
             stroke_width,
             fill,
             common,
             ..
         } => {
-            if points.len() < 2 {
-                return Err(DocError::PathTooFewPoints(points.len()));
+            match d {
+                None if points.len() < 2 => {
+                    // An empty `points` with no `d` is a missing geometry,
+                    // not a one-point polyline.
+                    return Err(if points.is_empty() {
+                        DocError::PathGeometry
+                    } else {
+                        DocError::PathTooFewPoints(points.len())
+                    });
+                }
+                None => {}
+                Some(_) if !points.is_empty() => return Err(DocError::PathGeometry),
+                Some(_) if *closed => return Err(DocError::PathClosedWithData),
+                Some(data) => {
+                    path_data::parse(data).map_err(|e| DocError::PathData(e.to_string()))?;
+                }
             }
             // Rejected rather than tolerated: an unpainted path parses,
             // validates and draws nothing, which reads as a renderer bug
@@ -430,6 +460,27 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
             validate_common(common)?;
             validate_elements(children, doc)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_draw(el: &Element) -> Result<(), DocError> {
+    let animates_draw = el
+        .common()
+        .animations
+        .iter()
+        .any(|track| track.prop == Prop::Draw);
+    // Rejected rather than ignored: only a stroke has a length to reveal, so
+    // a fill-only path or any other element would silently never change.
+    let strokable = matches!(
+        el,
+        Element::Path {
+            stroke: Some(_),
+            ..
+        }
+    );
+    if animates_draw && !strokable {
+        return Err(DocError::DrawUnsupported);
     }
     Ok(())
 }
@@ -541,6 +592,9 @@ fn validate_track(track: &Track) -> Result<(), DocError> {
             (_, KeyValue::Num(v)) => {
                 if track.prop == Prop::Opacity && !(0.0..=1.0).contains(&v.0) {
                     return Err(DocError::OpacityRange(v.0.to_string()));
+                }
+                if track.prop == Prop::Draw && !(0.0..=1.0).contains(&v.0) {
+                    return Err(DocError::DrawRange(v.0.to_string()));
                 }
             }
             (_, KeyValue::Vec2(_)) => return Err(DocError::KeyArity(name.to_string())),

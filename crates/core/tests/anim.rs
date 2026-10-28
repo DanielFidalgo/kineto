@@ -25,6 +25,40 @@ fn clamps_and_interpolates() {
 }
 
 #[test]
+fn draw_defaults_to_fully_drawn() {
+    assert_eq!(resolve_common(&Common::default(), 0).draw, 1.0);
+}
+
+#[test]
+fn draw_is_sampled_like_opacity() {
+    let c = Common {
+        animations: vec![Track::new(
+            Prop::Draw,
+            vec![Key::num(0, 0.0), Key::num(TIMEBASE, 1.0)],
+        )],
+        ..Default::default()
+    };
+    assert_eq!(resolve_common(&c, TIMEBASE / 2).draw, 0.5);
+}
+
+#[test]
+fn draw_is_clamped_when_back_easing_overshoots() {
+    let c = Common {
+        animations: vec![Track::new(
+            Prop::Draw,
+            vec![
+                Key::num(0, 0.0),
+                Key::num(TIMEBASE, 1.0).with_ease(Ease::OutBack),
+            ],
+        )],
+        ..Default::default()
+    };
+    // outBack peaks above 1 around 70% of the way in; 85% is past the peak
+    // but still short of the end, so only the clamp can yield exactly 1.
+    assert_eq!(resolve_common(&c, TIMEBASE * 85 / 100).draw, 1.0);
+}
+
+#[test]
 fn translate_track_is_vec2() {
     let c = Common {
         animations: vec![Track::new(

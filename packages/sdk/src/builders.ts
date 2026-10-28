@@ -81,6 +81,19 @@ export function path(
   return { type: "path", points, ...opts };
 }
 
+export function pathData(
+  d: string,
+  opts: {
+    stroke?: string;
+    strokeWidth?: number;
+    cap?: Cap;
+    join?: Join;
+    fill?: Paint;
+  } = {},
+): ZoeElement {
+  return { type: "path", d, ...opts };
+}
+
 export function rect(
   r: [number, number, number, number],
   fill: Paint,

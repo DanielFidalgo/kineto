@@ -37,6 +37,7 @@ pub const KINDS: &[&str] = &[
     "slideLeft",
     "slideRight",
     "popIn",
+    "drawOn",
 ];
 
 /// Expands every `reveal` in a document, leaving everything else alone.
@@ -91,6 +92,25 @@ fn number(spec: &Map<String, Value>, key: &str, default: f64) -> Result<f64, Too
     }
 }
 
+/// `drawOn` grows a stroke along its length, so it needs a path that has one.
+/// Checked before any track is built so the refusal names the real cause
+/// rather than surfacing later as an engine validation error.
+fn require_stroked_path(element: &Map<String, Value>) -> Result<(), ToolError> {
+    if element.get("type").and_then(Value::as_str) != Some("path") {
+        return Err(ToolError::DocumentSource(
+            "reveal 'drawOn' only applies to a path element; use fadeIn or another kind here"
+                .into(),
+        ));
+    }
+    if !element.contains_key("stroke") {
+        return Err(ToolError::DocumentSource(
+            "reveal 'drawOn' needs a path with a stroke; a fill-only path has no line to draw in"
+                .into(),
+        ));
+    }
+    Ok(())
+}
+
 fn expand_one(element: &mut Map<String, Value>) -> Result<(), ToolError> {
     let reveal = element.remove("reveal").expect("checked by caller");
     let spec = reveal.as_object().ok_or_else(|| {
@@ -107,6 +127,10 @@ fn expand_one(element: &mut Map<String, Value>) -> Result<(), ToolError> {
             "unknown reveal kind '{kind}': use one of {}",
             KINDS.join(", ")
         )));
+    }
+
+    if kind == "drawOn" {
+        require_stroked_path(element)?;
     }
 
     let at_ms = number(spec, "at", 0.0)? as i64;
@@ -151,13 +175,25 @@ fn expand_one(element: &mut Map<String, Value>) -> Result<(), ToolError> {
         "outCubic"
     };
 
-    let mut tracks: Vec<Value> = vec![json!({
-        "prop": "opacity",
-        "keys": [
-            { "t": start, "v": 0.0 },
-            { "t": end, "v": base_opacity, "ease": ease },
-        ]
-    })];
+    let mut tracks: Vec<Value> = if kind == "drawOn" {
+        // Only the stroke grows; fading as well would make the line's first
+        // frames invisible, which defeats drawing it in.
+        vec![json!({
+            "prop": "draw",
+            "keys": [
+                { "t": start, "v": 0.0 },
+                { "t": end, "v": 1.0, "ease": ease },
+            ]
+        })]
+    } else {
+        vec![json!({
+            "prop": "opacity",
+            "keys": [
+                { "t": start, "v": 0.0 },
+                { "t": end, "v": base_opacity, "ease": ease },
+            ]
+        })]
+    };
 
     let offset = match kind.as_str() {
         "fadeUp" => Some([0.0, distance]),

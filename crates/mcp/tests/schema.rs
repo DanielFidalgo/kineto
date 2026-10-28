@@ -81,6 +81,45 @@ fn the_schema_describes_every_element_type_the_corpus_uses() {
     );
 }
 
+fn schema() -> Value {
+    serde_json::from_str(
+        &kineto::resources::read("kineto://schema/document").expect("schema resource exists"),
+    )
+    .expect("schema is valid JSON")
+}
+
+#[test]
+fn the_schema_lists_every_reveal_kind() {
+    let schema = schema();
+    let listed: Vec<&str> = schema["$defs"]["reveal"]["properties"]["kind"]["enum"]
+        .as_array()
+        .expect("reveal kind enum")
+        .iter()
+        .map(|k| k.as_str().expect("kind is a string"))
+        .collect();
+    assert_eq!(listed, kineto::motion::KINDS);
+}
+
+#[test]
+fn the_schema_describes_path_data_and_draw() {
+    let schema = schema();
+    let path = schema["$defs"]["element"]["oneOf"]
+        .as_array()
+        .expect("element.oneOf is an array")
+        .iter()
+        .find(|v| v["properties"]["type"]["const"] == "path")
+        .expect("schema describes path");
+    assert!(
+        path["properties"]["d"].is_object(),
+        "path has no `d` property"
+    );
+
+    let props = schema["$defs"]["track"]["properties"]["prop"]["enum"]
+        .as_array()
+        .expect("track prop enum");
+    assert!(props.contains(&Value::from("draw")), "{props:?}");
+}
+
 /// Every reference document must survive the rules its imitators are judged
 /// by. An exemplar that trips our own lint teaches the wrong habit, and this
 /// is the only thing stopping one from drifting into that state.

@@ -12,6 +12,8 @@ export {
   image,
   imageAsset,
   key,
+  path,
+  pathData,
   rect,
   scene,
   text,
