@@ -8,6 +8,7 @@ use crate::color::Color;
 use crate::doc::{
     Asset, Common, Document, Element, Gradient, KeyValue, Paint, Prop, Scene, Track, Transition,
 };
+use crate::path_data;
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use thiserror::Error;
@@ -38,6 +39,12 @@ pub enum DocError {
     BadColor(String),
     #[error("path needs at least 2 points, got {0}")]
     PathTooFewPoints(usize),
+    #[error("path needs exactly one of `points` or `d`")]
+    PathGeometry,
+    #[error("invalid path data {0}")]
+    PathData(String),
+    #[error("`closed` applies to `points`; close a `d` path with Z")]
+    PathClosedWithData,
     #[error("path has neither `stroke` nor `fill`: it would render nothing")]
     PathNotPainted,
     #[error("path `strokeWidth` must be positive, got {0}")]
@@ -123,6 +130,7 @@ const STOP_KEYS: &[&str] = &["at", "color"];
 const PATH_KEYS: &[&str] = &[
     "type",
     "points",
+    "d",
     "closed",
     "stroke",
     "strokeWidth",
@@ -392,14 +400,30 @@ fn validate_element(el: &Element, doc: &Document) -> Result<(), DocError> {
         }
         Element::Path {
             points,
+            d,
+            closed,
             stroke,
             stroke_width,
             fill,
             common,
             ..
         } => {
-            if points.len() < 2 {
-                return Err(DocError::PathTooFewPoints(points.len()));
+            match d {
+                None if points.len() < 2 => {
+                    // An empty `points` with no `d` is a missing geometry,
+                    // not a one-point polyline.
+                    return Err(if points.is_empty() {
+                        DocError::PathGeometry
+                    } else {
+                        DocError::PathTooFewPoints(points.len())
+                    });
+                }
+                None => {}
+                Some(_) if !points.is_empty() => return Err(DocError::PathGeometry),
+                Some(_) if *closed => return Err(DocError::PathClosedWithData),
+                Some(data) => {
+                    path_data::parse(data).map_err(|e| DocError::PathData(e.to_string()))?;
+                }
             }
             // Rejected rather than tolerated: an unpainted path parses,
             // validates and draws nothing, which reads as a renderer bug

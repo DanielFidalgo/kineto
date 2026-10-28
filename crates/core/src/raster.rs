@@ -553,6 +553,7 @@ impl Renderer {
                 }
                 Element::Path {
                     points,
+                    d: _,
                     closed,
                     stroke,
                     stroke_width,
