@@ -33,6 +33,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
         paths_strokes(),
         curves(),
         curves_edge(),
+        curves_collinear(),
         draw_on(),
         gradients(),
         radius_easings(),
@@ -417,6 +418,41 @@ fn curves_edge() -> CorpusDoc {
     doc.push_scene(scene);
     CorpusDoc {
         name: "curves-edge",
+        doc,
+        ticks: vec![0],
+    }
+}
+
+/// Collinear cubics whose control points are unevenly spaced.
+///
+/// `curves_edge`'s collinear shapes have evenly spaced control points, so
+/// the stroker's `C = d + 3(b - c) - a` is zero and it takes the trig-free
+/// branch. A non-zero `C` on at least one axis is what sends it through
+/// `find_cubic_max_curvature` and its platform `acos`/`cos`/`powf`.
+fn curves_collinear() -> CorpusDoc {
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", ms(600))
+        // C = (-140, -140).
+        .with_element(
+            Element::path_data("M 20 20 C 30 30 110 110 120 120")
+                .with_stroke("#FF9900", 4.0)
+                .with_cap(Cap::Round),
+        )
+        // C = (-210, 0).
+        .with_element(
+            Element::path_data("M 20 160 C 30 160 150 160 170 160")
+                .with_stroke("#C77DFF", 4.0)
+                .with_cap(Cap::Round),
+        )
+        // Control points overshoot the endpoints, so the curve doubles back: C = (280, 0).
+        .with_element(
+            Element::path_data("M 200 40 C 260 40 180 40 240 40")
+                .with_stroke("#4ECDC4", 4.0)
+                .with_cap(Cap::Round),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "curves-collinear",
         doc,
         ticks: vec![0],
     }
