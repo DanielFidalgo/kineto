@@ -18,8 +18,8 @@ use cosmic_text::SwashContent;
 use std::collections::HashMap;
 use tiny_skia::{
     BlendMode, Color, FillRule, FilterQuality, GradientStop, LineCap, LineJoin, LinearGradient,
-    Mask, Paint as SkPaint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Point, RadialGradient,
-    Rect as SkRect, Shader, SpreadMode, Stroke, Transform,
+    Mask, Paint as SkPaint, PathBuilder, PathStroker, Pixmap, PixmapMut, PixmapPaint, Point,
+    RadialGradient, Rect as SkRect, Shader, SpreadMode, Stroke, Transform,
 };
 
 /// Build a tiny-skia path from absolute segments, shifted by `offset`.
@@ -687,20 +687,6 @@ impl Renderer {
                         .as_ref()
                         .and_then(|c| clip_mask(canvas.width(), canvas.height(), c, offset));
 
-                    if let Some(sh) = &common.shadow {
-                        draw_shadow(canvas, &path, sh, matrix, resolved.opacity, mask.as_ref());
-                    }
-
-                    // Fill first so a stroke reads as an outline on top of it.
-                    if let Some(f) = fill {
-                        canvas.fill_path(
-                            &path,
-                            &paint_for(f),
-                            FillRule::Winding,
-                            matrix,
-                            mask.as_ref(),
-                        );
-                    }
                     // Only the stroke is trimmed: a fill that grew with `draw`
                     // would reveal a shape the outline had not reached, and a
                     // finished draw must take the untrimmed path so documents
@@ -720,23 +706,52 @@ impl Renderer {
                         );
                         trimmed.as_ref()
                     };
-                    if let (Some(s), Some(stroke_path)) = (stroke, stroke_target) {
-                        let sk_stroke = Stroke {
-                            // Absent width means 1.0, not 0.0 — a zero-width
-                            // stroke paints nothing at all.
-                            width: stroke_width.map(|w| w.0 as f32).unwrap_or(1.0),
-                            line_cap: match cap {
-                                Cap::Butt => LineCap::Butt,
-                                Cap::Round => LineCap::Round,
-                                Cap::Square => LineCap::Square,
-                            },
-                            line_join: match join {
-                                Join::Miter => LineJoin::Miter,
-                                Join::Round => LineJoin::Round,
-                                Join::Bevel => LineJoin::Bevel,
-                            },
-                            ..Default::default()
+                    let sk_stroke = Stroke {
+                        // Absent width means 1.0, not 0.0 — a zero-width
+                        // stroke paints nothing at all.
+                        width: stroke_width.map(|w| w.0 as f32).unwrap_or(1.0),
+                        line_cap: match cap {
+                            Cap::Butt => LineCap::Butt,
+                            Cap::Round => LineCap::Round,
+                            Cap::Square => LineCap::Square,
+                        },
+                        line_join: match join {
+                            Join::Miter => LineJoin::Miter,
+                            Join::Round => LineJoin::Round,
+                            Join::Bevel => LineJoin::Bevel,
+                        },
+                        ..Default::default()
+                    };
+
+                    if let Some(sh) = &common.shadow {
+                        // A filled path casts the shadow of its shape. A line has
+                        // no area, so filling it would cast nothing: its shadow is
+                        // the line as stroked, which also makes it follow `draw`.
+                        let outline;
+                        let silhouette = if fill.is_some() {
+                            Some(&path)
+                        } else {
+                            outline = stroke_target.and_then(|p| {
+                                p.stroke(&sk_stroke, PathStroker::compute_resolution_scale(&matrix))
+                            });
+                            outline.as_ref()
                         };
+                        if let Some(sil) = silhouette {
+                            draw_shadow(canvas, sil, sh, matrix, resolved.opacity, mask.as_ref());
+                        }
+                    }
+
+                    // Fill first so a stroke reads as an outline on top of it.
+                    if let Some(f) = fill {
+                        canvas.fill_path(
+                            &path,
+                            &paint_for(f),
+                            FillRule::Winding,
+                            matrix,
+                            mask.as_ref(),
+                        );
+                    }
+                    if let (Some(s), Some(stroke_path)) = (stroke, stroke_target) {
                         canvas.stroke_path(
                             stroke_path,
                             &stroke_paint(s),

@@ -35,6 +35,7 @@ pub fn corpus() -> Vec<CorpusDoc> {
         curves_edge(),
         curves_collinear(),
         draw_on(),
+        shadow_stroke(),
         gradients(),
         radius_easings(),
         clip_fit(),
@@ -502,6 +503,42 @@ fn draw_on() -> CorpusDoc {
         name: "draw-on",
         doc,
         ticks: vec![0, ms(250), ms(500), ms(1000)],
+    }
+}
+
+/// Line-only paths cast the shadow of their stroked outline, which tiny-skia's
+/// stroker builds and the blur then spreads. The outline is new geometry the
+/// stroke itself never rasterised as a fill, so it needs its own parity
+/// evidence: a blurred shadow following a curve mid-draw, and a hard shadow
+/// under a rotated polyline with round joins.
+fn shadow_stroke() -> CorpusDoc {
+    let mut doc = Document::new(W, H);
+    let scene = Scene::new("s", ms(1200))
+        .with_element(
+            Element::path_data("M 16 160 C 60 40 150 40 200 120 S 280 170 300 60")
+                .with_stroke("#FF9900", 5.0)
+                .with_cap(Cap::Round)
+                .with_shadow(Shadow::new("#0D141999", 6, 3.0, 8.0))
+                .with_animation(Track::new(
+                    Prop::Draw,
+                    vec![
+                        Key::num(0, 0.0),
+                        Key::num(ms(1000), 1.0).with_ease(Ease::InOutCubic),
+                    ],
+                )),
+        )
+        .with_element(
+            Element::path(vec![[30.0, 30.0], [110.0, 42.0], [150.0, 20.0]])
+                .with_stroke("#4ECDC4", 3.5)
+                .with_join(Join::Round)
+                .with_shadow(Shadow::new("#0D1419", 0, 4.0, 5.0))
+                .with_rotation(9.0),
+        );
+    doc.push_scene(scene);
+    CorpusDoc {
+        name: "shadow-stroke",
+        doc,
+        ticks: vec![ms(400), ms(1000)],
     }
 }
 

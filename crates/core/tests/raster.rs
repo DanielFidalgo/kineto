@@ -1197,3 +1197,44 @@ fn a_draw_of_zero_paints_no_stroke() {
         "a stroke was painted at draw 0"
     );
 }
+
+// ---- shadows of line-only paths ----
+
+/// A horizontal line along y = 16 from x = 8 to x = 56, casting a hard green
+/// shadow 20 px straight down, so the shadow lies along y = 36.
+fn shadowed_line() -> Element {
+    use kineto_core::doc::Shadow;
+    Element::path_data("M 8 16 L 56 16")
+        .with_stroke("#FF0000", 4.0)
+        .with_shadow(Shadow::new("#00FF00", 0, 0.0, 20.0))
+}
+
+/// A line has no area, so a shadow cast from its filled shape is empty: the
+/// silhouette has to come from the line as it is stroked.
+#[test]
+fn a_line_only_path_casts_the_shadow_of_its_line() {
+    let pm = render_at(shadowed_line(), 0);
+    assert!(
+        pm.pixel(32, 36).unwrap().green() > 200,
+        "no shadow under the line"
+    );
+}
+
+/// Halfway through a draw the line ends at x = 32, so its shadow must too.
+#[test]
+fn a_line_only_shadow_stops_where_the_drawn_line_stops() {
+    use kineto_core::doc::{ms, Key, Prop, Track};
+    let drawing = shadowed_line().with_animation(Track::new(
+        Prop::Draw,
+        vec![Key::num(0, 0.0), Key::num(ms(500), 1.0)],
+    ));
+    let pm = render_at(drawing, ms(250));
+    assert!(
+        pm.pixel(16, 36).unwrap().green() > 200,
+        "no shadow under the drawn half"
+    );
+    assert!(
+        pm.pixel(48, 36).unwrap().green() < 40,
+        "shadow under the half not yet drawn"
+    );
+}
