@@ -29,7 +29,7 @@ const ORDER = {
   image: ["type", "asset", "rect", "fit"],
   text: ["type", "text", "font", "sizePx", "color", "pos", "maxW", "align"],
   rect: ["type", "rect", "fill", "radius"],
-  path: ["type", "points", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
+  path: ["type", "points", "d", "closed", "stroke", "strokeWidth", "cap", "join", "fill"],
   linear: ["type", "from", "to", "stops"],
   radial: ["type", "center", "radius", "stops"],
   stop: ["at", "color"],
@@ -193,7 +193,13 @@ function serElement(el: ZoeElement): string {
     case "path":
       return emit([...ORDER.path, ...ORDER.common], {
         type: serStr("path"),
-        points: `[${el.points.map((p) => serArr(p)).join(",")}]`,
+        // Omitted when empty, matching serde's skip on the Rust side; a
+        // data-driven path has no points.
+        points:
+          el.points !== undefined && el.points.length > 0
+            ? `[${el.points.map((p) => serArr(p)).join(",")}]`
+            : undefined,
+        d: el.d !== undefined ? serStr(el.d) : undefined,
         closed: el.closed ? "true" : undefined,
         stroke: el.stroke !== undefined ? serStr(el.stroke) : undefined,
         strokeWidth: el.strokeWidth !== undefined ? serNum(el.strokeWidth) : undefined,
