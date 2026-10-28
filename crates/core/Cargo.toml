@@ -32,6 +32,10 @@ parity = ["dep:sha2", "bundled-fonts"]
 cosmic-text = { version = "0.19.0", default-features = false, features = ["std", "swash"] }
 fontdb = { version = "0.23.0", default-features = false, features = ["std", "memmap"] }
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+# Arc geometry uses libm's trig, not std's: std defers to the platform math
+# library, which differs between native and wasm and would break the
+# byte-identical parity gate.
+libm = "0.2.16"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha2 = { version = "0.11.0", optional = true }
